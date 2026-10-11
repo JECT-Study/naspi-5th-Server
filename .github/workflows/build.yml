@@ -38,7 +38,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # 이미지 태그: <build.gradle 의 version>-<커밋 해시 7자리> (예: 1.0.0-0db60ba)
+      # 이미지 태그: <build.gradle 의 version>-<커밋 날짜 yyyyMMdd (KST)>-<커밋 해시 7자리> (예: 1.0.0-20261011-ab288ae)
+      # 날짜는 빌드 시각이 아닌 커밋 시각 기준 -> 같은 커밋을 다시 빌드해도 태그가 동일
       - name: Resolve image
         id: image
         run: |
@@ -51,7 +52,8 @@ jobs:
             echo "::error::build.gradle 에서 version 을 읽지 못했습니다."
             exit 1
           fi
-          TAG="${VERSION}-${GITHUB_SHA::7}"
+          DATE=$(TZ=Asia/Seoul git log -1 --format=%cd --date=format-local:%Y%m%d "$GITHUB_SHA")
+          TAG="${VERSION}-${DATE}-${GITHUB_SHA::7}"
           echo "::notice::image tag: ${TAG}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "ref=docker.io/${IMAGE_REPOSITORY}:${TAG}" >> "$GITHUB_OUTPUT"
