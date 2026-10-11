@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: 'Docker Hub에 push된 이미지 태그 (<version>-<commit hash>)'
+        description: 'Docker Hub에 push된 이미지 태그 (<version>-<yyyyMMdd>-<commit hash>)'
         required: true
         type: string
 
