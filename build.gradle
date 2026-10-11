@@ -1,11 +1,13 @@
 plugins {
 	id 'java'
+	id 'checkstyle'
 	id 'org.springframework.boot' version '4.0.8'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.google.cloud.tools.jib' version '3.4.5'
 }
 
 group = 'kr.ject'
-version = '0.0.1-SNAPSHOT'
+version = '1.0.0'
 
 java {
 	toolchain {
@@ -37,4 +39,39 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// Google Java Style 기반, 들여쓰기만 4칸으로 변경 (https://google.github.io/styleguide/javaguide.html)
+checkstyle {
+	toolVersion = '10.21.4'
+	configFile = file('config/checkstyle/google-checks-4space.xml')
+	configProperties = ['org.checkstyle.google.suppressionfilter.config': file('config/checkstyle/checkstyle-suppressions.xml')]
+	// 규칙 severity가 warning이므로 경고 1개라도 있으면 실패 처리
+	maxWarnings = 0
+}
+
+// 로컬: ./gradlew jibDockerBuild -> 로컬 Docker에 jectteam2/naspi-server:<version> 이미지 생성
+//       ./gradlew jib            -> Docker Hub에 jectteam2/naspi-server:<version> push
+// CI:   -Djib.to.image=<repo>:<commit sha> 로 태그 덮어씀
+jib {
+	// devtools(developmentOnly)가 이미지에 포함되지 않도록 운영용 classpath 사용
+	configurationName = 'productionRuntimeClasspath'
+	from {
+		image = 'eclipse-temurin:21-jre'
+	}
+	to {
+		image = "docker.io/jectteam2/naspi-server:${project.version}"
+	}
+	container {
+		ports = ['8080']
+		user = '1000:1000'
+	}
+	// IntelliJ 등에서 띄운 Gradle 데몬은 PATH에 docker가 없을 수 있어 주요 설치 경로를 직접 탐색
+	def dockerExecutable = ['/usr/local/bin/docker', '/opt/homebrew/bin/docker', '/usr/bin/docker']
+		.find { file(it).canExecute() }
+	if (dockerExecutable) {
+		dockerClient {
+			executable = dockerExecutable
+		}
+	}
 }

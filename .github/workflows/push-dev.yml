@@ -1,0 +1,84 @@
+name: push-dev
+
+# build.yml 에서 호출 (단독 실행 X)
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Docker Hub에 push된 이미지 태그 (<version>-<commit hash>)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # manifest 레포 (예: JECT-Study/naspi-manifest) - 비어 있으면 manifest 수정 단계를 건너뜀
+  GITOPS_REPO: JECT-Study/naspi-5th-manifest
+  # manifest 레포 안의 dev overlay 경로 (ArgoCD Application 이 바라보는 경로)
+  GITOPS_DEV_PATH: dev/overlay
+  # base/deployment.yaml 의 image 이름 (overlay 의 images[].name)
+  IMAGE_NAME: naspi
+  # Docker Hub 저장소 (build.yml 의 IMAGE_REPOSITORY 와 동일하게 유지)
+  IMAGE_REPOSITORY: jectteam2/naspi-server
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      TAG: ${{ inputs.tag }}
+
+    # job 단위 if 에서는 env 를 쓸 수 없어 step 단위로 건너뜀
+    steps:
+      # 태그가 비어 있으면 manifest 를 망가뜨리지 않도록 중단
+      - name: Validate tag
+        run: |
+          if [ -z "$TAG" ]; then
+            echo "::error::이미지 태그가 비어 있습니다. build job 의 output 을 확인하세요."
+            exit 1
+          fi
+          echo "IMAGE=docker.io/${IMAGE_REPOSITORY}:${TAG}" >> "$GITHUB_ENV"
+
+      - name: Skip (manifest repo not set)
+        if: env.GITOPS_REPO == ''
+        run: echo "::notice::push-dev.yml 의 GITOPS_REPO 가 비어 있어 manifest 수정을 건너뜁니다."
+
+      # Fine-grained PAT (manifest 레포 Contents: Read and write) 로 clone
+      # checkout 이 인증 정보를 git 설정에 남겨두므로 이후 git push 도 같은 토큰 사용
+      - name: Checkout manifest repo
+        if: env.GITOPS_REPO != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      # overlay/kustomization.yaml 의 images[].newName/newTag 갱신
+      - name: Update dev image tag
+        if: env.GITOPS_REPO != ''
+        working-directory: ${{ env.GITOPS_DEV_PATH }}
+        run: |
+          kustomize edit set image "${IMAGE_NAME}=${IMAGE}"
+          echo "::notice::${GITOPS_DEV_PATH} image -> ${IMAGE}"
+
+      - name: Commit and push
+        if: env.GITOPS_REPO != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "$GITOPS_DEV_PATH"
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "naspi: deploy ${IMAGE##*:} to dev" \
+                     -m "source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+
+          # 다른 커밋이 먼저 들어간 경우 rebase 후 재시도
+          for i in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            sleep $((i * 5))
+          done
+          exit 1
