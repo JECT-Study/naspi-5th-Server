@@ -21,6 +21,9 @@ env:
   IMAGE_NAME: naspi
   # Docker Hub 저장소 (build.yml 의 IMAGE_REPOSITORY 와 동일하게 유지)
   IMAGE_REPOSITORY: jectteam2/naspi-server
+  # manifest 레포에서 태그를 커밋할 브랜치 = 소스 레포에서 build 가 실행된 브랜치 (예: development/1.0.0)
+  # main 에는 커밋하지 않음. ArgoCD Application 의 targetRevision 도 이 브랜치로 설정
+  GITOPS_BRANCH: ${{ github.ref_name }}
 
 jobs:
   update-manifest:
@@ -53,32 +56,46 @@ jobs:
         with:
           repository: ${{ env.GITOPS_REPO }}
           token: ${{ secrets.GITOPS_TOKEN }}
+          fetch-depth: 0
 
-      # overlay/kustomization.yaml 의 images[].newName/newTag 갱신
-      - name: Update dev image tag
-        if: env.GITOPS_REPO != ''
-        working-directory: ${{ env.GITOPS_DEV_PATH }}
-        run: |
-          kustomize edit set image "${IMAGE_NAME}=${IMAGE}"
-          echo "::notice::${GITOPS_DEV_PATH} image -> ${IMAGE}"
-
-      - name: Commit and push
+      # manifest 레포의 같은 이름 브랜치에 이미지 태그 커밋 (브랜치가 없으면 main 기준으로 생성)
+      # push 가 거절되면 최신 브랜치를 다시 받아 태그를 다시 적용 (rebase 충돌 방지)
+      - name: Update dev image tag and push
         if: env.GITOPS_REPO != ''
         run: |
+          if [ "$GITOPS_BRANCH" = "main" ]; then
+            echo "::error::manifest 레포 main 브랜치에는 커밋하지 않습니다."
+            exit 1
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add "$GITOPS_DEV_PATH"
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-          git commit -m "naspi: deploy ${IMAGE##*:} to dev" \
-                     -m "source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
-
-          # 다른 커밋이 먼저 들어간 경우 rebase 후 재시도
           for i in 1 2 3; do
-            git pull --rebase && git push && exit 0
+            git fetch origin
+            if git rev-parse --verify --quiet "origin/${GITOPS_BRANCH}" >/dev/null; then
+              git checkout -B "$GITOPS_BRANCH" "origin/${GITOPS_BRANCH}"
+            else
+              echo "::notice::manifest 레포에 ${GITOPS_BRANCH} 브랜치가 없어 main 기준으로 생성합니다."
+              git checkout -B "$GITOPS_BRANCH" origin/main
+            fi
+
+            # overlay/kustomization.yaml 의 images[].newName/newTag 갱신
+            (cd "$GITOPS_DEV_PATH" && kustomize edit set image "${IMAGE_NAME}=${IMAGE}")
+
+            git add "$GITOPS_DEV_PATH"
+            if git diff --cached --quiet; then
+              echo "No changes to commit"
+              exit 0
+            fi
+            git commit -m "naspi: deploy ${IMAGE##*:} to dev" \
+                       -m "source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+
+            if git push origin "HEAD:${GITOPS_BRANCH}"; then
+              echo "::notice::${GITOPS_REPO}@${GITOPS_BRANCH} ${GITOPS_DEV_PATH} image -> ${IMAGE}"
+              exit 0
+            fi
+            echo "push 거절됨 - 최신 브랜치 기준으로 재시도 ($i/3)"
             sleep $((i * 5))
           done
           exit 1
