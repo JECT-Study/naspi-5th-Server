@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [development]
+    branches: ['development/**']
 
 # gitops 레포 push 충돌 방지: dev 배포는 한 번에 하나씩, 순서대로
 concurrency:
