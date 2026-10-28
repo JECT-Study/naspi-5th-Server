@@ -16,7 +16,7 @@ env:
   # manifest 레포 (예: JECT-Study/naspi-manifest) - 비어 있으면 manifest 수정 단계를 건너뜀
   GITOPS_REPO: JECT-Study/naspi-5th-manifest
   # manifest 레포 안의 dev overlay 경로 (ArgoCD Application 이 바라보는 경로)
-  GITOPS_DEV_PATH: dev/overlay
+  GITOPS_DEV_PATH: overlay/dev/naspi-server
   # base/naspi-server/deploy.yaml 의 image 이름 (overlay 의 images[].name)
   IMAGE_NAME: naspi
   # Docker Hub 저장소 (build.yml 의 IMAGE_REPOSITORY 와 동일하게 유지)
@@ -80,7 +80,7 @@ jobs:
               git checkout -B "$GITOPS_BRANCH" origin/main
             fi
 
-            # overlay/kustomization.yaml 의 images[].newName/newTag 갱신
+            # $GITOPS_DEV_PATH/kustomization.yaml 의 images[].newName/newTag 갱신
             (cd "$GITOPS_DEV_PATH" && kustomize edit set image "${IMAGE_NAME}=${IMAGE}")
 
             git add "$GITOPS_DEV_PATH"
