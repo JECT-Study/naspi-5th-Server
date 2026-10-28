@@ -1,3 +1,17 @@
 spring:
   application:
     name: naspi
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${DB_URL:jdbc:postgresql://naspi-db-svc:5432/naspi}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+jasypt:
+  encryptor:
+    password: ${JASYPT_KEY}
+    # starter 기본값과 같지만 암호화 시 맞춰야 하므로 명시 (JasyptEncryptorTest 와 동일하게 유지)
+    algorithm: PBEWITHHMACSHA512ANDAES_256
+    key-obtention-iterations: 1000
+    iv-generator-classname: org.jasypt.iv.RandomIvGenerator
+    string-output-type: base64
