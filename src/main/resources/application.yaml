@@ -15,3 +15,16 @@ jasypt:
     key-obtention-iterations: 1000
     iv-generator-classname: org.jasypt.iv.RandomIvGenerator
     string-output-type: base64
+
+---
+# k8s 배포 환경(JAVA_ARGS 의 spring.profiles.active)에서만 콘솔 로그를 Logstash JSON 형식으로 출력
+# 로컬(프로필 없음)은 기존 텍스트 형식 유지
+spring:
+  config:
+    activate:
+      on-profile: development | production
+
+logging:
+  structured:
+    format:
+      console: logstash
