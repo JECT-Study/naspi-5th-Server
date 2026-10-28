@@ -24,6 +24,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'com.github.ulisesbocchio:jasypt-spring-boot-starter:4.0.4'
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'com.h2database:h2'
@@ -60,11 +61,25 @@ jib {
 		image = 'eclipse-temurin:21-jre'
 	}
 	to {
-		image = "docker.io/jectteam2/naspi-server:${project.version}"
+		image = "docker.io/jectteam2/naspi-server:${project.version}-20261011-2b34729"
+
+		// 로컬: gradle.properties(gitignore) 의 Docker Hub 계정 사용
+		// CI: gradle.properties 가 없으므로 auth 를 설정하지 않고 docker login 결과(~/.docker/config.json) 사용
+		def dockerHubUsername = providers.gradleProperty('dockerHubUsername').orNull
+		def dockerHubToken = providers.gradleProperty('dockerHubToken').orNull
+		if (dockerHubUsername && dockerHubToken) {
+			auth {
+				username = dockerHubUsername
+				password = dockerHubToken
+			}
+		}
 	}
 	container {
 		ports = ['8080']
 		user = '1000:1000'
+		// k8s ConfigMap 으로 주입한 JAVA_ARGS 를 JVM 옵션으로 적용하기 위해 sh 를 거쳐 실행
+		// exec: java 를 PID 1 로 띄워 SIGTERM 을 직접 받도록 함 (graceful shutdown)
+		entrypoint = ['sh', '-c', 'exec java $JAVA_ARGS -cp @/app/jib-classpath-file @/app/jib-main-class-file']
 	}
 	// IntelliJ 등에서 띄운 Gradle 데몬은 PATH에 docker가 없을 수 있어 주요 설치 경로를 직접 탐색
 	def dockerExecutable = ['/usr/local/bin/docker', '/opt/homebrew/bin/docker', '/usr/bin/docker']
