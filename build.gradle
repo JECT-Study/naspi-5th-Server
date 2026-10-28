@@ -63,9 +63,15 @@ jib {
 	to {
 		image = "docker.io/jectteam2/naspi-server:${project.version}-20261011-2b34729"
 
-		auth {
-			username = providers.gradleProperty('dockerHubUsername').orNull
-			password = providers.gradleProperty('dockerHubToken').orNull
+		// 로컬: gradle.properties(gitignore) 의 Docker Hub 계정 사용
+		// CI: gradle.properties 가 없으므로 auth 를 설정하지 않고 docker login 결과(~/.docker/config.json) 사용
+		def dockerHubUsername = providers.gradleProperty('dockerHubUsername').orNull
+		def dockerHubToken = providers.gradleProperty('dockerHubToken').orNull
+		if (dockerHubUsername && dockerHubToken) {
+			auth {
+				username = dockerHubUsername
+				password = dockerHubToken
+			}
 		}
 	}
 	container {
