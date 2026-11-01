@@ -6,7 +6,7 @@ import lombok.Getter;
  * 비즈니스 규칙 위반을 알리는 예외.
  *
  * <p>Service 계층에서 HTTP 응답을 직접 만들지 않고 이 예외를 던지면,
- * {@link GlobalExceptionHandler}가 {@link ErrorCode}에 맞는 오류 응답으로 변환한다.
+ * {@link GlobalExceptionHandler}가 HTTP 200과 {@link ErrorCode}의 결과 코드를 담은 응답으로 변환한다.
  *
  * <pre>{@code
  * userRepository.findById(userId)
