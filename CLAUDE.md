@@ -35,7 +35,7 @@
 
 - 현재 구현 대상 버전은 `docs/policies/CURRENT`에 적혀 있다 (`scripts/policy-version.sh`). 이하 `<ver>`.
 - 기능 구현 전에 [docs/policies/README.md](docs/policies/README.md)와 해당 모듈의 `docs/policies/<ver>/domain/{모듈}.md`를 읽는다.
-- 정책 원본은 `docs/policies/<ver>/policy.md` 하나다. 이전 버전 폴더는 동결되어 수정하지 않는다. `domain/*.md`는 여기서 생성되므로 직접 수정하지 않는다. 정책을 바꾸면 `policy.md`를 고치고 `/sync-docs`로 domain 파일·이슈 초안·ERD를 동기화한다.
+- 정책 원본은 `docs/policies/<ver>/policy.md` 하나다. 이전 버전 폴더는 동결되어 수정하지 않는다. `domain/*.md`는 여기서 생성되므로 직접 수정하지 않는다. 정책을 바꾸면 `policy.md`를 고친다. 커밋할 때 훅이 domain 파일을 자동 생성하고, 이슈 초안·ERD 영향 분석이 필요하면 커밋을 멈춘다 → `/sync-docs` 3~7단계 수행 후 `scripts/mark-docs-reviewed.sh`로 기록하고 다시 커밋한다.
 - `docs/policies/roadmap.md`는 현재 버전 이후 참고용이므로 구현하지 않는다 (매매봇, 일일 요약 뉴스 등). 새 버전 시작은 `/sync-docs new v<N>`.
 - 정책에 없거나 모호한 결정은 임의로 정하지 말고 질문한다.
 - 정책과 코드가 어긋나면 정책서가 기준이다. 정책 변경이 필요하면 코드보다 문서를 먼저 고치자고 제안한다.

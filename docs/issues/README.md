@@ -49,7 +49,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 
 ### 정책이 바뀌면 — `/sync-docs`
 
-정책은 `docs/policies/<버전>/policy.md`에서만 고친다. 고친 뒤 `/sync-docs`를 실행하면 domain 정책 파일을 다시 생성하고, 이 폴더의 스토리와 ERD에 필요한 수정안을 제시한다. 새 버전 시작은 `/sync-docs new v2`.
+정책은 `docs/policies/<버전>/policy.md`에서만 고친다. `policy.md`나 `roadmap.md`를 커밋하면 커밋 전 훅이 domain 정책 파일을 자동으로 다시 생성하고, 이 폴더의 스토리와 ERD 영향 분석이 끝날 때까지 커밋을 멈춘다 (Claude가 `/sync-docs` 절차로 분석·수정안 제시 → 승인 후 반영 → `scripts/mark-docs-reviewed.sh`). 직접 실행해도 된다. 새 버전 시작은 `/sync-docs new v2`.
 
 ## Task (버전 무관)
 

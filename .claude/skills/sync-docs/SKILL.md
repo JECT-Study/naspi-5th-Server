@@ -2,7 +2,7 @@
 name: sync-docs
 description: 정책서 원본(docs/policies/<현재 버전>/policy.md)이 바뀌었을 때 domain 정책 파일, 이슈 초안, ERD(docs/erd/naspi.drawio)를 원본 기준으로 동기화한다. 새 정책 버전(v2 등) 시작도 담당한다. "정책 바뀌었어", "문서 싱크", "ERD 반영", "v2 시작" 요청이나 policy.md 수정 직후 사용.
 argument-hint: "[--check | new <버전>] (생략하면 동기화 실행)"
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash(scripts/policy-version.sh:*), Bash(scripts/new-policy-version.sh:*), Bash(python3 scripts/sync-policy.py:*), Bash(python3 scripts/erd-summary.py:*), Bash(scripts/erd-render.sh:*), Bash(scripts/find-story.sh:*), Bash(git diff:*), Bash(git status:*), Bash(git log:*)
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash(scripts/mark-docs-reviewed.sh:*), Bash(git add:*), Bash(scripts/policy-version.sh:*), Bash(scripts/new-policy-version.sh:*), Bash(python3 scripts/sync-policy.py:*), Bash(python3 scripts/erd-summary.py:*), Bash(scripts/erd-render.sh:*), Bash(scripts/find-story.sh:*), Bash(git diff:*), Bash(git status:*), Bash(git log:*)
 ---
 
 # 정책 문서 동기화
@@ -21,6 +21,8 @@ scripts/policy-version.sh        # 예: v1
 | `docs/policies/<ver>/domain/*.md` | `scripts/sync-policy.py`가 **자동 생성** (직접 수정 금지) |
 | `docs/issues/<ver>/*.md` | 영향받는 스토리를 찾아 **수정안 제시 → 승인 후 반영** |
 | `docs/erd/naspi.drawio` | 영향받는 엔티티·관계를 찾아 **수정안 제시 → 승인 후 반영** |
+
+> **자동 실행**: `policy.md`나 `roadmap.md`를 커밋하려 하면 커밋 전 훅이 domain 파일을 자동 생성·스테이징하고, 영향 분석이 끝나지 않았으면 커밋을 멈춘다. 훅 메시지를 받으면 이 스킬의 3~7단계를 수행한다.
 
 인자 `$ARGUMENTS`에 `--check`가 있으면 1~2단계의 확인만 하고 아무것도 수정하지 않는다.
 인자가 `new <버전>`이면 맨 아래 "새 버전 시작"만 수행한다.
@@ -114,6 +116,14 @@ scripts/erd-render.sh
 `build/erd/page-<n>.png` 중 수정한 페이지를 Read로 열어 선이 테이블을 관통하거나 도형이 겹치지 않는지 확인한다.
 
 ## 7. 마무리 보고
+
+영향 분석과 반영(또는 영향 없음 확인)이 끝나면 수정한 파일을 `git add` 하고 검토 완료를 기록한다. 기록하지 않으면 커밋 전 훅이 다시 멈춘다.
+
+```
+scripts/mark-docs-reviewed.sh
+```
+
+보고 내용:
 
 - 동기화된 파일, 수정한 스토리와 ERD 항목
 - `python3 scripts/sync-policy.py --check`, `python3 scripts/erd-summary.py --check` 결과
