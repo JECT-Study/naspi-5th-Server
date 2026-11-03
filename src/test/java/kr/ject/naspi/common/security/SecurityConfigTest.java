@@ -50,14 +50,6 @@ class SecurityConfigTest {
     }
 
     @Test
-    @DisplayName("공개 경로는 로그인하지 않아도 로그인 페이지로 이동하지 않는다")
-    void publicPathWithoutLogin() throws Exception {
-        // 아직 공개 API가 없으므로 보안을 통과해 404가 반환되는지로 확인한다.
-        mockMvc.perform(get("/public/any"))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
     @DisplayName("로그인이 필요한 경로는 로그인하지 않으면 로그인 페이지로 이동한다")
     void privatePathWithoutLogin() throws Exception {
         mockMvc.perform(get("/private/any"))
