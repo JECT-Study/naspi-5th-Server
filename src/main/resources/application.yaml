@@ -6,6 +6,38 @@ spring:
     url: ${DB_URL:jdbc:postgresql://naspi-db-svc:5432/naspi}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  # 로그인 세션 저장소. 접속 정보는 임시 값이므로 실제 환경 값은 환경 변수로 주입한다.
+  data:
+    redis:
+      host: ${REDIS_HOST:naspi-redis-svc}
+      port: ${REDIS_PORT:6379}
+  session:
+    timeout: 30m
+    redis:
+      namespace: naspi:session
+  # 회원 기능 전까지 사용할 임시 로그인 계정
+  security:
+    user:
+      name: ${LOGIN_USER_NAME:naspi}
+      password: ${LOGIN_USER_PASSWORD:naspi123!}
+    # 카카오 로그인. 키는 임시 값이므로 카카오 개발자 콘솔에서 발급받은 값을 환경 변수로 주입한다.
+    oauth2:
+      client:
+        registration:
+          kakao:
+            client-name: kakao
+            client-id: ${KAKAO_CLIENT_ID:kakao-client-id}
+            client-secret: ${KAKAO_CLIENT_SECRET:kakao-client-secret}
+            client-authentication-method: client_secret_post
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        # 카카오는 Spring Security에 기본 등록된 제공자가 아니므로 엔드포인트를 직접 지정한다.
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
 
 ---
 # k8s 배포 환경(JAVA_ARGS 의 spring.profiles.active)에서만 콘솔 로그를 Logstash JSON 형식으로 출력
