@@ -1,12 +1,7 @@
-# 테스트(CI) 전용 설정. 실제 DB / JASYPT_KEY 없이 context 가 뜨도록 덮어씀
-# main 의 ENC(...) 값을 테스트에서 읽어야 하면 여기서 평문 값으로 덮어쓸 것 (더미 키로는 복호화 불가)
+# 테스트(CI) 전용 설정. 실제 DB 없이 context 가 뜨도록 H2 로 덮어씀
 spring:
   datasource:
     driver-class-name: org.h2.Driver
     url: jdbc:h2:mem:naspi;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
     username: sa
     password:
-
-jasypt:
-  encryptor:
-    password: test-key
