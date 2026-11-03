@@ -1,4 +1,4 @@
-package kr.ject.naspi.common.exception;
+package kr.ject.naspi.global.exception;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;

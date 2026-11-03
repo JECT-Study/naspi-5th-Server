@@ -1,6 +1,6 @@
 package kr.ject.naspi.common.response;
 
-import kr.ject.naspi.common.exception.ErrorCode;
+import kr.ject.naspi.global.exception.ErrorCode;
 import org.springframework.http.HttpStatusCode;
 
 /**

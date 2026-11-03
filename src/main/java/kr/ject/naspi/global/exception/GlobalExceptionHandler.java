@@ -1,4 +1,4 @@
-package kr.ject.naspi.common.exception;
+package kr.ject.naspi.global.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
