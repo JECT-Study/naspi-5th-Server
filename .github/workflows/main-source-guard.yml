@@ -1,0 +1,31 @@
+name: main-source-guard
+
+# main 으로는 development/* 브랜치에서 올라온 PR만 머지한다
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  source-branch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+
+    steps:
+      - name: Check source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [[ "$HEAD_REPO" != "$BASE_REPO" ]]; then
+            echo "::error::main 으로의 PR은 이 레포의 development/* 브랜치에서만 가능합니다 (fork: $HEAD_REPO)"
+            exit 1
+          fi
+          if [[ "$HEAD_REF" != development/* ]]; then
+            echo "::error::main 으로의 PR은 development/* 브랜치에서만 가능합니다 (현재: $HEAD_REF)"
+            exit 1
+          fi
+          echo "허용된 출처 브랜치: $HEAD_REF"

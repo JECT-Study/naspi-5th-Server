@@ -41,8 +41,8 @@ public class GlobalExceptionHandler {
      * 비즈니스 규칙 위반을 HTTP 200과 예외에 지정된 결과 코드, 메시지로 응답한다.
      */
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<CommonResponse<Void>> handleBusinessException(BusinessException e,
-                                                                        HttpServletRequest request) {
+    public ResponseEntity<CommonResponse<Void>> handleBusinessException(
+            BusinessException e, HttpServletRequest request) {
         ErrorCode errorCode = e.getErrorCode();
         log.warn("{} {} -> {} {}: {}", request.getMethod(), request.getRequestURI(),
                 errorCode.getCode(), errorCode, e.getMessage());
@@ -53,8 +53,9 @@ public class GlobalExceptionHandler {
      * {@code @Valid} 요청 본문 검증 실패를 400과 필드별 오류 목록으로 응답한다.
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<CommonResponse<List<CommonResponse.FieldError>>> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException e, HttpServletRequest request) {
+    public ResponseEntity<CommonResponse<List<CommonResponse.FieldError>>>
+            handleMethodArgumentNotValid(MethodArgumentNotValidException e,
+                                         HttpServletRequest request) {
         List<CommonResponse.FieldError> errors = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> new CommonResponse.FieldError(error.getField(),
                         error.getDefaultMessage()))
@@ -66,8 +67,9 @@ public class GlobalExceptionHandler {
      * Controller 메서드 파라미터 제약 조건(예: {@code @Min}) 위반을 400과 파라미터별 오류 목록으로 응답한다.
      */
     @ExceptionHandler(HandlerMethodValidationException.class)
-    public ResponseEntity<CommonResponse<List<CommonResponse.FieldError>>> handleHandlerMethodValidation(
-            HandlerMethodValidationException e, HttpServletRequest request) {
+    public ResponseEntity<CommonResponse<List<CommonResponse.FieldError>>>
+            handleHandlerMethodValidation(HandlerMethodValidationException e,
+                                          HttpServletRequest request) {
         List<CommonResponse.FieldError> errors = e.getParameterValidationResults().stream()
                 .flatMap(result -> result.getResolvableErrors().stream()
                         .map(error -> new CommonResponse.FieldError(
@@ -81,8 +83,9 @@ public class GlobalExceptionHandler {
      * {@code @Validated} 클래스의 메서드 검증 실패를 400과 필드별 오류 목록으로 응답한다.
      */
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<CommonResponse<List<CommonResponse.FieldError>>> handleConstraintViolation(
-            ConstraintViolationException e, HttpServletRequest request) {
+    public ResponseEntity<CommonResponse<List<CommonResponse.FieldError>>>
+            handleConstraintViolation(ConstraintViolationException e,
+                                      HttpServletRequest request) {
         List<CommonResponse.FieldError> errors = e.getConstraintViolations().stream()
                 .map(violation -> new CommonResponse.FieldError(lastNodeName(violation),
                         violation.getMessage()))
