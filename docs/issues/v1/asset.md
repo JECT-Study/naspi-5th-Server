@@ -1,10 +1,10 @@
 # [자산] asset
 
-> 정책: [docs/policies/v1/asset.md](../../policies/v1/asset.md)
+> 정책: [docs/policies/v1/asset.md](../../policies/v1/domain/asset.md)
 
 ### AST-01 리그가 시작되면 모든 참여자에게 총 1억 원 상당의 주식과 현금이 배분된다
 - Jira:
-- 정책: [asset.md#초기-자산-배분](../../policies/v1/asset.md#초기-자산-배분)
+- 정책: [asset.md#초기-자산-배분](../../policies/v1/domain/asset.md#초기-자산-배분)
 - 선행: LEA-09, MKT-04
 - 내용: `LeagueStarted` 구독, 배분 완료 시 거래 개시 가능 상태로 전환
 - 완료 조건
@@ -23,7 +23,7 @@
 
 ### AST-03 참여자는 사용 가능한 현금 범위에서만 매수 주문을 넣을 수 있다
 - Jira:
-- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/asset.md#주문-가능-자산-및-정산)
+- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/domain/asset.md#주문-가능-자산-및-정산)
 - 선행: AST-01
 - 완료 조건
   - [ ] 주문 가능 현금 = 현금 - 예약 현금, 부족 시 거절
@@ -31,7 +31,7 @@
 
 ### AST-04 참여자는 매도 가능한 수량 범위에서만 매도할 수 있고, 자사주는 1,000주를 남겨야 한다
 - Jira:
-- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/asset.md#주문-가능-자산-및-정산), [#자사주-최소-유지분](../../policies/v1/asset.md#자사주-최소-유지분)
+- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/domain/asset.md#주문-가능-자산-및-정산), [#자사주-최소-유지분](../../policies/v1/domain/asset.md#자사주-최소-유지분)
 - 선행: AST-01
 - 완료 조건
   - [ ] 매도 가능 수량 = 보유 - 예약, 부족 시 거절
@@ -40,7 +40,7 @@
 
 ### AST-05 체결이 발생하면 매수자와 매도자의 현금과 주식이 즉시 정산된다
 - Jira:
-- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/asset.md#주문-가능-자산-및-정산)
+- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/domain/asset.md#주문-가능-자산-및-정산)
 - 선행: AST-03, AST-04
 - 완료 조건
   - [ ] 매수: 현금 감소·주식 증가, 매도: 주식 감소·현금 증가 (실제 체결가·수량 기준)
@@ -49,14 +49,14 @@
 
 ### AST-06 주문이 취소되거나 만료되면 묶여 있던 현금과 주식이 해제된다
 - Jira:
-- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/asset.md#주문-가능-자산-및-정산)
+- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/domain/asset.md#주문-가능-자산-및-정산)
 - 선행: AST-03, AST-04
 - 완료 조건
   - [ ] 취소·만료 시 미체결 잔량에 해당하는 예약 현금·주식 해제
 
 ### AST-07 탈퇴한 회원의 현금은 폐기되고 보유 주식은 더 이상 거래되지 않는다
 - Jira:
-- 정책: [member.md#회원-탈퇴](../../policies/v1/member.md#회원-탈퇴)
+- 정책: [member.md#회원-탈퇴](../../policies/v1/domain/member.md#회원-탈퇴)
 - 선행: MBR-06, ORD-11
 - 완료 조건
   - [ ] 미체결 주문 취소(ORD-11) 이후 현금 폐기

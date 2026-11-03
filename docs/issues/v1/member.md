@@ -1,10 +1,10 @@
 # [회원] member
 
-> 정책: [docs/policies/v1/member.md](../../policies/v1/member.md)
+> 정책: [docs/policies/v1/member.md](../../policies/v1/domain/member.md)
 
 ### MBR-01 사용자는 약관에 동의하고 카카오 계정으로 회원가입·로그인할 수 있다
 - Jira:
-- 정책: [member.md#로그인-회원가입](../../policies/v1/member.md#로그인-회원가입), [#회원-정보---이메일](../../policies/v1/member.md#회원-정보---이메일)
+- 정책: [member.md#로그인-회원가입](../../policies/v1/domain/member.md#로그인-회원가입), [#회원-정보---이메일](../../policies/v1/domain/member.md#회원-정보---이메일)
 - 선행: GLB-02
 - 내용: 카카오 OAuth 인증, 신규 회원이면 가입 절차, 기존 회원이면 로그인
 - 완료 조건
@@ -14,7 +14,7 @@
 
 ### MBR-02 사용자는 회원가입 시 카카오 이름을 서비스 이름 규칙에 맞게 자동으로 받는다
 - Jira:
-- 정책: [member.md#회원-정보---이름](../../policies/v1/member.md#회원-정보---이름)
+- 정책: [member.md#회원-정보---이름](../../policies/v1/domain/member.md#회원-정보---이름)
 - 선행: MBR-01
 - 완료 조건
   - [ ] 한글이 아닌 문자 제외 후 5자 초과분 절사
@@ -22,7 +22,7 @@
 
 ### MBR-03 카카오 이름에 한글이 없는 사용자는 회원가입 단계에서 이름을 직접 입력할 수 있다
 - Jira:
-- 정책: [member.md#회원-정보---이름](../../policies/v1/member.md#회원-정보---이름)
+- 정책: [member.md#회원-정보---이름](../../policies/v1/domain/member.md#회원-정보---이름)
 - 선행: MBR-02
 - 완료 조건
   - [ ] 최대 5자 한글만 허용 (영어, 한자, 특수문자, 공백 불가)
@@ -36,14 +36,14 @@
 
 ### MBR-05 회원은 자신의 이름을 수정할 수 있다
 - Jira:
-- 정책: [member.md#회원-정보---이름](../../policies/v1/member.md#회원-정보---이름)
+- 정책: [member.md#회원-정보---이름](../../policies/v1/domain/member.md#회원-정보---이름)
 - 선행: MBR-01
 - 완료 조건
   - [ ] MBR-03과 동일한 검증 규칙 적용
 
 ### MBR-06 회원은 즉시 탈퇴할 수 있다
 - Jira:
-- 정책: [member.md#회원-탈퇴](../../policies/v1/member.md#회원-탈퇴)
+- 정책: [member.md#회원-탈퇴](../../policies/v1/domain/member.md#회원-탈퇴)
 - 선행: MBR-01, GLB-04
 - 내용: 즉시 탈퇴, 회원 정보 hard delete, `MemberWithdrawn` 이벤트 발행
 - 완료 조건

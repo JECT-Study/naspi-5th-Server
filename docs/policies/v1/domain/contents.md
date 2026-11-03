@@ -1,6 +1,7 @@
 # 공시·뉴스 정책 (v1)
 
-> 모듈: `contents` · 원본: v1 §3
+> 이 파일은 `policy.md`에서 생성된다. 직접 수정하지 말고 `policy.md`를 고친 뒤 `/sync-docs` (또는 `python3 scripts/sync-policy.py`)를 실행한다.
+> 모듈: `contents` · 원본: policy.md §3.1, §3.2, §3.3
 
 ## 공시
 

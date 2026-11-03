@@ -6,9 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r \".tool_input.command // empty\"); printf \"%s\" \"$cmd\" | grep -qE \"(^|[;&|[:space:]])git[[:space:]]+commit([[:space:]]|$)\" || exit 0; cd \"${CLAUDE_PROJECT_DIR:-.}\" || exit 0; if ! out=$(./gradlew checkstyleMain checkstyleTest -q 2>&1); then echo \"checkstyle 실패로 커밋을 차단했습니다. 위반 사항을 수정한 뒤 다시 커밋하세요.\" >&2; printf \"%s\\n\" \"$out\" | tail -30 >&2; exit 2; fi",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-commit-check.sh",
             "timeout": 300,
-            "statusMessage": "커밋 전 checkstyle 검사 중..."
+            "statusMessage": "커밋 전 이슈 문서·checkstyle 검사 중..."
           }
         ]
       }

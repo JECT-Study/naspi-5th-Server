@@ -33,8 +33,10 @@
 
 ## 정책서 (필수)
 
-- 기능 구현 전에 [docs/policies/README.md](docs/policies/README.md)와 해당 모듈의 `docs/policies/v1/{모듈}.md`를 읽는다.
-- **현재 구현 대상은 v1.** `docs/policies/roadmap.md`는 v2 이후 참고용이므로 구현하지 않는다 (매매봇, 일일 요약 뉴스 등).
+- 현재 구현 대상 버전은 `docs/policies/CURRENT`에 적혀 있다 (`scripts/policy-version.sh`). 이하 `<ver>`.
+- 기능 구현 전에 [docs/policies/README.md](docs/policies/README.md)와 해당 모듈의 `docs/policies/<ver>/domain/{모듈}.md`를 읽는다.
+- 정책 원본은 `docs/policies/<ver>/policy.md` 하나다. 이전 버전 폴더는 동결되어 수정하지 않는다. `domain/*.md`는 여기서 생성되므로 직접 수정하지 않는다. 정책을 바꾸면 `policy.md`를 고치고 `/sync-docs`로 domain 파일·이슈 초안·ERD를 동기화한다.
+- `docs/policies/roadmap.md`는 현재 버전 이후 참고용이므로 구현하지 않는다 (매매봇, 일일 요약 뉴스 등). 새 버전 시작은 `/sync-docs new v<N>`.
 - 정책에 없거나 모호한 결정은 임의로 정하지 말고 질문한다.
 - 정책과 코드가 어긋나면 정책서가 기준이다. 정책 변경이 필요하면 코드보다 문서를 먼저 고치자고 제안한다.
 
@@ -50,7 +52,8 @@
 | `asset` | 현금·보유 주식, 예약/해제/정산, 초기 자산 배분, 자사주 최소 유지분 |
 | `order` | 주문 접수, 호가창, 매칭·체결, 미체결 만료/취소 |
 | `contents` | 공시, 공시 기반 AI 뉴스, 댓글, 호재/악재 반응 |
-| `global` | 보안, 공통 예외/응답, AI 클라이언트, 파일 저장소, 실시간 전송, 설정 |
+| `global` | 애플리케이션 전역 처리: 예외 (`ErrorCode`, `BusinessException`, `GlobalExceptionHandler`) |
+| `common` | 여러 모듈이 공통으로 쓰는 코드: 응답 형식 (`CommonResponse`), 보안 설정 (`SecurityConfig`) |
 
 모듈 내부 구조:
 ```
@@ -67,7 +70,8 @@
 - 다른 모듈의 `domain`/`infra`를 직접 참조하지 않고 해당 모듈의 `application` 서비스를 통해 접근한다.
 - 역방향 흐름은 Spring 이벤트로 처리한다 (체결, 거래일 전환, 공시 게시, 회원 탈퇴, 리그 종료). 목록은 정책서 README 참고.
 - 자산(현금·주식)의 소유자는 `Member`가 아니라 리그 참여자(`Participant`)다. 리그마다 자산이 분리되며, v2의 봇도 참여자로 추가된다.
-- `global`에는 도메인 로직을 두지 않는다 (보안, 예외, 응답 형식, 설정, 외부 연동 클라이언트, 실시간 전송만). 여러 모듈이 쓰는 도메인 개념은 소유 모듈에 두고 `application`을 통해 노출한다 (예: 거래일 계산은 `league`, 가격·호가 단위는 `market`). `common`/`util` 패키지는 만들지 않는다.
+- `global`과 `common`에는 도메인 로직을 두지 않는다. 여러 모듈이 쓰는 도메인 개념은 소유 모듈에 두고 `application`을 통해 노출한다 (예: 거래일 계산은 `league`, 가격·호가 단위는 `market`).
+- 새 공통 코드를 어디에 둘지 애매하면 임의로 정하지 말고 질문한다.
 - 버전별 패키지(`v1`, `v2`)를 만들지 않는다.
 
 ## 도메인 용어
@@ -91,6 +95,10 @@
 ## Git
 
 - 브랜치: `feature/*`, `fix/*` → `development/{버전}`으로 PR. CI는 `development/**` 대상 PR에서 실행된다.
+- Jira 이슈 작업 브랜치는 `{타입}/{JIRA-KEY}` (예: `feature/ND-12`, `fix/ND-12`, `refactor/ND-12`). 작업하는 스토리의 `docs/issues/<ver>/*.md` `Jira:` 칸에 해당 키를 기재한다.
+  - Jira 키가 없는 브랜치(예: `feature/json-logging`)는 기재 대상이 아니다.
+  - 검증: `scripts/check-issue-doc.sh` (커밋 전 훅에서 자동 실행, 미기재 시 커밋 차단). 키를 기재할 스토리가 불분명하면 질문한다.
+  - PR 전에 `/story`로 완료 조건 구현·테스트 여부를 점검한다. 스토리 조회는 `scripts/find-story.sh <스토리 ID | Jira 키>`.
 - **커밋 전에 항상 `./gradlew checkstyleMain checkstyleTest`를 실행하고, 통과하지 않으면 커밋하지 않는다.**
 - 커밋 메시지는 한국어로 간결하게 작성한다 (예: `주문 체결 로직 추가`).
 - 요청 없이 push하지 않는다.

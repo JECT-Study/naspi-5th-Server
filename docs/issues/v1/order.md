@@ -1,10 +1,10 @@
 # [주문] order
 
-> 정책: [docs/policies/v1/order.md](../../policies/v1/order.md)
+> 정책: [docs/policies/v1/order.md](../../policies/v1/domain/order.md)
 
 ### ORD-01 시스템은 주문과 종목별 호가창을 정책에 맞는 모델로 관리한다
 - Jira:
-- 정책: [order.md#주문](../../policies/v1/order.md#주문), [#체결](../../policies/v1/order.md#체결)
+- 정책: [order.md#주문](../../policies/v1/domain/order.md#주문), [#체결](../../policies/v1/domain/order.md#체결)
 - 내용: 주문(방향, 유형, 가격, 수량, 잔량, 상태, 접수 시각, 거래일), 종목별 호가창 모델
 - 완료 조건
   - [ ] 수량은 1주 단위 양의 정수, 가격은 100원 이상 100원 단위
@@ -12,7 +12,7 @@
 
 ### ORD-02 참여자는 가격과 수량을 지정해 지정가 주문을 넣을 수 있다
 - Jira:
-- 정책: [order.md#주문](../../policies/v1/order.md#주문)
+- 정책: [order.md#주문](../../policies/v1/domain/order.md#주문)
 - 선행: ORD-01, MKT-03, AST-03, AST-04
 - 완료 조건
   - [ ] 거래 가능 상태(자산 배분 완료, 종료 전) 리그에서만 접수
@@ -23,7 +23,7 @@
 
 ### ORD-03 접수된 주문은 가격·시간 우선 원칙에 따라 상대 주문과 체결된다
 - Jira:
-- 정책: [order.md#체결](../../policies/v1/order.md#체결)
+- 정책: [order.md#체결](../../policies/v1/domain/order.md#체결)
 - 선행: ORD-01, AST-05
 - 내용: 체결 시 정산(AST-05) 후 `TradeExecuted` 이벤트 발행
 - 완료 조건
@@ -34,7 +34,7 @@
 
 ### ORD-04 같은 참여자의 매수·매도 주문끼리는 체결되지 않는다
 - Jira:
-- 정책: [order.md#체결](../../policies/v1/order.md#체결)
+- 정책: [order.md#체결](../../policies/v1/domain/order.md#체결)
 - 선행: ORD-03
 - 완료 조건
   - [ ] 같은 참여자의 매수·매도가 체결될 차례면 신규 주문 미체결 잔량 취소
@@ -42,7 +42,7 @@
 
 ### ORD-05 참여자는 수량만 지정해 최우선 호가 기준 5% 이내에서 즉시 체결되는 시장가 주문을 넣을 수 있다
 - Jira:
-- 정책: [order.md#주문](../../policies/v1/order.md#주문)
+- 정책: [order.md#주문](../../policies/v1/domain/order.md#주문)
 - 선행: ORD-03
 - 완료 조건
   - [ ] 매수: 최우선 매도 호가 + 최대 5%, 매도: 최우선 매수 호가 - 최대 5% 범위에서 즉시 체결
@@ -54,7 +54,7 @@
 
 ### ORD-06 주문과 취소가 동시에 몰려도 체결 순서와 자산 정합성이 보장된다
 - Jira:
-- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/asset.md#주문-가능-자산-및-정산)
+- 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/domain/asset.md#주문-가능-자산-및-정산)
 - 선행: ORD-03
 - 완료 조건
   - [ ] 종목별 매칭을 직렬화하여 체결 순서 보장
@@ -64,7 +64,7 @@
 
 ### ORD-07 참여자는 자신의 미체결 주문을 취소할 수 있다
 - Jira:
-- 정책: [order.md#미체결-주문-관리](../../policies/v1/order.md#미체결-주문-관리)
+- 정책: [order.md#미체결-주문-관리](../../policies/v1/domain/order.md#미체결-주문-관리)
 - 선행: ORD-02, AST-06
 - 완료 조건
   - [ ] 본인 주문의 미체결 잔량만 취소, 예약 자산 해제
@@ -77,7 +77,7 @@
 
 ### ORD-09 지정가 주문의 미체결 잔량은 다음 거래일 09:00에 자동으로 만료된다
 - Jira:
-- 정책: [order.md#미체결-주문-관리](../../policies/v1/order.md#미체결-주문-관리)
+- 정책: [order.md#미체결-주문-관리](../../policies/v1/domain/order.md#미체결-주문-관리)
 - 선행: LEA-11, AST-06
 - 완료 조건
   - [ ] `TradingDayChanged` 수신 시 이전 거래일 지정가 미체결 잔량 만료, 예약 자산 해제
@@ -85,7 +85,7 @@
 
 ### ORD-10 리그가 종료되면 주문 접수가 막히고 모든 미체결 주문이 취소된다
 - Jira:
-- 정책: [order.md#미체결-주문-관리](../../policies/v1/order.md#미체결-주문-관리)
+- 정책: [order.md#미체결-주문-관리](../../policies/v1/domain/order.md#미체결-주문-관리)
 - 선행: LEA-12, AST-06
 - 완료 조건
   - [ ] 종료 시각 이후 주문 접수·체결 불가
@@ -93,7 +93,7 @@
 
 ### ORD-11 회원이 탈퇴하면 참여 중인 모든 리그의 미체결 주문이 취소된다
 - Jira:
-- 정책: [member.md#회원-탈퇴](../../policies/v1/member.md#회원-탈퇴)
+- 정책: [member.md#회원-탈퇴](../../policies/v1/domain/member.md#회원-탈퇴)
 - 선행: MBR-06, ORD-07
 - 완료 조건
   - [ ] 탈퇴 회원의 모든 리그 미체결 주문 취소 및 예약 해제

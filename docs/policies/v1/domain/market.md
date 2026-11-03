@@ -1,6 +1,7 @@
 # 종목·시세 정책 (v1)
 
-> 모듈: `market` · 원본: v1 §2.4, §4.1, §5.1
+> 이 파일은 `policy.md`에서 생성된다. 직접 수정하지 말고 `policy.md`를 고친 뒤 `/sync-docs` (또는 `python3 scripts/sync-policy.py`)를 실행한다.
+> 모듈: `market` · 원본: policy.md §4.1, §2.4, §5.1
 
 ## 종목 상장
 

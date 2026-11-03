@@ -1,0 +1,53 @@
+{
+  "_comment": "policy.md 의 ### 섹션을 domain/*.md 로 나누는 규칙. scripts/sync-policy.py 가 사용한다. 섹션은 번호가 아니라 제목으로 매칭한다.",
+  "source": "policy.md",
+  "target_dir": "domain",
+  "modules": [
+    {
+      "module": "member",
+      "file": "member.md",
+      "title": "회원 정책 (v1)",
+      "sections": ["로그인/ 회원가입", "회원 정보 - 이름", "회원 정보 - 이메일", "회원 탈퇴"],
+      "notes": ["탈퇴 처리는 여러 모듈에 걸쳐 있음: 주문 취소(order), 현금 폐기·보유 유지(asset), 종목 연결 해제(market), 콘텐츠 유지(contents), 결과 처리(league)"]
+    },
+    {
+      "module": "league",
+      "file": "league.md",
+      "title": "리그 정책 (v1)",
+      "sections": ["리그 생성 및 초대", "대기실", "리그 시작 및 운영", "리그 결과"],
+      "notes": ["거래일·거래 시간 정의는 [market.md](market.md) 참고"]
+    },
+    {
+      "module": "market",
+      "file": "market.md",
+      "title": "종목·시세 정책 (v1)",
+      "sections": ["종목 상장", "시장", "가격제한폭"],
+      "notes": []
+    },
+    {
+      "module": "asset",
+      "file": "asset.md",
+      "title": "자산 정책 (v1)",
+      "sections": ["초기 자산 배분", "주문 가능 자산 및 정산", "자사주 최소 유지분"],
+      "notes": ["예약·정산은 order가 호출, 자사주 매도 가능 수량은 order 접수·체결 시 사용"]
+    },
+    {
+      "module": "order",
+      "file": "order.md",
+      "title": "주문·체결 정책 (v1)",
+      "sections": ["주문", "체결", "미체결 주문 관리"],
+      "notes": ["가격제한폭은 [market.md](market.md#가격제한폭), 주문 가능 자산·예약·정산과 자사주 최소 유지분은 [asset.md](asset.md) 참고"]
+    },
+    {
+      "module": "contents",
+      "file": "contents.md",
+      "title": "공시·뉴스 정책 (v1)",
+      "sections": ["공시", "뉴스 - 공시 기반 AI 뉴스", "댓글 (공통)"],
+      "notes": []
+    }
+  ],
+  "replacements": [
+    {"file": "league.md", "from": "상장 관련 정책은 ‣  참고", "to": "상장 관련 정책은 [market.md](market.md#종목-상장) 참고"},
+    {"file": "market.md", "from": "상·하한가 관련 정책은 ‣  참고", "to": "상·하한가 관련 정책은 [가격제한폭](#가격제한폭) 참고"}
+  ]
+}

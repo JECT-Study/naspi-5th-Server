@@ -1,6 +1,7 @@
 # 주문·체결 정책 (v1)
 
-> 모듈: `order` · 원본: v1 §5.2, §5.4, §5.6
+> 이 파일은 `policy.md`에서 생성된다. 직접 수정하지 말고 `policy.md`를 고친 뒤 `/sync-docs` (또는 `python3 scripts/sync-policy.py`)를 실행한다.
+> 모듈: `order` · 원본: policy.md §5.2, §5.4, §5.6
 > 가격제한폭은 [market.md](market.md#가격제한폭), 주문 가능 자산·예약·정산과 자사주 최소 유지분은 [asset.md](asset.md) 참고
 
 ## 주문

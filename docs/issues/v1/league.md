@@ -1,12 +1,12 @@
 # [리그] league
 
-> 정책: [docs/policies/v1/league.md](../../policies/v1/league.md)
+> 정책: [docs/policies/v1/league.md](../../policies/v1/domain/league.md)
 
 ## 대기실
 
 ### LEA-01 회원은 리그 이름을 정하고 자신의 종목을 상장해 리그를 만들 수 있다
 - Jira:
-- 정책: [league.md#리그-생성-및-초대](../../policies/v1/league.md#리그-생성-및-초대)
+- 정책: [league.md#리그-생성-및-초대](../../policies/v1/domain/league.md#리그-생성-및-초대)
 - 선행: MBR-01
 - 내용: 리그 이름 지정 → 대기실 생성, 방장은 대기자 상태. 방장이 상장(MKT-01)을 마치면 생성 완료 및 초대 코드 발급
 - 완료 조건
@@ -17,14 +17,14 @@
 
 ### LEA-02 회원은 대기실과 진행 중인 리그를 합쳐 최대 5개까지만 참여할 수 있다
 - Jira:
-- 정책: [league.md#리그-생성-및-초대](../../policies/v1/league.md#리그-생성-및-초대)
+- 정책: [league.md#리그-생성-및-초대](../../policies/v1/domain/league.md#리그-생성-및-초대)
 - 완료 조건
   - [ ] 대기실 + 진행 중 리그 합계 최대 5개, 종료된 리그는 제외
   - [ ] 리그 생성 시와 대기실 입장 시 모두 검증
 
 ### LEA-03 회원은 초대 코드로 리그 대기실에 입장할 수 있다
 - Jira:
-- 정책: [league.md#대기실](../../policies/v1/league.md#대기실)
+- 정책: [league.md#대기실](../../policies/v1/domain/league.md#대기실)
 - 선행: LEA-01
 - 완료 조건
   - [ ] 입장 시 대기자 상태
@@ -39,7 +39,7 @@
 
 ### LEA-05 대기자는 종목 상장을 마치면 참여자가 된다
 - Jira:
-- 정책: [league.md#대기실](../../policies/v1/league.md#대기실)
+- 정책: [league.md#대기실](../../policies/v1/domain/league.md#대기실)
 - 선행: LEA-03, MKT-01
 - 완료 조건
   - [ ] 상장 완료 이벤트 수신 시 대기자 → 참여자 전환, 상장 완료 순서 기록 (방장 위임 기준)
@@ -47,7 +47,7 @@
 
 ### LEA-06 대기실의 사용자는 리그 시작 전에 대기실을 나갈 수 있고, 방장이 나가면 다음 참여자에게 방장이 위임된다
 - Jira:
-- 정책: [league.md#대기실](../../policies/v1/league.md#대기실)
+- 정책: [league.md#대기실](../../policies/v1/domain/league.md#대기실)
 - 선행: LEA-05
 - 완료 조건
   - [ ] 참여자·대기자 퇴장 가능, 퇴장한 참여자의 종목 처리
@@ -57,7 +57,7 @@
 
 ### LEA-07 방장은 리그 시작 전에 리그 이름 수정, 리그 삭제, 참여자 삭제를 할 수 있다
 - Jira:
-- 정책: [league.md#대기실](../../policies/v1/league.md#대기실)
+- 정책: [league.md#대기실](../../policies/v1/domain/league.md#대기실)
 - 선행: LEA-05
 - 완료 조건
   - [ ] 리그 이름 수정, 리그 삭제, 참여자 삭제는 방장만, 대기실 상태에서만 가능
@@ -65,7 +65,7 @@
 
 ### LEA-08 생성 후 7일 안에 시작되지 않은 대기실은 초대 코드와 함께 만료된다
 - Jira:
-- 정책: [league.md#리그-생성-및-초대](../../policies/v1/league.md#리그-생성-및-초대)
+- 정책: [league.md#리그-생성-및-초대](../../policies/v1/domain/league.md#리그-생성-및-초대)
 - 선행: LEA-01, GLB-03
 - 완료 조건
   - [ ] 대기실 생성 후 7일 내 미시작 시 대기실과 초대 코드 만료
@@ -75,7 +75,7 @@
 
 ### LEA-09 방장은 참여자가 3명 이상이고 대기자가 없을 때 리그를 시작할 수 있다
 - Jira:
-- 정책: [league.md#리그-시작-및-운영](../../policies/v1/league.md#리그-시작-및-운영)
+- 정책: [league.md#리그-시작-및-운영](../../policies/v1/domain/league.md#리그-시작-및-운영)
 - 선행: LEA-05
 - 내용: 시작 조건 검증 후 참여자 명단 고정, `LeagueStarted` 이벤트 발행 → 자산 배분(AST-01) 완료 시 거래 개시
 - 완료 조건
@@ -85,7 +85,7 @@
 
 ### LEA-10 참여자는 리그 종료 시각과 현재 몇 거래일차인지 알 수 있다
 - Jira:
-- 정책: [league.md#리그-시작-및-운영](../../policies/v1/league.md#리그-시작-및-운영), [market.md#시장](../../policies/v1/market.md#시장)
+- 정책: [league.md#리그-시작-및-운영](../../policies/v1/domain/league.md#리그-시작-및-운영), [market.md#시장](../../policies/v1/domain/market.md#시장)
 - 선행: GLB-03
 - 완료 조건
   - [ ] 종료 시각 = 시작 KST 날짜 + 7일, 09:00 KST
@@ -95,7 +95,7 @@
 
 ### LEA-11 진행 중인 리그는 매일 09:00 KST에 다음 거래일로 전환된다
 - Jira:
-- 정책: [market.md#시장](../../policies/v1/market.md#시장)
+- 정책: [market.md#시장](../../policies/v1/domain/market.md#시장)
 - 선행: LEA-10, GLB-04
 - 내용: 매일 09:00 KST에 진행 중인 리그마다 `TradingDayChanged` 이벤트 발행
 - 완료 조건
@@ -104,7 +104,7 @@
 
 ### LEA-12 리그는 종료 시각에 자동으로 종료되고, 이후에는 결과 페이지만 열린다
 - Jira:
-- 정책: [league.md#리그-시작-및-운영](../../policies/v1/league.md#리그-시작-및-운영)
+- 정책: [league.md#리그-시작-및-운영](../../policies/v1/domain/league.md#리그-시작-및-운영)
 - 선행: LEA-10
 - 내용: 종료 시각에 주문 접수·체결 종료, `LeagueEnded` 이벤트 발행
 - 완료 조건
@@ -115,7 +115,7 @@
 
 ### LEA-13 리그가 종료되면 참여자의 최종 총자산과 순위가 산정된다
 - Jira:
-- 정책: [league.md#리그-결과](../../policies/v1/league.md#리그-결과)
+- 정책: [league.md#리그-결과](../../policies/v1/domain/league.md#리그-결과)
 - 선행: LEA-12, MKT-07, AST-05
 - 완료 조건
   - [ ] 최종 총자산 = 최종 현금 + Σ(보유 수량 × 종료 평가 가격), 원 미만 절사
@@ -125,7 +125,7 @@
 
 ### LEA-14 참여자는 종료된 리그의 최종 순위와 참여자별 자산 내역을 영구히 조회할 수 있다
 - Jira:
-- 정책: [league.md#리그-결과](../../policies/v1/league.md#리그-결과)
+- 정책: [league.md#리그-결과](../../policies/v1/domain/league.md#리그-결과)
 - 선행: LEA-13
 - 완료 조건
   - [ ] 최종 순위와 참여자별 세부 내역 공개
@@ -133,7 +133,7 @@
 
 ### LEA-15 탈퇴한 회원은 리그 종료 전이면 결과에서 제외되고, 종료 후면 '탈퇴한 사용자'로 표시된다
 - Jira:
-- 정책: [member.md#회원-탈퇴](../../policies/v1/member.md#회원-탈퇴)
+- 정책: [member.md#회원-탈퇴](../../policies/v1/domain/member.md#회원-탈퇴)
 - 선행: MBR-06, LEA-13
 - 완료 조건
   - [ ] 종료 전 탈퇴: 결과 산정·보관 대상에서 제외

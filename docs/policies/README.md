@@ -1,21 +1,24 @@
 # 정책서
 
-**현재 구현 대상: v1**
+**현재 구현 대상: [`CURRENT`](CURRENT) 파일에 적힌 버전** (`scripts/policy-version.sh`로 확인)
 
-기능을 구현하기 전에 해당 모듈의 v1 정책 파일을 확인한다.
-[roadmap.md](roadmap.md)는 v2 이후(매매봇, 추가 뉴스 유형 등)를 포함한 전체 기획 참고용이며, v1 구현 대상이 아니다.
-v1과 roadmap의 내용이 다르면 v1을 따른다.
+기능을 구현하기 전에 현재 버전의 모듈 정책 파일을 확인한다.
+버전마다 폴더(`v1/`, `v2/` ...)에 정책서 전체본을 둔다. 이전 버전은 동결되어 수정하지 않으며, 새 버전은 `/sync-docs new v<N>`으로 시작한다.
+[roadmap.md](roadmap.md)는 이후 버전(매매봇, 추가 뉴스 유형 등)을 포함한 전체 기획 참고용이며 구현 대상이 아니다. 현재 버전과 roadmap이 다르면 현재 버전을 따른다.
 
 ## v1 모듈별 정책
 
+원본은 [v1/policy.md](v1/policy.md) 하나다. 아래 모듈별 파일은 원본에서 생성되므로 직접 수정하지 않는다.
+정책을 바꾸면 `policy.md`만 고치고 `/sync-docs`로 domain 파일·이슈 초안·ERD를 맞춘다.
+
 | 모듈 | 파일 | 범위 |
 |---|---|---|
-| `member` | [v1/member.md](v1/member.md) | 카카오 로그인/회원가입, 이름·이메일, 회원 탈퇴 |
-| `league` | [v1/league.md](v1/league.md) | 리그 생성·초대, 대기실, 시작·운영 기간·종료, 리그 결과 |
-| `market` | [v1/market.md](v1/market.md) | 종목 상장, 거래일, 시세(현재가·기준가·종가·거래량), 가격제한폭 |
-| `asset` | [v1/asset.md](v1/asset.md) | 초기 자산 배분, 주문 가능 자산·예약·정산, 자사주 최소 유지분 |
-| `order` | [v1/order.md](v1/order.md) | 지정가·시장가 주문, 체결 원칙, 자전거래 금지, 미체결 만료·취소 |
-| `contents` | [v1/contents.md](v1/contents.md) | 공시, 공시 기반 AI 뉴스, 댓글 |
+| `member` | [v1/domain/member.md](v1/domain/member.md) | 카카오 로그인/회원가입, 이름·이메일, 회원 탈퇴 |
+| `league` | [v1/domain/league.md](v1/domain/league.md) | 리그 생성·초대, 대기실, 시작·운영 기간·종료, 리그 결과 |
+| `market` | [v1/domain/market.md](v1/domain/market.md) | 종목 상장, 거래일, 시세(현재가·기준가·종가·거래량), 가격제한폭 |
+| `asset` | [v1/domain/asset.md](v1/domain/asset.md) | 초기 자산 배분, 주문 가능 자산·예약·정산, 자사주 최소 유지분 |
+| `order` | [v1/domain/order.md](v1/domain/order.md) | 지정가·시장가 주문, 체결 원칙, 자전거래 금지, 미체결 만료·취소 |
+| `contents` | [v1/domain/contents.md](v1/domain/contents.md) | 공시, 공시 기반 AI 뉴스, 댓글 |
 
 ## 모듈 간 의존 방향
 

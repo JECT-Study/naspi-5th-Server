@@ -1,12 +1,12 @@
 # [콘텐츠] contents
 
-> 정책: [docs/policies/v1/contents.md](../../policies/v1/contents.md)
+> 정책: [docs/policies/v1/contents.md](../../policies/v1/domain/contents.md)
 
 ## 공시
 
 ### CNT-01 상장자는 자기 종목에 이미지와 함께 공시를 작성할 수 있다
 - Jira:
-- 정책: [contents.md#공시](../../policies/v1/contents.md#공시)
+- 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시)
 - 선행: MKT-01, GLB-05
 - 내용: 상장자가 자기 종목에 공시 작성, `DisclosurePublished` 이벤트 발행
 - 완료 조건
@@ -23,7 +23,7 @@
 
 ### CNT-03 공시 작성자는 자신의 공시를 삭제할 수 있다
 - Jira:
-- 정책: [contents.md#공시](../../policies/v1/contents.md#공시)
+- 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시)
 - 선행: CNT-01
 - 완료 조건
   - [ ] 작성자만 삭제 가능
@@ -32,7 +32,7 @@
 
 ### CNT-04 참여자는 공시에 호재 또는 악재로 반응할 수 있다
 - Jira:
-- 정책: [contents.md#공시](../../policies/v1/contents.md#공시)
+- 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시)
 - 선행: CNT-01
 - 완료 조건
   - [ ] 호재 또는 악재 반응, 반응 수 집계
@@ -43,7 +43,7 @@
 
 ### CNT-05 공시가 게시되면 AI가 공시 내용을 바탕으로 뉴스 1개를 생성한다
 - Jira:
-- 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/contents.md#뉴스---공시-기반-ai-뉴스)
+- 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/domain/contents.md#뉴스---공시-기반-ai-뉴스)
 - 선행: CNT-01, GLB-06
 - 내용: `DisclosurePublished` 비동기 구독
 - 완료 조건
@@ -56,7 +56,7 @@
 
 ### CNT-06 AI 뉴스 생성에 실패하면 최대 2회까지 자동으로 재시도한다
 - Jira:
-- 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/contents.md#뉴스---공시-기반-ai-뉴스)
+- 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/domain/contents.md#뉴스---공시-기반-ai-뉴스)
 - 선행: CNT-05
 - 완료 조건
   - [ ] 최초 실패 후 최대 2회 자동 재시도, 공시 삭제 여부와 무관
@@ -64,7 +64,7 @@
 
 ### CNT-07 공시 작성자는 자동 재시도까지 실패한 AI 뉴스를 직접 다시 생성할 수 있다
 - Jira:
-- 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/contents.md#뉴스---공시-기반-ai-뉴스)
+- 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/domain/contents.md#뉴스---공시-기반-ai-뉴스)
 - 선행: CNT-06
 - 완료 조건
   - [ ] 공시 작성자만, 자동 재시도 모두 실패한 경우만
@@ -82,7 +82,7 @@
 
 ### CNT-09 참여자는 공시와 뉴스에 댓글을 작성하고 조회할 수 있다
 - Jira:
-- 정책: [contents.md#댓글-공통](../../policies/v1/contents.md#댓글-공통)
+- 정책: [contents.md#댓글-공통](../../policies/v1/domain/contents.md#댓글-공통)
 - 선행: CNT-01, CNT-05
 - 완료 조건
   - [ ] 공시·뉴스 공통 적용, 최대 100자, 이미지 불가, 대댓글 불가
@@ -90,7 +90,7 @@
 
 ### CNT-10 댓글 작성자는 자신의 댓글을 삭제할 수 있다
 - Jira:
-- 정책: [contents.md#댓글-공통](../../policies/v1/contents.md#댓글-공통)
+- 정책: [contents.md#댓글-공통](../../policies/v1/domain/contents.md#댓글-공통)
 - 선행: CNT-09
 - 완료 조건
   - [ ] 작성자 본인만 삭제

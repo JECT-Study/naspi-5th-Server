@@ -11,7 +11,7 @@
 
 ### GLB-02 비회원은 공개 API 외에는 접근할 수 없고, 회원은 인증 정보로 본인을 식별받는다
 - Jira:
-- 정책: [member.md#로그인-회원가입](../../policies/v1/member.md#로그인-회원가입) — 서비스는 회원만 이용 가능
+- 정책: [member.md#로그인-회원가입](../../policies/v1/domain/member.md#로그인-회원가입) — 서비스는 회원만 이용 가능
 - 내용: Spring Session + Redis 기반 세션 인증, 인증 예외(401/403) 응답, 현재 회원 조회용 리졸버
 - 완료 조건
   - [ ] 로그인 시 세션이 Redis에 저장되고, 서버 여러 대에서 같은 세션 공유
@@ -35,7 +35,7 @@
 
 ### GLB-05 사용자는 JPEG/PNG 이미지를 업로드할 수 있다
 - Jira:
-- 정책: [contents.md#공시](../../policies/v1/contents.md#공시) — JPEG(.jpg/.jpeg), PNG
+- 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시) — JPEG(.jpg/.jpeg), PNG
 - 내용: 이미지 업로드/조회 추상화, 확장자·MIME 검증
 - 완료 조건
   - [ ] JPEG/PNG 외 형식 거절
@@ -44,7 +44,7 @@
 
 ### GLB-06 시스템은 AI 모델을 호출해 텍스트를 생성할 수 있다
 - Jira:
-- 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/contents.md#뉴스---공시-기반-ai-뉴스)
+- 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/domain/contents.md#뉴스---공시-기반-ai-뉴스)
 - 내용: LLM API 호출 클라이언트, 타임아웃·실패 예외 구분
 - 완료 조건
   - [ ] 프롬프트/응답 파싱과 HTTP 호출 분리
