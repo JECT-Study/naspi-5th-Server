@@ -6,7 +6,8 @@
 #   scripts/find-story.sh ND-99      Jira 키로 찾기 ("- Jira: ND-99" 가 적힌 스토리)
 #   scripts/find-story.sh            현재 브랜치({타입}/{JIRA-KEY})의 Jira 키로 찾기
 #
-# 검색 범위: 현재 버전(docs/policies/CURRENT)의 docs/issues/<버전>/ 을 먼저 찾고, 없으면 다른 버전도 찾는다.
+# 검색 범위: 현재 버전(docs/policies/CURRENT)의 docs/issues/<버전>/ 과 docs/issues/tasks/ 를 먼저 찾고,
+#           없으면 다른 버전도 찾는다. tasks/ 의 항목은 Task(정책 무관), 나머지는 Story 다.
 # 출력: 첫 줄에 "FILE <경로>:<줄번호>", 이어서 스토리 섹션 본문
 # 종료 코드: 0 찾음, 1 못 찾음, 2 인자/브랜치로 대상을 정할 수 없음
 set -euo pipefail
@@ -52,8 +53,8 @@ done
 return 0
 }
 found=0
-if [[ -n "$cur" ]]; then search "$root"/docs/issues/"$cur"/*.md; fi
-if [[ $found -eq 0 ]]; then search "$root"/docs/issues/v*/*.md; fi
+if [[ -n "$cur" ]]; then search "$root"/docs/issues/"$cur"/*.md "$root"/docs/issues/tasks/*.md; fi
+if [[ $found -eq 0 ]]; then search "$root"/docs/issues/v*/*.md "$root"/docs/issues/tasks/*.md; fi
 
 if [[ $found -eq 0 ]]; then
   echo "$target 에 해당하는 스토리를 docs/issues 에서 찾지 못했습니다." >&2

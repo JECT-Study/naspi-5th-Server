@@ -95,7 +95,8 @@
 ## Git
 
 - 브랜치: `feature/*`, `fix/*` → `development/{버전}`으로 PR. CI는 `development/**` 대상 PR에서 실행된다.
-- Jira 이슈 작업 브랜치는 `{타입}/{JIRA-KEY}` (예: `feature/ND-12`, `fix/ND-12`, `refactor/ND-12`). 작업하는 스토리의 `docs/issues/<ver>/*.md` `Jira:` 칸에 해당 키를 기재한다.
+- 이슈는 Story(정책 기반 사용자 기능, `docs/issues/<ver>/`)와 Task(기술 작업, 정책 무관은 `docs/issues/tasks/`)로 나눈다. 형식은 `docs/issues/README.md` 참고.
+- Jira 이슈 작업 브랜치는 `{타입}/{JIRA-KEY}` (예: `feature/ND-12`, `fix/ND-12`, `refactor/ND-12`). 작업하는 Story·Task의 `Jira:` 칸에 해당 키를 기재한다.
   - Jira 키가 없는 브랜치(예: `feature/json-logging`)는 기재 대상이 아니다.
   - 검증: `scripts/check-issue-doc.sh` (커밋 전 훅에서 자동 실행, 미기재 시 커밋 차단). 키를 기재할 스토리가 불분명하면 질문한다.
   - PR 전에 `/story`로 완료 조건 구현·테스트 여부를 점검한다. 스토리 조회는 `scripts/find-story.sh <스토리 ID | Jira 키>`.

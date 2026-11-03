@@ -1,8 +1,8 @@
 ---
 name: story
-description: 스토리의 완료 조건과 연결된 정책이 현재 브랜치에 구현·테스트됐는지 조건별로 검증해 리포트한다. 인자로 Jira 키(ND-99)나 스토리 ID(MBR-03)를 받고, 생략하면 현재 브랜치({타입}/{JIRA-KEY})의 키를 쓴다. PR 전 점검, "스토리 검증", "완료 조건 확인" 요청 시 사용.
+description: 스토리(또는 Task)의 완료 조건과 연결된 정책이 현재 브랜치에 구현·테스트됐는지 조건별로 검증해 리포트한다. 인자로 Jira 키(ND-99)나 스토리 ID(MBR-03)를 받고, 생략하면 현재 브랜치({타입}/{JIRA-KEY})의 키를 쓴다. PR 전 점검, "스토리 검증", "완료 조건 확인" 요청 시 사용.
 argument-hint: "[Jira 키 | 스토리 ID]"
-allowed-tools: Read, Grep, Glob, Bash(scripts/find-story.sh:*), Bash(git diff:*), Bash(git log:*), Bash(git status:*), Bash(git merge-base:*), Bash(git rev-parse:*), Bash(./gradlew test:*)
+allowed-tools: Read, Grep, Glob, Bash(scripts/find-story.sh:*), Bash(git diff:*), Bash(git log:*), Bash(git status:*), Bash(git merge-base:*), Bash(git rev-parse:*), Bash(./gradlew test:*), Bash(python3 scripts/sync-policy.py --check:*), Bash(python3 scripts/erd-summary.py --check:*), Bash(scripts/check-issue-doc.sh:*), Bash(./gradlew checkstyleMain:*)
 ---
 
 # 스토리 완료 조건 검증
@@ -23,6 +23,18 @@ scripts/find-story.sh $ARGUMENTS
   - 정책 링크 (`정책:` 줄) → 링크된 `docs/policies/<버전>/domain/*.md` 섹션을 읽는다 (버전은 스토리 파일 경로의 `docs/issues/<버전>/`).
   - 결정 필요 항목
   - 선행 스토리
+- **유형 판별**: `FILE` 경로가 `docs/issues/tasks/`이면 **Task**, `docs/issues/<버전>/`이면 **Story**다. Task는 아래 "Task 검증"으로 간다.
+
+### Task 검증 (`docs/issues/tasks/`)
+
+Task는 정책과 무관한 기술 작업이다. 2~5단계 대신 다음을 한다.
+
+1. 완료 조건마다 `— ` 뒤의 확인 방법을 본다.
+   - 명령이면 실행한다. 단, **읽기 전용 검사 명령만** 실행한다 (`--check` 옵션, 테스트, checkstyle, 검증 스크립트). 배포·푸시·외부 시스템 변경 명령은 실행하지 않고 ❓로 둔다.
+   - 파일·경로이면 존재와 내용을 확인한다.
+   - 확인 방법이 없으면 조건 문장을 근거로 저장소를 검색해 판단하고, 근거가 부족하면 ❓로 둔다.
+2. 판정은 ✅ 확인됨 / ❌ 미충족 / ❓ 수동 확인 필요 세 가지만 쓴다 (테스트 근거 열은 확인 방법으로 대체).
+3. 6단계 리포트 형식을 쓰되, 표의 열은 `검증 항목 | 판정 | 확인 방법 | 결과`로 한다.
 
 ## 2. 검증 기준 만들기
 
