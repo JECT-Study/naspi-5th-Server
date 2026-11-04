@@ -9,8 +9,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.Objects;
-import kr.ject.naspi.global.exception.BusinessException;
-import kr.ject.naspi.global.exception.ErrorCode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,7 +16,8 @@ import lombok.NoArgsConstructor;
 /**
  * 회원 (ERD: member).
  *
- * <p>카카오 계정으로만 가입하며, 개인정보처리방침과 서비스이용약관에 동의해야 가입할 수 있다.
+ * <p>카카오 계정으로만 가입한다. 개인정보처리방침과 서비스이용약관은 카카오 로그인 동의 화면에서 필수로 동의받으므로
+ * 카카오 인증을 마친 사용자는 약관에 동의한 것으로 본다.
  */
 @Entity
 @Table(name = "member")
@@ -56,18 +55,14 @@ public class Member {
     /**
      * 카카오 계정으로 회원가입한다.
      *
+     * <p>약관 동의는 카카오 동의 화면에서 받으므로 약관 동의 상태로 가입된다.
+     *
      * @param kakaoId 카카오 회원 번호
      * @param name 회원 이름
-     * @param termsAgreed 개인정보처리방침·서비스이용약관 동의 여부
      * @param joinedAt 가입 일시
      * @return 가입한 회원
-     * @throws BusinessException 약관에 동의하지 않은 경우
      */
-    public static Member join(
-            Long kakaoId, MemberName name, boolean termsAgreed, LocalDateTime joinedAt) {
-        if (!termsAgreed) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "약관에 동의해야 가입할 수 있습니다.");
-        }
+    public static Member join(Long kakaoId, MemberName name, LocalDateTime joinedAt) {
         return new Member(kakaoId, name, joinedAt);
     }
 
