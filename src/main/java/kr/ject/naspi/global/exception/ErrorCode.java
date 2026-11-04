@@ -1,4 +1,4 @@
-package kr.ject.naspi.common.exception;
+package kr.ject.naspi.global.exception;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
