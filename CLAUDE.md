@@ -58,7 +58,9 @@
 모듈 내부 구조:
 ```
 {module}/
-├── api/          Controller, Request/Response DTO
+├── api/          Controller (웹 진입점)
+│   ├── request/  Request DTO (record)
+│   └── response/ Response DTO (record)
 ├── application/  Service (유스케이스, 트랜잭션 경계)
 ├── domain/       Entity, 도메인 규칙
 └── infra/        Repository, 외부 연동

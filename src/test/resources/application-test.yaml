@@ -5,3 +5,18 @@ spring:
     url: jdbc:h2:mem:naspi;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
     username: sa
     password:
+  # 테스트는 Redis 에 실제로 연결하지 않지만, 접속 정보 환경 변수가 없으므로 값을 채워 둔다
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+# 프론트 주소가 바뀌어도 테스트가 영향받지 않도록 리다이렉트 경로를 고정한다
+naspi:
+  auth:
+    redirect:
+      login-success-url: /
+      name-input-url: /signup
+      login-failure-url: /login-failure
+  cors:
+    allowed-origins: https://front.test

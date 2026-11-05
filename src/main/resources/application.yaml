@@ -1,36 +1,41 @@
 spring:
   application:
     name: naspi
+  # 프로필: local(로컬 개발), development / production(k8s, JAVA_ARGS 의 spring.profiles.active 로 지정).
+  # 프로필을 지정하지 않으면 production 으로 동작한다. 로컬 실행 시 local 을 지정한다.
+  profiles:
+    default: production
   datasource:
     driver-class-name: org.postgresql.Driver
     url: ${DB_URL:jdbc:postgresql://naspi-db-svc:5432/naspi}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-  # 로그인 세션 저장소. 접속 정보는 임시 값이므로 실제 환경 값은 환경 변수로 주입한다.
+  # 로그인 세션 저장소. 접속 정보는 환경 변수로 주입한다 (k8s: manifest 의 naspi-cm-common).
   data:
     redis:
-      host: ${REDIS_HOST:naspi-redis-svc}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
   session:
-    timeout: 30m
-    redis:
-      namespace: naspi:session
-  # 회원 기능 전까지 사용할 임시 로그인 계정
+    # 로그인 전 세션(카카오 인증 진행 중, 가입 대기)의 유지 시간.
+    # 로그인을 마치면 naspi.auth.login-session-timeout 으로 늘린다.
+    timeout: 10m
+    data:
+      redis:
+        namespace: naspi:session
   security:
-    user:
-      name: ${LOGIN_USER_NAME:naspi}
-      password: ${LOGIN_USER_PASSWORD:naspi123!}
     # 카카오 로그인. 키는 임시 값이므로 카카오 개발자 콘솔에서 발급받은 값을 환경 변수로 주입한다.
     oauth2:
       client:
         registration:
           kakao:
             client-name: kakao
-            client-id: ${KAKAO_CLIENT_ID:kakao-client-id}
-            client-secret: ${KAKAO_CLIENT_SECRET:kakao-client-secret}
+            client-id: ${KAKAO_CLIENT_ID}
+            client-secret: ${KAKAO_CLIENT_SECRET}
             client-authentication-method: client_secret_post
             authorization-grant-type: authorization_code
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            # 닉네임만 받는다. 이메일은 수집하지 않는다 (정책 v1 §1).
+            scope: profile_nickname
         # 카카오는 Spring Security에 기본 등록된 제공자가 아니므로 엔드포인트를 직접 지정한다.
         provider:
           kakao:
@@ -39,15 +44,89 @@ spring:
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
 
+server:
+  # TLS 는 Gateway 에서 끝나므로 X-Forwarded-* 헤더로 원래 주소(https://api.naspi.my)를 복원한다.
+  # 없으면 카카오 redirect_uri 가 http:// 로 만들어져 카카오 콘솔 등록값과 어긋난다 (KOE006).
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        # 브라우저를 닫아도 로그인이 유지되도록 쿠키를 로그인 유지 기간만큼 둔다.
+        # 요청마다 다시 내려보내므로 마지막 요청 기준으로 연장된다 (SessionCookieRefreshFilter).
+        max-age: 7d
+        http-only: true
+        # 프론트(naspi.my)와 API(api.naspi.my)는 같은 사이트이므로 same-site 는 기본값(Lax)을 쓴다.
+        secure: true
+
+naspi:
+  auth:
+    # 로그인 유지 기간. 마지막 요청으로부터 이 기간 동안 요청이 없으면 로그아웃된다.
+    login-session-timeout: 7d
+    # 카카오 로그인 후 이동할 프론트 경로. 환경 변수로 주입한다 (k8s: manifest 의 naspi-cm-common).
+    # 로컬 값은 아래 local 프로필에 있다.
+    redirect:
+      # 기존 회원 로그인 완료
+      login-success-url: ${NASPI_LOGIN_SUCCESS_URL:https://naspi.my/}
+      # 카카오 이름에 한글이 없는 신규 회원. 이름 입력 후 POST /api/members/signup 호출
+      name-input-url: ${NASPI_NAME_INPUT_URL:https://naspi.my/signup}
+      # 카카오 인증 실패 또는 사용자 취소
+      login-failure-url: ${NASPI_LOGIN_FAILURE_URL:https://naspi.my/login-failure}
+  cors:
+    # API 호출을 허용할 프론트 출처. 여러 개면 쉼표로 구분한다.
+    allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://naspi.my}
+
+logging:
+  structured:
+    format:
+      console: logstash
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  # 로컬은 H2 인메모리 DB 를 쓴다. 테이블은 엔티티 기준으로 자동 생성되고 앱을 끄면 데이터가 사라진다.
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:naspi;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+  # H2 콘솔: http://localhost:8080/h2-console (JDBC URL 은 위 datasource.url, 사용자 sa, 비밀번호 없음)
+  h2:
+    console:
+      enabled: true
+  # 로컬 Redis (docker run -d --name naspi-redis -p 6379:6379 redis:7)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+naspi:
+  auth:
+    # 로그인 유지 기간. 마지막 요청으로부터 이 기간 동안 요청이 없으면 로그아웃된다.
+    login-session-timeout: 7d
+    # 카카오 로그인 후 이동할 로컬 프론트 경로 (Vite 기본 포트 5173)
+    redirect:
+      # 기존 회원 로그인 완료
+      login-success-url: http://localhost:5173/
+      # 카카오 이름에 한글이 없는 신규 회원. 이름 입력 후 POST /api/members/signup 호출
+      name-input-url: http://localhost:5173/signup
+      # 카카오 인증 실패 또는 사용자 취소
+      login-failure-url: http://localhost:5173/login-failure
+  cors:
+    allowed-origins: http://localhost:5173
+
+server:
+  servlet:
+    session:
+      cookie:
+        # 로컬은 http 이므로 secure 쿠키를 끈다 (Safari 는 localhost 에서도 secure 쿠키를 받지 않는다).
+        secure: false
+
 ---
 # k8s 배포 환경(JAVA_ARGS 의 spring.profiles.active)에서만 콘솔 로그를 Logstash JSON 형식으로 출력
 # 로컬(프로필 없음)은 기존 텍스트 형식 유지
 spring:
   config:
     activate:
-      on-profile: development | production
-
-logging:
-  structured:
-    format:
-      console: logstash
+      on-profile: development

@@ -13,7 +13,7 @@
 
 | 모듈 | 파일 | 범위 |
 |---|---|---|
-| `member` | [v1/domain/member.md](v1/domain/member.md) | 카카오 로그인/회원가입, 이름·이메일, 회원 탈퇴 |
+| `member` | [v1/domain/member.md](v1/domain/member.md) | 카카오 로그인/회원가입, 이름, 회원 탈퇴 |
 | `league` | [v1/domain/league.md](v1/domain/league.md) | 리그 생성·초대, 대기실, 시작·운영 기간·종료, 리그 결과 |
 | `market` | [v1/domain/market.md](v1/domain/market.md) | 종목 상장, 거래일, 시세(현재가·기준가·종가·거래량), 가격제한폭 |
 | `asset` | [v1/domain/asset.md](v1/domain/asset.md) | 초기 자산 배분, 주문 가능 자산·예약·정산, 자사주 최소 유지분 |
