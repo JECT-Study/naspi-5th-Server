@@ -1,4 +1,4 @@
-package kr.ject.naspi.member.api;
+package kr.ject.naspi.member.api.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -9,9 +9,9 @@ import java.util.Optional;
  *
  * <p>세션 키, 형변환, 세션이 없는 경우의 처리를 이곳에 모은다.
  * 세션은 Spring Session을 통해 Redis에 저장되며, 로그인 전 세션 유지 시간({@code spring.session.timeout})만 유지된다.
- * 빈 등록은 {@link MemberWebConfig}에서 한다.
+ * 빈 등록은 {@link AuthWebConfig}에서 한다.
  */
-public class SignupSession {
+class SignupSession {
 
     /** 세션 속성 이름. */
     static final String ATTRIBUTE = PendingSignup.class.getName();

@@ -1,13 +1,21 @@
-package kr.ject.naspi.member.infra;
+package kr.ject.naspi.member.domain;
 
 import java.util.Optional;
-import kr.ject.naspi.member.domain.Member;
-import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
  * 회원 저장소.
+ *
+ * <p>도메인이 필요로 하는 저장·조회만 정의한다. 구현은 infra의 {@code MemberJpaRepository}가 맡는다.
  */
-public interface MemberRepository extends JpaRepository<Member, Long> {
+public interface MemberRepository {
+
+    /**
+     * 회원을 저장한다.
+     *
+     * @param member 회원
+     * @return 저장된 회원 (ID 발급됨)
+     */
+    Member save(Member member);
 
     /**
      * 카카오 회원 번호로 회원을 찾는다.

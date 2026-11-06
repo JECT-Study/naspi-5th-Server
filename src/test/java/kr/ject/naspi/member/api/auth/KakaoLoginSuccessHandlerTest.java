@@ -1,4 +1,4 @@
-package kr.ject.naspi.member.api;
+package kr.ject.naspi.member.api.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

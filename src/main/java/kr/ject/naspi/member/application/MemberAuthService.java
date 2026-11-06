@@ -7,7 +7,7 @@ import kr.ject.naspi.global.exception.BusinessException;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
-import kr.ject.naspi.member.infra.MemberRepository;
+import kr.ject.naspi.member.domain.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

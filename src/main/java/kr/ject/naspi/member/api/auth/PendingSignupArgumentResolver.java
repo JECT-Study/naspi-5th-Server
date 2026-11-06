@@ -1,4 +1,4 @@
-package kr.ject.naspi.member.api;
+package kr.ject.naspi.member.api.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import kr.ject.naspi.global.exception.BusinessException;
@@ -16,7 +16,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  * <p>컨트롤러 호출 직전에 실행되므로, 여기서 던진 예외도 공통 예외 처리(GlobalExceptionHandler)를 거친다.
  */
 @RequiredArgsConstructor
-public class PendingSignupArgumentResolver implements HandlerMethodArgumentResolver {
+class PendingSignupArgumentResolver implements HandlerMethodArgumentResolver {
 
     private final SignupSession signupSession;
 

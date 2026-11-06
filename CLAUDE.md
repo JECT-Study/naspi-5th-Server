@@ -58,13 +58,18 @@
 모듈 내부 구조:
 ```
 {module}/
-├── api/          Controller (웹 진입점)
-│   ├── request/  Request DTO (record)
-│   └── response/ Response DTO (record)
+├── api/          웹 계층
+│   └── {기능}/   Controller, Request·Response DTO(record), 그 기능의 웹 지원 코드 (예: member의 auth/ — 카카오 로그인·가입)
 ├── application/  Service (유스케이스, 트랜잭션 경계)
-├── domain/       Entity, 도메인 규칙
-└── infra/        Repository, 외부 연동
+├── domain/       Entity, 값 객체, 도메인 규칙, Repository 인터페이스
+└── infra/        Repository 구현(Spring Data), 외부 연동
 ```
+
+- 모듈 내부 의존 방향: `api → application → domain ← infra`. api는 application만, application은 domain만 참조한다. infra는 domain을 구현한다.
+- Repository 인터페이스는 `domain`에 Spring 의존 없이 두고, 쓰는 메서드만 선언한다. infra에서 `interface XxxJpaRepository extends Repository<Xxx, Long>, XxxRepository`로 구현한다 (package-private, `JpaRepository` 상속 금지). JPQL 등 저장 기술에 묶인 쿼리는 infra 인터페이스에 둔다.
+- 외부 모델 번역: 들어오는 데이터(요청 JSON, OAuth2 사용자 정보 등)는 api에서, 우리가 외부를 호출하는 코드는 infra에서 번역한다. application에는 외부 형식을 넘기지 않는다.
+- `api/` 아래는 기능별 하위 패키지로 나누고, 기능 하나에 속한 웹 코드(Controller, Request·Response DTO, 보안 핸들러, 세션 접근, ArgumentResolver·어노테이션, 웹 설정)를 한 패키지에 모은다. `api/` 바로 아래에는 클래스를 두지 않는다.
+- 하위 패키지는 기술 역할(`controller/`, `request/`, `resolver/`, `config/`)이 아니라 함께 바뀌는 기능 단위로 나눈다. 예: 카카오 로그인과 회원가입은 한 흐름이므로 로그인 핸들러·가입 Controller·DTO·가입 대기 세션·리졸버·설정을 모두 `auth/`에 둔다. 기능 안에서만 쓰는 클래스는 package-private으로 둔다.
 
 ### 경계 규칙
 

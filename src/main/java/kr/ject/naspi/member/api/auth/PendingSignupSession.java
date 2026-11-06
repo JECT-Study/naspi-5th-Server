@@ -1,4 +1,4 @@
-package kr.ject.naspi.member.api;
+package kr.ject.naspi.member.api.auth;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -20,5 +20,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-public @interface PendingSignupSession {
+@interface PendingSignupSession {
 }
