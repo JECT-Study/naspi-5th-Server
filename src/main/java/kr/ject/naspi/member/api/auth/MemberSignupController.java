@@ -6,9 +6,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
-import kr.ject.naspi.common.response.CommonResponse;
+import kr.ject.naspi.common.response.Result;
 import kr.ject.naspi.common.security.LoginSession;
-import kr.ject.naspi.global.exception.BusinessException;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.member.application.MemberAuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,7 +37,7 @@ public class MemberSignupController {
      * @param httpRequest 요청
      * @param httpResponse 응답
      * @return 가입한 회원 ID
-     * @throws BusinessException 이미 가입했거나 이름이 규칙에 맞지 않는 경우
+     * @throws NaspiBizException 이미 가입했거나 이름이 규칙에 맞지 않는 경우
      */
     @Operation(
             summary = "이름 입력 회원가입",
@@ -55,21 +55,21 @@ public class MemberSignupController {
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
                     - 이름: 1~5자 한글. 영어·숫자·특수문자·공백 불가.
 
-                    **성공 시** 가입한 회원으로 로그인된다 (로그인 유지 7일).
+                    **성공 시** HTTP 200, `code` `"000"`. 가입한 회원으로 로그인된다 (로그인 유지 7일).
 
-                    **실패 응답**
+                    **실패 응답** (`code`는 3자리 문자열)
 
                     | HTTP | code | 상황 | 프론트 처리 |
                     |---|---|---|---|
-                    | 200 | 40002 | 이름이 규칙에 맞지 않음 | 메시지 표시 후 다시 입력 \
-                    (가입 대기 상태 유지) |
-                    | 400 | 40002 | `name` 누락·공백 | 다시 입력 |
-                    | 200 | 40101 | 가입 대기 정보 없음 (카카오 로그인 안 함, 세션 만료) \
+                    | 200 | `"100"` | 가입 대기 정보 없음 (카카오 로그인 안 함, 세션 만료) \
                     | 카카오 로그인부터 다시 |
-                    | 200 | 40901 | 이미 가입한 카카오 계정 | 카카오 로그인부터 다시 |
+                    | 200 | `"101"` | 이름이 규칙에 맞지 않음 | 메시지 표시 후 다시 입력 \
+                    (가입 대기 상태 유지) |
+                    | 200 | `"102"` | 이미 가입한 카카오 계정 | 카카오 로그인부터 다시 |
+                    | 400 | `"002"` | `name` 누락·공백 | 다시 입력 |
                     """)
     @PostMapping("/signup")
-    public CommonResponse<SignupResponse> signup(@Valid @RequestBody SignupRequest request,
+    public Result<SignupResponse> signup(@Valid @RequestBody SignupRequest request,
                                                  @Parameter(hidden = true) @PendingSignupSession
                                                  PendingSignup pending,
                                                  HttpServletRequest httpRequest,
@@ -78,6 +78,6 @@ public class MemberSignupController {
 
         signupSession.remove(httpRequest);
         loginSession.login(httpRequest, httpResponse, memberId);
-        return CommonResponse.success(new SignupResponse(memberId));
+        return Result.success(new SignupResponse(memberId));
     }
 }

@@ -3,8 +3,8 @@ package kr.ject.naspi.member.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import kr.ject.naspi.global.exception.BusinessException;
 import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -29,12 +29,12 @@ class MemberNameTest {
         @ParameterizedTest
         @NullAndEmptySource
         @ValueSource(strings = {"여섯글자이름", "Kim", "홍길동1", "홍 길동", "홍길동!", "金", "ㄱㄴ"})
-        @DisplayName("한글이 아니거나 5자를 넘으면 INVALID_INPUT 예외가 발생한다")
+        @DisplayName("한글이 아니거나 5자를 넘으면 INVALID_MEMBER_NAME 예외가 발생한다")
         void invalidName(String value) {
             assertThatThrownBy(() -> MemberName.of(value))
-                    .isInstanceOf(BusinessException.class)
+                    .isInstanceOf(NaspiBizException.class)
                     .extracting("errorCode")
-                    .isEqualTo(ErrorCode.INVALID_INPUT);
+                    .isEqualTo(ErrorCode.INVALID_MEMBER_NAME);
         }
 
         @Test

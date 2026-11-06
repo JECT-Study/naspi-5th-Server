@@ -7,8 +7,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import kr.ject.naspi.global.config.ClockConfig;
-import kr.ject.naspi.global.exception.BusinessException;
 import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
 import org.junit.jupiter.api.DisplayName;
@@ -67,9 +67,9 @@ class MemberAuthServiceTest {
     @DisplayName("입력한 이름은 최대 5자 한글만 허용한다")
     void joinWithInvalidInputName() {
         assertThatThrownBy(() -> memberAuthService.joinWithInputName(KAKAO_ID, "John"))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_INPUT);
+                .isEqualTo(ErrorCode.INVALID_MEMBER_NAME);
         assertThat(memberCount()).isZero();
     }
 
@@ -79,13 +79,13 @@ class MemberAuthServiceTest {
         memberAuthService.joinWithKakaoName(KAKAO_ID, "홍길동");
 
         assertThatThrownBy(() -> memberAuthService.joinWithKakaoName(KAKAO_ID, "홍길동"))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.CONFLICT);
+                .isEqualTo(ErrorCode.MEMBER_ALREADY_JOINED);
         assertThatThrownBy(() -> memberAuthService.joinWithInputName(KAKAO_ID, "존"))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.CONFLICT);
+                .isEqualTo(ErrorCode.MEMBER_ALREADY_JOINED);
         assertThat(memberCount()).isEqualTo(1);
     }
 

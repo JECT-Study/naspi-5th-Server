@@ -3,8 +3,8 @@ package kr.ject.naspi.member.application;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import kr.ject.naspi.global.exception.BusinessException;
 import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
 import kr.ject.naspi.member.domain.MemberRepository;
@@ -42,7 +42,7 @@ public class MemberAuthService {
      * @param kakaoId 카카오 회원 번호
      * @param kakaoNickname 카카오 닉네임, 없으면 null
      * @return 가입한 회원 ID, 이름 입력이 필요하면 빈 값
-     * @throws BusinessException 이미 가입한 경우
+     * @throws NaspiBizException 이미 가입한 경우
      */
     @Transactional
     public Optional<Long> joinWithKakaoName(long kakaoId, String kakaoNickname) {
@@ -55,7 +55,7 @@ public class MemberAuthService {
      * @param kakaoId 카카오 회원 번호
      * @param inputName 사용자가 입력한 이름
      * @return 가입한 회원 ID
-     * @throws BusinessException 이미 가입했거나, 이름이 규칙(최대 5자 한글)에 맞지 않는 경우
+     * @throws NaspiBizException 이미 가입했거나, 이름이 규칙(최대 5자 한글)에 맞지 않는 경우
      */
     @Transactional
     public long joinWithInputName(long kakaoId, String inputName) {
@@ -64,7 +64,7 @@ public class MemberAuthService {
 
     private long join(long kakaoId, MemberName name) {
         if (memberRepository.existsByKakaoId(kakaoId)) {
-            throw new BusinessException(ErrorCode.CONFLICT, "이미 가입한 회원입니다.");
+            throw new NaspiBizException(ErrorCode.MEMBER_ALREADY_JOINED);
         }
         Member member = Member.join(kakaoId, name, LocalDateTime.now(clock));
         return memberRepository.save(member).getId();

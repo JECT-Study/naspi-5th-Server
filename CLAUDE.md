@@ -52,8 +52,8 @@
 | `asset` | 현금·보유 주식, 예약/해제/정산, 초기 자산 배분, 자사주 최소 유지분 |
 | `order` | 주문 접수, 호가창, 매칭·체결, 미체결 만료/취소 |
 | `contents` | 공시, 공시 기반 AI 뉴스, 댓글, 호재/악재 반응 |
-| `global` | 애플리케이션 전역 처리: 예외 (`ErrorCode`, `BusinessException`, `GlobalExceptionHandler`) |
-| `common` | 여러 모듈이 공통으로 쓰는 코드: 응답 형식 (`CommonResponse`), 보안 설정 (`SecurityConfig`) |
+| `global` | 애플리케이션 전역 처리: 예외 (`ErrorCode`, `NaspiRuntimeException`, `NaspiBizException`, `GlobalExceptionHandler`) |
+| `common` | 여러 모듈이 공통으로 쓰는 코드: 응답 형식 (`Result`), 보안 설정 (`SecurityConfig`) |
 
 모듈 내부 구조:
 ```

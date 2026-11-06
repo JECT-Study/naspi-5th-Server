@@ -48,7 +48,7 @@ class SecurityConfigTest {
     void unauthenticatedRequest() throws Exception {
         mockMvc.perform(get("/private"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(40101));
+                .andExpect(jsonPath("$.code").value("003"));
     }
 
     @Test
