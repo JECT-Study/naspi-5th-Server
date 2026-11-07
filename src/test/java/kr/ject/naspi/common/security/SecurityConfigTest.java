@@ -1,8 +1,10 @@
 package kr.ject.naspi.common.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -13,6 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -48,7 +52,7 @@ class SecurityConfigTest {
     void unauthenticatedRequest() throws Exception {
         mockMvc.perform(get("/private"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(40101));
+                .andExpect(jsonPath("$.code").value("003"));
     }
 
     @Test
@@ -95,6 +99,51 @@ class SecurityConfigTest {
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PUT", "PATCH", "DELETE"})
+    @DisplayName("API는 GET, POST만 쓰므로 PUT, PATCH, DELETE 사전 요청(preflight)은 거부한다")
+    void corsPreflightWithDisallowedMethod(String method) throws Exception {
+        mockMvc.perform(options("/private")
+                        .header(HttpHeaders.ORIGIN, "https://front.test")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, method))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/swagger-ui/index.html", "/v3/api-docs"})
+    @DisplayName("Swagger UI와 API 문서는 계정 없이 접근하면 HTTP Basic 로그인을 요구한다")
+    void swaggerRequiresLogin(String path) throws Exception {
+        mockMvc.perform(get(path))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, startsWith("Basic")));
+    }
+
+    @Test
+    @DisplayName("Swagger 계정 비밀번호가 틀리면 접근할 수 없다")
+    void swaggerWithWrongPassword() throws Exception {
+        mockMvc.perform(get("/v3/api-docs").with(httpBasic("swagger-test", "wrong")))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Swagger 계정으로 로그인하면 접근할 수 있고 세션은 만들지 않는다")
+    void swaggerWithLogin() throws Exception {
+        mockMvc.perform(get("/v3/api-docs").with(httpBasic("swagger-test", "swagger-test-pw")))
+                .andExpect(result -> {
+                    assertThat(result.getResponse().getStatus()).isNotIn(401, 403);
+                    assertThat(result.getRequest().getSession(false)).isNull();
+                });
+    }
+
+    @Test
+    @DisplayName("Swagger 계정으로는 회원 API를 호출할 수 없다")
+    void swaggerAccountCannotCallMemberApi() throws Exception {
+        mockMvc.perform(get("/private").with(httpBasic("swagger-test", "swagger-test-pw")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("003"));
     }
 
     @Test

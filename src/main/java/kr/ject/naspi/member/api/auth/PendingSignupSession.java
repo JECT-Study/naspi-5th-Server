@@ -1,4 +1,4 @@
-package kr.ject.naspi.member.api;
+package kr.ject.naspi.member.api.auth;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * <p>가입 대기 정보가 없으면(카카오 인증 전이거나 세션 만료) 인증 필요 오류로 응답한다.
  *
  * <pre>{@code
- * public CommonResponse<?> signup(@PendingSignupSession PendingSignup pending) { ... }
+ * public Result<?> signup(@PendingSignupSession PendingSignup pending) { ... }
  * }</pre>
  *
  * @see PendingSignupArgumentResolver
@@ -20,5 +20,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-public @interface PendingSignupSession {
+@interface PendingSignupSession {
 }

@@ -74,6 +74,12 @@ naspi:
   cors:
     # API 호출을 허용할 프론트 출처. 여러 개면 쉼표로 구분한다.
     allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://naspi.my}
+  # Swagger UI·API 문서 접속 계정 (HTTP Basic). k8s: ID는 naspi-cm-common, 비밀번호는 naspi-secret-common
+  # 로컬도 SWAGGER_PASSWORD 환경 변수를 직접 주입한다 (IDE 실행 설정 등).
+  # 기본값을 빈 값으로 둬야 변수가 없을 때 시작에 실패한다. 기본값이 없으면 "${SWAGGER_PASSWORD}" 문자열이 비밀번호가 된다.
+  swagger:
+    username: ${SWAGGER_USERNAME:nspusr}
+    password: ${SWAGGER_PASSWORD:}
 
 logging:
   structured:

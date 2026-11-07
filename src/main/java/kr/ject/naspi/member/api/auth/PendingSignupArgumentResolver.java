@@ -1,8 +1,8 @@
-package kr.ject.naspi.member.api;
+package kr.ject.naspi.member.api.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
-import kr.ject.naspi.global.exception.BusinessException;
 import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.MethodParameter;
 import org.springframework.web.bind.support.WebDataBinderFactory;
@@ -16,7 +16,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  * <p>컨트롤러 호출 직전에 실행되므로, 여기서 던진 예외도 공통 예외 처리(GlobalExceptionHandler)를 거친다.
  */
 @RequiredArgsConstructor
-public class PendingSignupArgumentResolver implements HandlerMethodArgumentResolver {
+class PendingSignupArgumentResolver implements HandlerMethodArgumentResolver {
 
     private final SignupSession signupSession;
 
@@ -33,7 +33,6 @@ public class PendingSignupArgumentResolver implements HandlerMethodArgumentResol
                                          WebDataBinderFactory binderFactory) {
         HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
         return signupSession.find(request)
-                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED,
-                        "카카오 로그인 후 가입할 수 있습니다."));
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.SIGNUP_LOGIN_REQUIRED));
     }
 }

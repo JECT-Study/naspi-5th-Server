@@ -1,4 +1,4 @@
-package kr.ject.naspi.member.api;
+package kr.ject.naspi.member.api.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -9,8 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.common.security.SecurityConfig;
-import kr.ject.naspi.global.exception.BusinessException;
 import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.member.application.MemberAuthService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,7 +54,7 @@ class MemberSignupControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"존\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(20000))
+                .andExpect(jsonPath("$.code").value("000"))
                 .andExpect(jsonPath("$.data.memberId").value(7))
                 .andReturn();
 
@@ -70,8 +70,7 @@ class MemberSignupControllerTest {
     @DisplayName("이름이 규칙(최대 5자 한글)에 맞지 않으면 가입되지 않고 가입 대기 상태가 유지된다")
     void signupWithInvalidName() throws Exception {
         given(memberAuthService.joinWithInputName(KAKAO_ID, "John"))
-                .willThrow(new BusinessException(ErrorCode.INVALID_INPUT,
-                        "이름은 1~5자의 한글만 사용할 수 있습니다."));
+                .willThrow(new NaspiBizException(ErrorCode.INVALID_MEMBER_NAME));
         MockHttpSession session = pendingSession();
 
         mockMvc.perform(post("/api/members/signup")
@@ -79,7 +78,7 @@ class MemberSignupControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"John\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(40002));
+                .andExpect(jsonPath("$.code").value("101"));
 
         assertThat(session.getAttribute(SignupSession.ATTRIBUTE)).isNotNull();
     }
@@ -92,7 +91,7 @@ class MemberSignupControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(40002));
+                .andExpect(jsonPath("$.code").value("002"));
     }
 
     @Test
@@ -102,7 +101,7 @@ class MemberSignupControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"존\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(40101));
+                .andExpect(jsonPath("$.code").value("100"));
     }
 
     private MockHttpSession pendingSession() {

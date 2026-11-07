@@ -52,19 +52,24 @@
 | `asset` | 현금·보유 주식, 예약/해제/정산, 초기 자산 배분, 자사주 최소 유지분 |
 | `order` | 주문 접수, 호가창, 매칭·체결, 미체결 만료/취소 |
 | `contents` | 공시, 공시 기반 AI 뉴스, 댓글, 호재/악재 반응 |
-| `global` | 애플리케이션 전역 처리: 예외 (`ErrorCode`, `BusinessException`, `GlobalExceptionHandler`) |
-| `common` | 여러 모듈이 공통으로 쓰는 코드: 응답 형식 (`CommonResponse`), 보안 설정 (`SecurityConfig`) |
+| `global` | 애플리케이션 전역 처리: 예외 (`ErrorCode`, `NaspiRuntimeException`, `NaspiBizException`, `GlobalExceptionHandler`) |
+| `common` | 여러 모듈이 공통으로 쓰는 코드: 응답 형식 (`Result`), 보안 설정 (`SecurityConfig`) |
 
 모듈 내부 구조:
 ```
 {module}/
-├── api/          Controller (웹 진입점)
-│   ├── request/  Request DTO (record)
-│   └── response/ Response DTO (record)
+├── api/          웹 계층
+│   └── {기능}/   Controller, Request·Response DTO(record), 그 기능의 웹 지원 코드 (예: member의 auth/ — 카카오 로그인·가입)
 ├── application/  Service (유스케이스, 트랜잭션 경계)
-├── domain/       Entity, 도메인 규칙
-└── infra/        Repository, 외부 연동
+├── domain/       Entity, 값 객체, 도메인 규칙, Repository 인터페이스
+└── infra/        Repository 구현(Spring Data), 외부 연동
 ```
+
+- 모듈 내부 의존 방향: `api → application → domain ← infra`. api는 application만, application은 domain만 참조한다. infra는 domain을 구현한다.
+- Repository 인터페이스는 `domain`에 Spring 의존 없이 두고, 쓰는 메서드만 선언한다. infra에서 `interface XxxJpaRepository extends Repository<Xxx, Long>, XxxRepository`로 구현한다 (package-private, `JpaRepository` 상속 금지). JPQL 등 저장 기술에 묶인 쿼리는 infra 인터페이스에 둔다.
+- 외부 모델 번역: 들어오는 데이터(요청 JSON, OAuth2 사용자 정보 등)는 api에서, 우리가 외부를 호출하는 코드는 infra에서 번역한다. application에는 외부 형식을 넘기지 않는다.
+- `api/` 아래는 기능별 하위 패키지로 나누고, 기능 하나에 속한 웹 코드(Controller, Request·Response DTO, 보안 핸들러, 세션 접근, ArgumentResolver·어노테이션, 웹 설정)를 한 패키지에 모은다. `api/` 바로 아래에는 클래스를 두지 않는다.
+- 하위 패키지는 기술 역할(`controller/`, `request/`, `resolver/`, `config/`)이 아니라 함께 바뀌는 기능 단위로 나눈다. 예: 카카오 로그인과 회원가입은 한 흐름이므로 로그인 핸들러·가입 Controller·DTO·가입 대기 세션·리졸버·설정을 모두 `auth/`에 둔다. 기능 안에서만 쓰는 클래스는 package-private으로 둔다.
 
 ### 경계 규칙
 
@@ -92,13 +97,14 @@
 - 금액·수량은 `long`(원, 주 단위) 사용. 부동소수점 금지. 절사·반올림 규칙은 정책서의 계산식을 그대로 따른다.
 - 시간은 KST 기준 정책이 많으므로 `Clock`을 주입받아 사용한다 (테스트에서 시각 고정).
 - 엔티티를 API 응답으로 직접 반환하지 않고 DTO(record)로 변환한다.
+- API의 HTTP 메서드는 `GET`(조회)과 `POST`(생성·수정·삭제 등 상태 변경)만 쓴다. `PUT`, `PATCH`, `DELETE`는 보안상 쓰지 않는다 (CORS 허용 메서드도 `GET`, `POST`, `OPTIONS`로 제한). 수정·삭제는 동작이 드러나는 경로의 `POST`로 만든다 (예: `POST /api/members/me/name`, `POST /api/members/me/withdraw`).
 - 정책 규칙을 검증하는 테스트는 `@DisplayName`에 정책 내용을 한글로 적는다.
 
 ## Git
 
 - 브랜치: `feature/*`, `fix/*` → `development/{버전}`으로 PR. CI는 `development/**` 대상 PR에서 실행된다.
 - 이슈는 Story(정책 기반 사용자 기능, `docs/issues/<ver>/`)와 Task(기술 작업, 정책 무관은 `docs/issues/tasks/`)로 나눈다. 형식은 `docs/issues/README.md` 참고.
-- Jira 이슈 작업 브랜치는 `{타입}/{JIRA-KEY}` (예: `feature/ND-12`, `fix/ND-12`, `refactor/ND-12`). 작업하는 Story·Task의 `Jira:` 칸에 해당 키를 기재한다.
+- Jira 이슈 작업 브랜치는 `{타입}/{JIRA-KEY}` (예: `feature/ND-12`, `fix/ND-12`, `refactor/ND-12`). 한 브랜치에서 여러 이슈를 다루면 쉼표로 이어 쓴다 (예: `feature/ND-8,ND-28`). 작업하는 Story·Task의 `Jira:` 칸에 해당 키를 모두 기재한다.
   - Jira 키가 없는 브랜치(예: `feature/json-logging`)는 기재 대상이 아니다.
   - 검증: `scripts/check-issue-doc.sh` (커밋 전 훅에서 자동 실행, 미기재 시 커밋 차단). 키를 기재할 스토리가 불분명하면 질문한다.
   - PR 전에 `/story`로 완료 조건 구현·테스트 여부를 점검한다. 스토리 조회는 `scripts/find-story.sh <스토리 ID | Jira 키>`.

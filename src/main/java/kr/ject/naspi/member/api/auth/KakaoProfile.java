@@ -1,4 +1,4 @@
-package kr.ject.naspi.member.infra;
+package kr.ject.naspi.member.api.auth;
 
 import java.util.Map;
 
@@ -11,7 +11,7 @@ import java.util.Map;
  * @param kakaoId 카카오 회원 번호
  * @param nickname 카카오 닉네임, 없으면 null
  */
-public record KakaoProfile(long kakaoId, String nickname) {
+record KakaoProfile(long kakaoId, String nickname) {
 
     /**
      * 카카오 사용자 정보 응답을 변환한다.

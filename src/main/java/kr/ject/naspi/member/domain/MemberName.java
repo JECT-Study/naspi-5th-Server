@@ -4,8 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import kr.ject.naspi.global.exception.BusinessException;
 import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -41,12 +41,11 @@ public class MemberName {
      *
      * @param value 이름
      * @return 회원 이름
-     * @throws BusinessException 1~5자의 한글이 아닌 경우
+     * @throws NaspiBizException 1~5자의 한글이 아닌 경우
      */
     public static MemberName of(String value) {
         if (value == null || !VALID.matcher(value).matches()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT,
-                    "이름은 1~" + MAX_LENGTH + "자의 한글만 사용할 수 있습니다.");
+            throw new NaspiBizException(ErrorCode.INVALID_MEMBER_NAME);
         }
         return new MemberName(value);
     }

@@ -18,6 +18,8 @@ import lombok.NoArgsConstructor;
  *
  * <p>카카오 계정으로만 가입한다. 개인정보처리방침과 서비스이용약관은 카카오 로그인 동의 화면에서 필수로 동의받으므로
  * 카카오 인증을 마친 사용자는 약관에 동의한 것으로 본다.
+ *
+ * <p>탈퇴하면 회원 정보를 즉시 삭제(hard delete)하므로 탈퇴 여부를 따로 저장하지 않는다.
  */
 @Entity
 @Table(name = "member")
@@ -38,9 +40,6 @@ public class Member {
     @Column(name = "terms_agreed", nullable = false)
     private boolean termsAgreed;
 
-    @Column(name = "withdrawn", nullable = false)
-    private boolean withdrawn;
-
     @Column(name = "joined_at", nullable = false, updatable = false)
     private LocalDateTime joinedAt;
 
@@ -49,7 +48,6 @@ public class Member {
         this.name = Objects.requireNonNull(name, "name");
         this.joinedAt = Objects.requireNonNull(joinedAt, "joinedAt");
         this.termsAgreed = true;
-        this.withdrawn = false;
     }
 
     /**
@@ -73,14 +71,5 @@ public class Member {
      */
     public void changeName(MemberName newName) {
         this.name = Objects.requireNonNull(newName, "newName");
-    }
-
-    /**
-     * 탈퇴 처리한다.
-     *
-     * <p>ERD의 탈퇴여부(soft delete)를 따른다. v1 정책은 hard delete이므로 방식이 확정되면 변경될 수 있다.
-     */
-    public void withdraw() {
-        this.withdrawn = true;
     }
 }

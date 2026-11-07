@@ -7,15 +7,19 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
-import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.cors.CorsConfiguration;
@@ -39,16 +43,25 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties({AuthProperties.class, CorsProperties.class})
+@EnableConfigurationProperties({AuthProperties.class, CorsProperties.class,
+    SwaggerAuthProperties.class})
 public class SecurityConfig {
+
+    /** Swagger UI·API 문서 경로. HTTP Basic 로그인으로 보호한다. */
+    private static final String[] SWAGGER_PATHS = {
+        "/swagger-ui.html",
+        "/swagger-ui/**",
+        "/v3/api-docs/**",
+    };
+
+    private static final String SWAGGER_ROLE = "SWAGGER";
 
     /** 로그인하지 않아도 접근할 수 있는 경로. */
     private static final String[] PUBLIC_PATHS = {
         "/oauth2/authorization/**",
         "/login/oauth2/code/**",
         "/api/members/signup",
-        "/swagger-ui/**",
-        "/v3/api-docs/**",
+        "/api/auth/logout",
         "/error",
     };
 
@@ -69,6 +82,37 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .csrf(AbstractHttpConfigurer::disable)
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
+        return http.build();
+    }
+
+    /**
+     * Swagger UI·API 문서를 HTTP Basic 로그인으로 보호한다.
+     *
+     * <p>회원 로그인(카카오, 세션)과 분리된 개발자용 계정을 쓴다. 브라우저가 로그인 창으로 계정을 받아 요청마다 보내므로
+     * 세션을 만들지 않는다. Swagger에서 API를 호출할 때는 회원 세션 쿠키가 별도로 쓰인다.
+     *
+     * @param http 보안 설정 빌더
+     * @param swaggerAuthProperties Swagger 접속 계정
+     * @return Swagger 경로 전용 보안 필터 체인
+     */
+    @Bean
+    @Order(1)
+    public SecurityFilterChain swaggerSecurityFilterChain(
+            HttpSecurity http, SwaggerAuthProperties swaggerAuthProperties) {
+        PasswordEncoder passwordEncoder =
+                PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        UserDetails swaggerUser = User.withUsername(swaggerAuthProperties.username())
+                .password(passwordEncoder.encode(swaggerAuthProperties.password()))
+                .roles(SWAGGER_ROLE)
+                .build();
+        http
+                .securityMatcher(SWAGGER_PATHS)
+                .authorizeHttpRequests(auth -> auth.anyRequest().hasRole(SWAGGER_ROLE))
+                .httpBasic(Customizer.withDefaults())
+                .userDetailsService(new InMemoryUserDetailsManager(swaggerUser))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(AbstractHttpConfigurer::disable);
         return http.build();
     }
 
@@ -103,10 +147,8 @@ public class SecurityConfig {
                                 authProperties.redirect().loginFailureUrl())))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(new JsonAuthenticationEntryPoint(jsonMapper)))
-                .logout(logout -> logout
-                        .logoutUrl("/api/auth/logout")
-                        .logoutSuccessHandler(
-                                new HttpStatusReturningLogoutSuccessHandler(HttpStatus.OK)))
+                // 로그아웃은 공통 응답 형식과 API 문서를 위해 컨트롤러(POST /api/auth/logout)가 처리한다.
+                .logout(AbstractHttpConfigurer::disable)
                 // 프론트(naspi.my)와 API(api.naspi.my)는 같은 사이트이므로 SameSite=Lax 쿠키를 전제로 비활성화한다.
                 // TODO: CSRF 처리 방식 결정 (CookieCsrfTokenRepository 권장).
                 .csrf(AbstractHttpConfigurer::disable);
@@ -126,8 +168,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(corsProperties.allowedOrigins());
-        configuration.setAllowedMethods(
-                List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        // API는 GET, POST만 쓴다 (CLAUDE.md 코드 규칙). OPTIONS는 브라우저의 CORS 사전 요청용이다.
+        configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(Duration.ofHours(1));
