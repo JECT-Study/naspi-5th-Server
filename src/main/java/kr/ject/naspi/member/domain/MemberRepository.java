@@ -18,6 +18,13 @@ public interface MemberRepository {
     Member save(Member member);
 
     /**
+     * 회원을 삭제한다 (hard delete).
+     *
+     * @param member 회원
+     */
+    void delete(Member member);
+
+    /**
      * 회원 ID로 회원을 찾는다.
      *
      * @param id 회원 ID

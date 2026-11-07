@@ -7,7 +7,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -15,7 +14,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
-import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.cors.CorsConfiguration;
@@ -47,6 +45,7 @@ public class SecurityConfig {
         "/oauth2/authorization/**",
         "/login/oauth2/code/**",
         "/api/members/signup",
+        "/api/auth/logout",
         "/swagger-ui/**",
         "/v3/api-docs/**",
         "/error",
@@ -103,10 +102,8 @@ public class SecurityConfig {
                                 authProperties.redirect().loginFailureUrl())))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(new JsonAuthenticationEntryPoint(jsonMapper)))
-                .logout(logout -> logout
-                        .logoutUrl("/api/auth/logout")
-                        .logoutSuccessHandler(
-                                new HttpStatusReturningLogoutSuccessHandler(HttpStatus.OK)))
+                // 로그아웃은 공통 응답 형식과 API 문서를 위해 컨트롤러(POST /api/auth/logout)가 처리한다.
+                .logout(AbstractHttpConfigurer::disable)
                 // 프론트(naspi.my)와 API(api.naspi.my)는 같은 사이트이므로 SameSite=Lax 쿠키를 전제로 비활성화한다.
                 // TODO: CSRF 처리 방식 결정 (CookieCsrfTokenRepository 권장).
                 .csrf(AbstractHttpConfigurer::disable);

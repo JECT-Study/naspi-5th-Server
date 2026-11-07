@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -45,6 +46,27 @@ class MemberProfileControllerTest {
 
     @MockitoBean
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
+
+    @Test
+    @DisplayName("로그인한 회원은 자신의 이름을 조회할 수 있다")
+    void getName() throws Exception {
+        given(memberService.getName(MEMBER_ID)).willReturn("홍길동");
+
+        mockMvc.perform(get("/api/members/me/name").with(loginMember()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("000"))
+                .andExpect(jsonPath("$.data.name").value("홍길동"));
+    }
+
+    @Test
+    @DisplayName("로그인하지 않으면 이름을 조회할 수 없다")
+    void getNameWithoutLogin() throws Exception {
+        mockMvc.perform(get("/api/members/me/name"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("003"));
+
+        then(memberService).should(never()).getName(anyLong());
+    }
 
     @Test
     @DisplayName("로그인한 회원은 자신의 이름을 수정할 수 있다")

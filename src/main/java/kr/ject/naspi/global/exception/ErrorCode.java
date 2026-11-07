@@ -61,7 +61,10 @@ public enum ErrorCode {
     INVALID_MEMBER_NAME("101", "이름은 1~5자의 한글만 사용할 수 있습니다."),
 
     /** 이미 가입한 카카오 계정으로 다시 가입하려는 경우. */
-    MEMBER_ALREADY_JOINED("102", "이미 가입한 회원입니다.");
+    MEMBER_ALREADY_JOINED("102", "이미 가입한 회원입니다."),
+
+    /** 회원을 찾을 수 없는 경우 (탈퇴 등으로 회원 정보가 삭제된 경우 포함). */
+    MEMBER_NOT_FOUND("103", "회원을 찾을 수 없습니다.");
 
     private final String code;
     private final String message;

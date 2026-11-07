@@ -2,6 +2,7 @@ package kr.ject.naspi.common.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -51,6 +52,21 @@ public class LoginSession {
 
         request.getSession().setMaxInactiveInterval(
                 (int) authProperties.loginSessionTimeout().toSeconds());
+    }
+
+    /**
+     * 로그아웃한다. 세션을 무효화해 세션 저장소(Redis)에서 지운다.
+     *
+     * <p>세션 쿠키는 세션이 무효화될 때 Spring Session이 만료시킨다. 세션이 없어도(로그인하지 않았거나 만료됨) 그대로 끝난다.
+     *
+     * @param request 요청
+     */
+    public void logout(HttpServletRequest request) {
+        holderStrategy.clearContext();
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
     }
 
     /**
