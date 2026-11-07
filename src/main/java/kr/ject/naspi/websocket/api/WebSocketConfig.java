@@ -1,15 +1,21 @@
 package kr.ject.naspi.websocket.api;
 
+import java.util.List;
 import kr.ject.naspi.common.security.CorsProperties;
+import kr.ject.naspi.websocket.application.PeriodicTopic;
 import kr.ject.naspi.websocket.application.TopicMessagePublisher;
+import kr.ject.naspi.websocket.application.TopicScheduler;
 import kr.ject.naspi.websocket.application.TopicSubscriptionAuthorizer;
+import kr.ject.naspi.websocket.infra.TopicSubscriptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
@@ -56,12 +62,22 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         this.messageBrokerTaskScheduler = messageBrokerTaskScheduler;
     }
 
+    /**
+     * STOMP 엔드포인트 등록.
+     *
+     * @param registry 엔드포인트 등록
+     */
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint(ENDPOINT)
                 .setAllowedOrigins(corsProperties.allowedOrigins().toArray(String[]::new));
     }
 
+    /**
+     * 메시지 브로커 설정.
+     *
+     * @param registry 메시지 브로커 등록
+     */
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         long heartbeatMillis = properties.heartbeat().toMillis();
@@ -71,9 +87,42 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.setApplicationDestinationPrefixes("/app");
     }
 
+    /**
+     * 클라이언트 인바운드 채널 설정.
+     *
+     * @param registration 채널 등록
+     */
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(
                 new StompAuthChannelInterceptor(authorizers.orderedStream().toList()));
+    }
+
+    /**
+     * 주기 발행 전용 스레드 풀. 다른 곳에서 {@link TaskScheduler}로 주입받지 않도록 후보에서 뺀다.
+     *
+     * @return 주기 발행 스케줄러
+     */
+    @Bean(autowireCandidate = false)
+    public ThreadPoolTaskScheduler topicTaskScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();  // Spring이 관리하는 스케줄러와 분리
+        scheduler.setPoolSize(properties.schedulerPoolSize());              // 주기 발행 토픽이 많으면 늘린다
+        scheduler.setThreadNamePrefix("ws-topic-");                         // 스레드 이름 접두사
+        return scheduler;
+    }
+
+    /**
+     * 주기 발행 토픽을 예약하는 스케줄러.
+     *
+     * @param topics 주기 발행 토픽
+     * @param subscriptions 구독 현황
+     * @param publisher 메시지 발행기
+     * @return 주기 발행 스케줄러
+     */
+    @Bean
+    public TopicScheduler topicScheduler(List<PeriodicTopic> topics,
+            TopicSubscriptions subscriptions, TopicMessagePublisher publisher) {
+        return new TopicScheduler(topicTaskScheduler(), topics, properties.intervals(),
+                subscriptions, publisher);
     }
 }

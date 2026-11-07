@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.lang.reflect.Type;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,11 +15,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.LoginSession;
+import kr.ject.naspi.websocket.application.PeriodicTopic;
 import kr.ject.naspi.websocket.application.TopicMessagePublisher;
 import kr.ject.naspi.websocket.application.TopicSubscriptionAuthorizer;
 import kr.ject.naspi.websocket.domain.TopicMessage;
+import kr.ject.naspi.websocket.infra.TopicSubscriptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,7 +58,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 /**
- * 실제 서버에 STOMP로 연결해 인증, 이벤트 발행을 검증한다.
+ * 실제 서버에 STOMP로 연결해 인증, 이벤트 발행, 주기 발행을 검증한다.
  *
  * <p>테스트에는 Redis가 없으므로 Redis 세션 대신 메모리 세션 저장소를 쓴다.
  * 로그인은 테스트 전용 경로에서 실제 {@link LoginSession}으로 처리해 세션 쿠키를 받는다.
@@ -64,6 +68,7 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
     "spring.autoconfigure.exclude="
             + "org.springframework.boot.session.data.redis.autoconfigure"
             + ".SessionDataRedisAutoConfiguration",
+    "naspi.websocket.topics.test-periodic.interval=100ms",
 })
 @Import(WebSocketIntegrationTest.TestTopics.class)
 class WebSocketIntegrationTest {
@@ -78,7 +83,13 @@ class WebSocketIntegrationTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Autowired
+    private TopicSubscriptions subscriptions;
+
+    @Autowired
     private TopicMessagePublisher publisher;
+
+    @Autowired
+    private TestTopics testTopics;
 
     private WebSocketStompClient stompClient;
     private StompSession session;
@@ -157,6 +168,25 @@ class WebSocketIntegrationTest {
         assertThat(topicB.poll(300, TimeUnit.MILLISECONDS)).isNull();
     }
 
+    @Test
+    @DisplayName("이벤트 발행과 주기 발행이 동시에 동작하고, 주기 설정이 없는 토픽은 실행되지 않는다")
+    void eventAndPeriodicPublishingWorkTogether() throws Exception {
+        session = connect(7L);
+        final BlockingQueue<Map<String, Object>> periodic = subscribe("/topic/test/periodic");
+        BlockingQueue<Map<String, Object>> events = subscribe("/topic/test/events/a");
+        subscribe("/topic/test/unscheduled");
+
+        eventPublisher.publishEvent(new TestEvent("a", "체결"));
+
+        assertThat(events.poll(TIMEOUT.toSeconds(), TimeUnit.SECONDS))
+                .containsEntry("payload", "체결");
+        assertThat(periodic.poll(TIMEOUT.toSeconds(), TimeUnit.SECONDS))
+                .containsEntry("type", "TEST_PERIODIC");
+        assertThat(periodic.poll(TIMEOUT.toSeconds(), TimeUnit.SECONDS))
+                .containsEntry("type", "TEST_PERIODIC");
+        assertThat(testTopics.unscheduledProduced.get()).isZero();
+    }
+
     private StompSession connect(long memberId) throws Exception {
         return stompClient.connectAsync(url(), cookieHeaders(login(memberId)),
                         new StompSessionHandlerAdapter() {})
@@ -196,6 +226,7 @@ class WebSocketIntegrationTest {
             }
             publisher.publish(new TopicMessage(destination, PROBE, null));
         }
+        assertThat(subscriptions.hasSubscribers(destination)).isTrue();
         return received;
     }
 
@@ -235,6 +266,8 @@ class WebSocketIntegrationTest {
     @EnableSpringHttpSession
     static class TestTopics {
 
+        final AtomicInteger unscheduledProduced = new AtomicInteger();
+
         @Bean
         MapSessionRepository sessionRepository() {
             return new MapSessionRepository(new ConcurrentHashMap<>());
@@ -270,6 +303,50 @@ class WebSocketIntegrationTest {
                 @Override
                 public boolean canSubscribe(LoginMember member, String destination) {
                     return true;
+                }
+            };
+        }
+
+        @Bean
+        PeriodicTopic testPeriodicTopic() {
+            AtomicInteger count = new AtomicInteger();
+            return new PeriodicTopic() {
+                @Override
+                public String name() {
+                    return "test-periodic";
+                }
+
+                @Override
+                public String destinationPrefix() {
+                    return "/topic/test/periodic";
+                }
+
+                @Override
+                public List<TopicMessage> produce() {
+                    return List.of(new TopicMessage("/topic/test/periodic", "TEST_PERIODIC",
+                            count.incrementAndGet()));
+                }
+            };
+        }
+
+        /** 주기 설정이 없으므로 구독자가 있어도 실행되면 안 되는 토픽. */
+        @Bean
+        PeriodicTopic testUnscheduledTopic() {
+            return new PeriodicTopic() {
+                @Override
+                public String name() {
+                    return "test-unscheduled";
+                }
+
+                @Override
+                public String destinationPrefix() {
+                    return "/topic/test/unscheduled";
+                }
+
+                @Override
+                public List<TopicMessage> produce() {
+                    unscheduledProduced.incrementAndGet();
+                    return List.of();
                 }
             };
         }

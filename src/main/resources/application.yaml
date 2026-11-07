@@ -78,6 +78,11 @@ naspi:
   websocket:
     # 서버·클라이언트 heartbeat 간격
     heartbeat: 10s
+    # 주기 발행 스레드 수. 동시에 실행될 수 있는 주기 토픽 수 이상으로 둔다
+    scheduler-pool-size: 2
+    # 주기 발행 토픽별 간격. 여기에 없는 토픽은 주기 발행하지 않는다 (이벤트 발행만 사용)
+    # 예) topics.ranking.interval: 10s
+    topics: {}
 
 logging:
   structured:
