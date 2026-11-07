@@ -97,6 +97,7 @@
 - 금액·수량은 `long`(원, 주 단위) 사용. 부동소수점 금지. 절사·반올림 규칙은 정책서의 계산식을 그대로 따른다.
 - 시간은 KST 기준 정책이 많으므로 `Clock`을 주입받아 사용한다 (테스트에서 시각 고정).
 - 엔티티를 API 응답으로 직접 반환하지 않고 DTO(record)로 변환한다.
+- API의 HTTP 메서드는 `GET`(조회)과 `POST`(생성·수정·삭제 등 상태 변경)만 쓴다. `PUT`, `PATCH`, `DELETE`는 보안상 쓰지 않는다 (CORS 허용 메서드도 `GET`, `POST`, `OPTIONS`로 제한). 수정·삭제는 동작이 드러나는 경로의 `POST`로 만든다 (예: `POST /api/members/me/name`, `POST /api/members/me/withdraw`).
 - 정책 규칙을 검증하는 테스트는 `@DisplayName`에 정책 내용을 한글로 적는다.
 
 ## Git

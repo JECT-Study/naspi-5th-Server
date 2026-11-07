@@ -7,7 +7,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -73,7 +73,7 @@ class MemberProfileControllerTest {
     void changeName() throws Exception {
         given(memberService.changeName(MEMBER_ID, "김철수")).willReturn("김철수");
 
-        mockMvc.perform(patch("/api/members/me/name")
+        mockMvc.perform(post("/api/members/me/name")
                         .with(loginMember())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"김철수\"}"))
@@ -88,7 +88,7 @@ class MemberProfileControllerTest {
         given(memberService.changeName(MEMBER_ID, "John"))
                 .willThrow(new NaspiBizException(ErrorCode.INVALID_MEMBER_NAME));
 
-        mockMvc.perform(patch("/api/members/me/name")
+        mockMvc.perform(post("/api/members/me/name")
                         .with(loginMember())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"John\"}"))
@@ -99,7 +99,7 @@ class MemberProfileControllerTest {
     @Test
     @DisplayName("이름을 보내지 않으면 400으로 응답한다")
     void changeNameWithoutName() throws Exception {
-        mockMvc.perform(patch("/api/members/me/name")
+        mockMvc.perform(post("/api/members/me/name")
                         .with(loginMember())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
@@ -110,7 +110,7 @@ class MemberProfileControllerTest {
     @Test
     @DisplayName("로그인하지 않으면 이름을 수정할 수 없다")
     void changeNameWithoutLogin() throws Exception {
-        mockMvc.perform(patch("/api/members/me/name")
+        mockMvc.perform(post("/api/members/me/name")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\": \"김철수\"}"))
                 .andExpect(status().isUnauthorized())

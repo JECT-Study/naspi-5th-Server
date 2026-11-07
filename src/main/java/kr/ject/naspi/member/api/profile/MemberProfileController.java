@@ -11,7 +11,7 @@ import kr.ject.naspi.member.application.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -88,7 +88,7 @@ public class MemberProfileController {
                     | 400 | `"002"` | `name` 누락·공백 | 다시 입력 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
-    @PatchMapping("/name")
+    @PostMapping("/name")
     public Result<MemberNameResponse> changeName(
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @Valid @RequestBody ChangeNameRequest request) {
