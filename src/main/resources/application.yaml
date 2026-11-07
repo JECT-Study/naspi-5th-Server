@@ -74,6 +74,10 @@ naspi:
   cors:
     # API 호출을 허용할 프론트 출처. 여러 개면 쉼표로 구분한다.
     allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://naspi.my}
+  # 실시간 메시지 (STOMP over WebSocket, 엔드포인트 /ws). WebSocketProperties 참고
+  websocket:
+    # 서버·클라이언트 heartbeat 간격
+    heartbeat: 10s
 
 logging:
   structured:
