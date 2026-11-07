@@ -18,6 +18,14 @@ public interface MemberRepository {
     Member save(Member member);
 
     /**
+     * 회원 ID로 회원을 찾는다.
+     *
+     * @param id 회원 ID
+     * @return 회원, 없으면 빈 값
+     */
+    Optional<Member> findById(Long id);
+
+    /**
      * 카카오 회원 번호로 회원을 찾는다.
      *
      * @param kakaoId 카카오 회원 번호
