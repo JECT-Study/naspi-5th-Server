@@ -1,13 +1,13 @@
 ---
 name: story
-description: 스토리(또는 Task)의 완료 조건과 연결된 정책이 현재 브랜치에 구현·테스트됐는지 조건별로 검증해 리포트한다. 인자로 Jira 키(ND-99)나 스토리 ID(MBR-03)를 받고, 생략하면 현재 브랜치({타입}/{JIRA-KEY})의 키를 쓴다. PR 전 점검, "스토리 검증", "완료 조건 확인" 요청 시 사용.
-argument-hint: "[Jira 키 | 스토리 ID]"
+description: 스토리(또는 Task)의 완료 조건과 연결된 정책이 현재 브랜치에 구현·테스트됐는지 조건별로 검증해 리포트한다. 인자로 Jira 키(ND-99)나 스토리 ID(MBR-03)를 받고(쉼표로 여러 개 가능), 생략하면 현재 브랜치({타입}/{JIRA-KEY}[,{JIRA-KEY}...])의 키를 모두 쓴다. PR 전 점검, "스토리 검증", "완료 조건 확인" 요청 시 사용.
+argument-hint: "[Jira 키 | 스토리 ID][,...]"
 allowed-tools: Read, Grep, Glob, Bash(scripts/find-story.sh:*), Bash(git diff:*), Bash(git log:*), Bash(git status:*), Bash(git merge-base:*), Bash(git rev-parse:*), Bash(./gradlew test:*), Bash(python3 scripts/sync-policy.py --check:*), Bash(python3 scripts/erd-summary.py --check:*), Bash(scripts/check-issue-doc.sh:*), Bash(./gradlew checkstyleMain:*)
 ---
 
 # 스토리 완료 조건 검증
 
-대상: `$ARGUMENTS` (비어 있으면 현재 브랜치의 Jira 키)
+대상: `$ARGUMENTS` (비어 있으면 현재 브랜치의 Jira 키. 브랜치에 키가 여러 개면 모두)
 
 이 스킬은 **검증과 보고만** 한다. 코드, 테스트, 문서(체크박스 포함)를 수정하지 않는다.
 
@@ -17,7 +17,9 @@ allowed-tools: Read, Grep, Glob, Bash(scripts/find-story.sh:*), Bash(git diff:*)
 scripts/find-story.sh $ARGUMENTS
 ```
 
-- 종료 코드 1 또는 2이면 출력된 메시지를 그대로 전달하고 멈춘다. (Jira 키가 `docs/issues`의 `- Jira:` 칸에 기재되지 않은 경우 등)
+- 종료 코드 2이면 출력된 메시지를 그대로 전달하고 멈춘다.
+- 종료 코드 1이면 못 찾은 키의 메시지를 전달한다 (Jira 키가 `docs/issues`의 `- Jira:` 칸에 기재되지 않은 경우 등). 찾은 스토리가 하나도 없으면 멈추고, 있으면 찾은 스토리만 계속 검증한다.
+- **스토리가 여러 개**이면 (`FILE` 줄이 여러 개) 스토리마다 아래 2~6단계를 따로 수행한다. 3단계 변경 범위 파악과 5단계 테스트 실행은 한 번에 해도 된다. 리포트는 스토리별로 나누고, 마지막에 스토리별 판정을 한 줄씩 요약한다.
 - 출력의 `FILE` 줄에서 스토리 위치를, 본문에서 다음을 뽑는다.
   - 완료 조건 (`- [ ]` / `- [x]` 항목)
   - 정책 링크 (`정책:` 줄) → 링크된 `docs/policies/<버전>/domain/*.md` 섹션을 읽는다 (버전은 스토리 파일 경로의 `docs/issues/<버전>/`).
@@ -103,4 +105,4 @@ git status --short
 - 선행 스토리 ID와, 그 스토리가 필요로 하는 코드가 존재하는지 여부
 ```
 
-마지막에 모든 항목이 ✅이면 "완료 조건 체크박스를 [x]로 바꿀까요?"라고 묻는다. 사용자가 동의할 때만 체크박스를 수정한다.
+마지막에 모든 항목이 ✅인 스토리가 있으면 해당 스토리를 나열하며 "완료 조건 체크박스를 [x]로 바꿀까요?"라고 묻는다. 사용자가 동의할 때만 체크박스를 수정한다.
