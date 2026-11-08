@@ -27,6 +27,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-session-data-redis'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// STOMP WebSocket (실시간 메시지 발행, websocket 모듈)
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'com.github.ulisesbocchio:jasypt-spring-boot-starter:4.0.4'
 	// Swagger UI / OpenAPI 문서 (springdoc 3.0.x = Spring Boot 4.0.x 대응)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
