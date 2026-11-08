@@ -87,6 +87,9 @@ naspi:
       # 캔들 차트 (CandleChartTopic)
       candles:
         interval: 5s
+      # 내 자산 (AssetTopic)
+      assets:
+        interval: 1s
 
 logging:
   structured:
