@@ -82,7 +82,11 @@ naspi:
     scheduler-pool-size: 2
     # 주기 발행 토픽별 간격. 여기에 없는 토픽은 주기 발행하지 않는다 (이벤트 발행만 사용)
     # 예) topics.ranking.interval: 10s
-    topics: {}
+    # TODO: 아래 토픽은 실제 발행 구현 전까지 더미 응답을 주기적으로 보낸다. 구현하면 주기를 조정하거나 지운다
+    topics:
+      # 캔들 차트 (CandleChartTopic)
+      candles:
+        interval: 5s
 
 logging:
   structured:
