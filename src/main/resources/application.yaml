@@ -93,6 +93,9 @@ naspi:
       # 알림 (AlertTopic)
       alerts:
         interval: 10s
+      # 종목 정보 (StockTopic)
+      stocks:
+        interval: 1s
 
 logging:
   structured:
