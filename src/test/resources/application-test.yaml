@@ -20,3 +20,7 @@ naspi:
       login-failure-url: /login-failure
   cors:
     allowed-origins: https://front.test
+  # Swagger 접속 계정 (테스트 전용 값)
+  swagger:
+    username: swagger-test
+    password: swagger-test-pw

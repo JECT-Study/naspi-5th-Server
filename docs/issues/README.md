@@ -28,8 +28,8 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 
 | 단계 | 할 일 | 도구 |
 |---|---|---|
-| 1. 브랜치 | `{타입}/{JIRA-KEY}` 브랜치 생성 (예: `feature/ND-12`, `fix/ND-12`) | |
-| 2. 기재 | 작업할 스토리·Task의 `Jira:` 칸에 키 기입 (예: `- Jira: ND-12`) | 커밋 전 훅이 미기재 시 커밋 차단 (`scripts/check-issue-doc.sh`) |
+| 1. 브랜치 | `{타입}/{JIRA-KEY}` 브랜치 생성 (예: `feature/ND-12`, `fix/ND-12`). 한 브랜치에서 여러 이슈를 다루면 쉼표로 이어 쓴다 (예: `feature/ND-8,ND-28`) | |
+| 2. 기재 | 작업할 스토리·Task의 `Jira:` 칸에 키 기입 (예: `- Jira: ND-12`) | 커밋 전 훅이 브랜치의 키 중 하나라도 미기재면 커밋 차단 (`scripts/check-issue-doc.sh`) |
 | 3. 조회 | 스토리·Task 내용과 완료 조건 확인 | `scripts/find-story.sh ND-12` (ID `MBR-03`, `COM-01`도 가능) |
 | 4. 구현 | 완료 조건과 링크된 정책을 기준으로 구현·테스트 | |
 | 5. 검증 | 완료 조건별 구현·테스트 여부 점검 (PR 전) | **`/story`** (아래 참고) |
@@ -39,7 +39,8 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 ```
 /story ND-12      # Jira 키로
 /story MBR-03     # 스토리 ID로
-/story            # 현재 브랜치({타입}/{JIRA-KEY})의 키로
+/story ND-8,ND-28 # 여러 개를 한 번에
+/story            # 현재 브랜치({타입}/{JIRA-KEY}[,{JIRA-KEY}...])의 키 모두로
 ```
 
 - 완료 조건과 링크된 정책 규칙마다 구현 코드(`파일:줄`)와 테스트를 찾고, 관련 테스트를 실행한다.
@@ -62,7 +63,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 | Epic | 파일 | 스토리 수 |
 |---|---|---|
 | [기반] 공통·인프라 (Jira 유형: Task) | [v1/global.md](v1/global.md) | 8 |
-| [회원] | [v1/member.md](v1/member.md) | 6 |
+| [회원] | [v1/member.md](v1/member.md) | 7 |
 | [리그] | [v1/league.md](v1/league.md) | 16 |
 | [시장] | [v1/market.md](v1/market.md) | 9 |
 | [자산] | [v1/asset.md](v1/asset.md) | 7 |
@@ -73,7 +74,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 
 ```
 1. 기반      GLB-01 ~ GLB-04
-2. 회원      MBR-01 ~ MBR-05
+2. 회원      MBR-01 ~ MBR-05, MBR-07
 3. 대기실    LEA-01 ~ LEA-05, MKT-01, MKT-02, LEA-06 ~ LEA-08, LEA-16
 4. 시작      LEA-09, LEA-10, MKT-03, MKT-04, AST-01
 5. 거래      AST-03 ~ AST-06, ORD-01 ~ ORD-07, MKT-05, MKT-08, AST-02, ORD-08, ORD-12

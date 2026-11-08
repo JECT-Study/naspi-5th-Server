@@ -1,4 +1,4 @@
-package kr.ject.naspi.member.api;
+package kr.ject.naspi.member.api.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -7,7 +7,6 @@ import java.util.Optional;
 import kr.ject.naspi.common.security.AuthProperties;
 import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.member.application.MemberAuthService;
-import kr.ject.naspi.member.infra.KakaoProfile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;

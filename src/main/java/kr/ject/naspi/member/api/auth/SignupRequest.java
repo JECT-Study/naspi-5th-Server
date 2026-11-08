@@ -1,5 +1,6 @@
-package kr.ject.naspi.member.api.request;
+package kr.ject.naspi.member.api.auth;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 
 /**
@@ -8,5 +9,6 @@ import jakarta.validation.constraints.NotBlank;
  * @param name 이름 (최대 5자 한글)
  */
 public record SignupRequest(
+        @Schema(description = "이름 (1~5자 한글)", example = "홍길동")
         @NotBlank(message = "이름을 입력해야 합니다.") String name) {
 }

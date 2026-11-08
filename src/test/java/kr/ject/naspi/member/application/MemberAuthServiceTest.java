@@ -7,15 +7,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import kr.ject.naspi.global.config.ClockConfig;
-import kr.ject.naspi.global.exception.BusinessException;
 import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
-import kr.ject.naspi.member.infra.MemberRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -32,14 +32,14 @@ class MemberAuthServiceTest {
     private MemberAuthService memberAuthService;
 
     @Autowired
-    private MemberRepository memberRepository;
+    private TestEntityManager entityManager;
 
     @Test
     @DisplayName("카카오 이름에 한글이 있으면 서비스 이름 규칙에 맞게 변환한 이름으로 자동 가입되고 가입 일시가 기록된다")
     void joinWithKakaoName() {
         long memberId = memberAuthService.joinWithKakaoName(KAKAO_ID, "홍길동Kim123456").orElseThrow();
 
-        Member member = memberRepository.findById(memberId).orElseThrow();
+        Member member = entityManager.find(Member.class, memberId);
         assertThat(member.getKakaoId()).isEqualTo(KAKAO_ID);
         assertThat(member.getName()).isEqualTo(MemberName.of("홍길동"));
         assertThat(member.isTermsAgreed()).isTrue();
@@ -51,7 +51,7 @@ class MemberAuthServiceTest {
     void joinWithKakaoNameWithoutHangul() {
         assertThat(memberAuthService.joinWithKakaoName(KAKAO_ID, "John")).isEmpty();
         assertThat(memberAuthService.joinWithKakaoName(KAKAO_ID, null)).isEmpty();
-        assertThat(memberRepository.count()).isZero();
+        assertThat(memberCount()).isZero();
     }
 
     @Test
@@ -59,7 +59,7 @@ class MemberAuthServiceTest {
     void joinWithInputName() {
         long memberId = memberAuthService.joinWithInputName(KAKAO_ID, "존");
 
-        assertThat(memberRepository.findById(memberId).orElseThrow().getName())
+        assertThat(entityManager.find(Member.class, memberId).getName())
                 .isEqualTo(MemberName.of("존"));
     }
 
@@ -67,10 +67,10 @@ class MemberAuthServiceTest {
     @DisplayName("입력한 이름은 최대 5자 한글만 허용한다")
     void joinWithInvalidInputName() {
         assertThatThrownBy(() -> memberAuthService.joinWithInputName(KAKAO_ID, "John"))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.INVALID_INPUT);
-        assertThat(memberRepository.count()).isZero();
+                .isEqualTo(ErrorCode.INVALID_MEMBER_NAME);
+        assertThat(memberCount()).isZero();
     }
 
     @Test
@@ -79,14 +79,14 @@ class MemberAuthServiceTest {
         memberAuthService.joinWithKakaoName(KAKAO_ID, "홍길동");
 
         assertThatThrownBy(() -> memberAuthService.joinWithKakaoName(KAKAO_ID, "홍길동"))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.CONFLICT);
+                .isEqualTo(ErrorCode.MEMBER_ALREADY_JOINED);
         assertThatThrownBy(() -> memberAuthService.joinWithInputName(KAKAO_ID, "존"))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.CONFLICT);
-        assertThat(memberRepository.count()).isEqualTo(1);
+                .isEqualTo(ErrorCode.MEMBER_ALREADY_JOINED);
+        assertThat(memberCount()).isEqualTo(1);
     }
 
     @Test
@@ -96,6 +96,12 @@ class MemberAuthServiceTest {
 
         assertThat(memberAuthService.findMemberId(KAKAO_ID)).contains(memberId);
         assertThat(memberAuthService.findMemberId(99999L)).isEmpty();
+    }
+
+    private long memberCount() {
+        return entityManager.getEntityManager()
+                .createQuery("select count(m) from Member m", Long.class)
+                .getSingleResult();
     }
 
     @TestConfiguration
