@@ -96,6 +96,9 @@ naspi:
       # 종목 정보 (StockTopic)
       stocks:
         interval: 1s
+      # 호가 (OrderBookTopic)
+      orderbook:
+        interval: 1s
 
 logging:
   structured:
