@@ -78,7 +78,7 @@
 - `websocket`은 최상위 소비자다 (`websocket → 도메인 모듈`). 어떤 모듈도 `websocket`을 import하지 않는다. 도메인 이벤트를 듣고 각 모듈 `application`으로 조회해 발행한다. 내부 구조는 다른 모듈과 같은 `api/application/domain/infra`이고, 토픽별 구현은 `application/topic/{도메인}/`에 둔다. 새 토픽은 기존 코드 수정 없이 리스너·`PeriodicTopic`·`TopicSubscriptionAuthorizer` 빈 추가로 만든다. 현재 내장 브로커라 단일 서버 전제이며, 다중 서버 시 `TopicMessagePublisher`를 Redis Pub/Sub 구현으로 교체한다.
 - 다른 모듈의 `domain`/`infra`를 직접 참조하지 않고 해당 모듈의 `application` 서비스를 통해 접근한다.
 - 역방향 흐름은 Spring 이벤트로 처리한다 (체결, 거래일 전환, 공시 게시, 회원 탈퇴, 리그 종료). 목록은 정책서 README 참고.
-- 자산(현금·주식)의 소유자는 `Member`가 아니라 리그 참여자(`Participant`)다. 리그마다 자산이 분리되며, v2의 봇도 참여자로 추가된다.
+- 자산(현금·주식)의 소유자는 `Member`가 아니라 리그 참여자(`Player`)다. 리그마다 자산이 분리되며, v2의 봇도 참여자로 추가된다.
 - `global`과 `common`에는 도메인 로직을 두지 않는다. 여러 모듈이 쓰는 도메인 개념은 소유 모듈에 두고 `application`을 통해 노출한다 (예: 거래일 계산은 `league`, 가격·호가 단위는 `market`).
 - 새 공통 코드를 어디에 둘지 애매하면 임의로 정하지 말고 질문한다.
 - 버전별 패키지(`v1`, `v2`)를 만들지 않는다.
