@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 알림 토픽: {@code /topic/leagues/{leagueId}/members/{memberId}/alerts}.
+ * 알림 토픽: {@code /topic/leagues/{leagueId}/players/{playerId}/alerts}.
  *
  * <p>TODO: 체결·공시 등 도메인 이벤트를 받아 보내도록 교체. 지금은 구독 중인 토픽에 더미 응답을 주기적으로 보낸다.
  */
@@ -19,9 +19,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AlertTopic implements PeriodicTopic {
 
-    /** 구독 경로. {@code memberId} 본인만 구독. */
+    /** 구독 경로. {@code playerId}가 본인일 때만 구독. */
     static final Pattern DESTINATION =
-            Pattern.compile("^/topic/leagues/(\\d+)/members/(\\d+)/alerts$");
+            Pattern.compile("^/topic/leagues/(\\d+)/players/(\\d+)/alerts$");
 
     /** 더미 응답. */
     static final AlertResponse DUMMY = new AlertResponse(AlertType.TRADE_EXECUTED,

@@ -3,7 +3,7 @@ package kr.ject.naspi.websocket.api.response.alert;
 /**
  * 알림 메시지.
  *
- * <p>토픽: {@code /topic/leagues/{leagueId}/members/{memberId}/alerts} (본인만 구독 가능)
+ * <p>토픽: {@code /topic/leagues/{leagueId}/players/{playerId}/alerts} (본인만 구독 가능)
  *
  * @param alertType 알림 종류
  * @param message 알림 내용

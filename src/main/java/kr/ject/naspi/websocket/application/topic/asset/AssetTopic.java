@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 내 자산 토픽: {@code /topic/leagues/{leagueId}/members/{memberId}/assets}.
+ * 내 자산 토픽: {@code /topic/leagues/{leagueId}/players/{playerId}/assets}.
  *
  * <p>TODO: 실제 자산(현금·보유 주식·현재가) 조회로 교체. 지금은 구독 중인 토픽에 더미 응답을 주기적으로 보낸다.
  */
@@ -19,9 +19,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AssetTopic implements PeriodicTopic {
 
-    /** 구독 경로. {@code memberId} 본인만 구독. */
+    /** 구독 경로. {@code playerId}가 본인일 때만 구독. */
     static final Pattern DESTINATION =
-            Pattern.compile("^/topic/leagues/(\\d+)/members/(\\d+)/assets$");
+            Pattern.compile("^/topic/leagues/(\\d+)/players/(\\d+)/assets$");
 
     /**
      * 더미 응답. 평가금 = 예수금 + 보유 주식 평가액 (시초가 기준 총자산 1억 원 근처).

@@ -21,11 +21,11 @@ class AlertTopicTest {
     @DisplayName("구독 중인 알림 토픽에만 메시지를 만든다")
     void producesForSubscribedAlertTopics() {
         when(subscriptions.subscribedDestinations("/topic/leagues/")).thenReturn(Set.of(
-                "/topic/leagues/1/members/7/alerts",
-                "/topic/leagues/1/members/7/assets"));
+                "/topic/leagues/1/players/7/alerts",
+                "/topic/leagues/1/players/7/assets"));
 
         assertThat(topic.produce()).containsExactly(new TopicMessage(
-                "/topic/leagues/1/members/7/alerts", "ALERT", AlertTopic.DUMMY));
+                "/topic/leagues/1/players/7/alerts", "ALERT", AlertTopic.DUMMY));
     }
 
     @Test
@@ -41,8 +41,8 @@ class AlertTopicTest {
     void onlyOwnerCanSubscribe() {
         LoginMember member = new LoginMember(7L);
 
-        assertThat(authorizer.supports("/topic/leagues/1/members/7/alerts")).isTrue();
-        assertThat(authorizer.canSubscribe(member, "/topic/leagues/1/members/7/alerts")).isTrue();
-        assertThat(authorizer.canSubscribe(member, "/topic/leagues/1/members/8/alerts")).isFalse();
+        assertThat(authorizer.supports("/topic/leagues/1/players/7/alerts")).isTrue();
+        assertThat(authorizer.canSubscribe(member, "/topic/leagues/1/players/7/alerts")).isTrue();
+        assertThat(authorizer.canSubscribe(member, "/topic/leagues/1/players/8/alerts")).isFalse();
     }
 }

@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * 내 자산 메시지. 금액은 원, 수량은 주 단위.
  *
- * <p>토픽: {@code /topic/leagues/{leagueId}/members/{memberId}/assets} (본인만 구독 가능)
+ * <p>토픽: {@code /topic/leagues/{leagueId}/players/{playerId}/assets} (본인만 구독 가능)
  *
  * @param totalAsset 평가금 (예수금 + 보유 주식 평가액)
  * @param deposit 예수금. 예약금을 포함한 전체 현금
