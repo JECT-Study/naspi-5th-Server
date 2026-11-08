@@ -29,3 +29,10 @@
   - [x] 커밋 전 훅이 이슈 기재, 문서 동기화·ERD 일관성, checkstyle을 검사한다 — `.claude/hooks/pre-commit-check.sh`
   - [x] 스킬 `/story`(완료 조건 검증), `/sync-docs`(정책 동기화·새 버전 시작)가 있다 — `.claude/skills/`
   - [x] 정책 버전을 관리한다 — `scripts/policy-version.sh`, `scripts/new-policy-version.sh`
+
+### COM-02 웹 요청 로깅 추가
+- Jira: ND-64
+- 목적: 운영 중 요청 흐름과 오류 원인을 로그로 추적할 수 있게 한다
+- 작업 내용: 모든 필터보다 먼저 실행되는 요청 로그 필터를 등록해 요청 메서드·URI·본문을 남긴다
+- 완료 조건 (확인 방법)
+  - [ ] 인증 실패 등으로 막힌 요청도 로그에 남는다 — `./gradlew test --tests "kr.ject.naspi.global.logging.*"`
