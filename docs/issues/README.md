@@ -66,7 +66,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 | [회원] | [v1/member.md](v1/member.md) | 7 |
 | [리그] | [v1/league.md](v1/league.md) | 16 |
 | [시장] | [v1/market.md](v1/market.md) | 9 |
-| [자산] | [v1/asset.md](v1/asset.md) | 7 |
+| [자산] | [v1/asset.md](v1/asset.md) | 8 |
 | [주문] | [v1/order.md](v1/order.md) | 12 |
 | [콘텐츠] | [v1/contents.md](v1/contents.md) | 10 |
 
@@ -77,7 +77,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 2. 회원      MBR-01 ~ MBR-05, MBR-07
 3. 대기실    LEA-01 ~ LEA-05, MKT-01, MKT-02, LEA-06 ~ LEA-08, LEA-16
 4. 시작      LEA-09, LEA-10, MKT-03, MKT-04, AST-01
-5. 거래      AST-03 ~ AST-06, ORD-01 ~ ORD-07, MKT-05, MKT-08, AST-02, ORD-08, ORD-12
+5. 거래      AST-08, AST-03 ~ AST-06, ORD-01 ~ ORD-07, MKT-05, MKT-08, AST-02, ORD-08, ORD-12
 6. 거래일    LEA-11, MKT-06, ORD-09
 7. 종료      LEA-12, ORD-10, MKT-07, LEA-13, LEA-14
 8. 탈퇴      MBR-06, ORD-11, AST-07, MKT-09, LEA-15
