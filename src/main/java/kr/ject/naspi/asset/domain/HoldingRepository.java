@@ -22,4 +22,13 @@ public interface HoldingRepository {
      * @return 보유 주식 목록
      */
     List<Holding> findAllByLeagueId(Long leagueId);
+
+    /**
+     * 리그 참여자의 보유 주식을 모두 조회한다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 플레이어 ID
+     * @return 보유 주식 목록
+     */
+    List<Holding> findAllByLeagueIdAndPlayerId(Long leagueId, Long playerId);
 }

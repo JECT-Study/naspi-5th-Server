@@ -58,4 +58,13 @@ public class Account {
         }
         return new Account(leagueId, playerId, initialCash);
     }
+
+    /**
+     * 주문 가능 현금. 예약 자산을 제외한 잔액이다 (docs/policies/v1/domain/asset.md "주문 가능 자산 및 정산").
+     *
+     * @return {@code 예수금 - 예약금}
+     */
+    public long orderableDeposit() {
+        return deposit - reservedDeposit;
+    }
 }

@@ -1,6 +1,7 @@
 package kr.ject.naspi.asset.domain;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 현금 계좌 저장소. 구현은 infra의 {@code AccountJpaRepository}가 맡는다.
@@ -30,4 +31,13 @@ public interface AccountRepository {
      * @return 계좌 존재 여부
      */
     boolean existsByLeagueId(Long leagueId);
+
+    /**
+     * 리그 참여자의 계좌를 조회한다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 플레이어 ID
+     * @return 계좌. 초기 자산이 배분되지 않았으면 비어 있다
+     */
+    Optional<Account> findByLeagueIdAndPlayerId(Long leagueId, Long playerId);
 }
