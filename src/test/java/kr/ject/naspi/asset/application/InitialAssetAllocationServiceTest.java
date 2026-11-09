@@ -72,6 +72,16 @@ class InitialAssetAllocationServiceTest {
     }
 
     @Test
+    @DisplayName("초기 배분 주식의 매입 금액은 배분 수량 × 시초가 10,000원이다")
+    void allocatesPurchaseAmount() {
+        service.allocate(LEAGUE_ID, LISTINGS);
+
+        assertThat(holdingRepository.findAllByLeagueId(LEAGUE_ID))
+                .allSatisfy(holding -> assertThat(holding.getPurchaseAmount())
+                        .isEqualTo(holding.getQuantity() * 10_000));
+    }
+
+    @Test
     @DisplayName("이미 초기 자산이 배분된 리그에는 다시 배분하지 않는다")
     void rejectsDuplicateAllocation() {
         service.allocate(LEAGUE_ID, LISTINGS);

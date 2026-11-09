@@ -1,5 +1,7 @@
 package kr.ject.naspi.market.domain;
 
+import java.util.List;
+
 /**
  * 종목 저장소. 구현은 infra의 {@code StockJpaRepository}가 맡는다.
  */
@@ -29,4 +31,12 @@ public interface StockRepository {
      * @return 존재 여부
      */
     boolean existsByListerPlayerId(Long listerPlayerId);
+
+    /**
+     * 리그의 종목을 모두 조회한다.
+     *
+     * @param leagueId 리그 ID
+     * @return 종목 목록
+     */
+    List<Stock> findAllByLeagueId(Long leagueId);
 }

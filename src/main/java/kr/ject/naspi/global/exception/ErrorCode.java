@@ -78,7 +78,12 @@ public enum ErrorCode {
     STOCK_NAME_DUPLICATED("302", "이미 사용 중인 종목 이름입니다."),
 
     /** 이미 이 리그에 종목을 상장한 참여자가 다시 상장하려는 경우. */
-    STOCK_ALREADY_LISTED("303", "이미 종목을 상장했습니다.");
+    STOCK_ALREADY_LISTED("303", "이미 종목을 상장했습니다."),
+
+
+    // asset (4xx)
+    /** 리그 참여자의 자산이 없는 경우 (리그 시작 전이라 초기 자산이 배분되지 않은 경우 포함). */
+    ASSET_NOT_FOUND("400", "자산 정보를 찾을 수 없습니다.");
 
     private final String code;
     private final String message;
