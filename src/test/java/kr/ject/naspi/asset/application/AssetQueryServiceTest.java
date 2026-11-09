@@ -3,6 +3,10 @@ package kr.ject.naspi.asset.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,6 +26,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @ActiveProfiles("test")
 @DataJpaTest
@@ -39,6 +44,9 @@ class AssetQueryServiceTest {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @MockitoSpyBean
+    private StockQueryService stockQueryService;
 
     @Test
     @DisplayName("참여자는 현금, 종목별 보유 수량·평가 손익·수익률, 현재가 기준 총자산과 총자산 평가 손익을 조회할 수 있다")
@@ -107,6 +115,56 @@ class AssetQueryServiceTest {
 
         assertThatThrownBy(() -> service.getPlayerAsset(LEAGUE_ID, 1L))
                 .isInstanceOf(NaspiRuntimeException.class);
+    }
+
+    @Test
+    @DisplayName("같은 리그 참여자 여러 명의 자산을 한 번에 조회하면 한 명씩 조회한 결과와 같다")
+    void getPlayerAssets() {
+        startLeagueWithThreePlayers();
+
+        List<PlayerAsset> assets = service.getPlayerAssets(LEAGUE_ID, List.of(3L, 1L, 2L));
+
+        assertThat(assets).extracting(PlayerAsset::playerId).containsExactly(1L, 2L, 3L);
+        assertThat(assets).containsExactly(
+                service.getPlayerAsset(LEAGUE_ID, 1L),
+                service.getPlayerAsset(LEAGUE_ID, 2L),
+                service.getPlayerAsset(LEAGUE_ID, 3L));
+    }
+
+    @Test
+    @DisplayName("여러 명을 조회해도 리그 종목·현재가는 한 번만 조회한다")
+    void getPlayerAssetsQueriesStocksOnce() {
+        startLeagueWithThreePlayers();
+        clearInvocations(stockQueryService);
+
+        service.getPlayerAssets(LEAGUE_ID, List.of(1L, 2L, 3L));
+
+        verify(stockQueryService, times(1)).findAllByLeagueId(anyLong());
+    }
+
+    @Test
+    @DisplayName("여러 명을 조회할 때 자산이 없거나 다른 리그인 플레이어는 오류 없이 빠진다")
+    void getPlayerAssetsSkipsPlayersWithoutAsset() {
+        startLeagueWithThreePlayers();
+
+        List<PlayerAsset> assets = service.getPlayerAssets(LEAGUE_ID, List.of(1L, 1L, 99L));
+
+        assertThat(assets).extracting(PlayerAsset::playerId).containsExactly(1L);
+        assertThat(service.getPlayerAssets(2L, List.of(1L, 2L))).isEmpty();
+        assertThat(service.getPlayerAssets(LEAGUE_ID, List.of())).isEmpty();
+    }
+
+    /** 참여자 3명(플레이어 1·2·3)으로 리그를 시작하고 현재가를 정한다. */
+    private void startLeagueWithThreePlayers() {
+        long stockA = listStock(1L, "가나다");
+        long stockB = listStock(2L, "라마바");
+        long stockC = listStock(3L, "사아자");
+        allocationService.allocate(LEAGUE_ID, List.of(
+                new StockListing(stockA, 1L), new StockListing(stockB, 2L),
+                new StockListing(stockC, 3L)));
+        setCurrentPrice(stockA, 12_000);
+        setCurrentPrice(stockB, 10_000);
+        setCurrentPrice(stockC, 8_000);
     }
 
     private long listStock(long listerPlayerId, String name) {

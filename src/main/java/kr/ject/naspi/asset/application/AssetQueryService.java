@@ -1,7 +1,10 @@
 package kr.ject.naspi.asset.application;
 
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import kr.ject.naspi.asset.application.PlayerAsset.HoldingAsset;
@@ -61,11 +64,54 @@ public class AssetQueryService {
         Account account = accountRepository.findByLeagueIdAndPlayerId(leagueId, playerId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.ASSET_NOT_FOUND));
         List<Holding> holdings = holdingRepository.findAllByLeagueIdAndPlayerId(leagueId, playerId);
-        Map<Long, LeagueStock> stocks = stockQueryService.findAllByLeagueId(leagueId).stream()
-                .collect(Collectors.toMap(LeagueStock::stockId, Function.identity()));
+        return evaluate(leagueId, account, holdings, leagueStocks(leagueId));
+    }
 
+    /**
+     * 같은 리그 참여자 여러 명의 자산을 한 번에 조회한다. 웹소켓 주기 발행처럼 한 리그의 여러 구독자에게
+     * 보낼 때 쓴다.
+     *
+     * <p>리그의 종목·현재가는 한 번만 조회하고, 계좌와 보유 주식도 플레이어별이 아니라 한 번에 조회한다.
+     * 초기 자산이 배분되지 않은 플레이어(리그 시작 전 등)는 오류 없이 결과에서 빠진다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerIds 플레이어 ID 목록. 중복은 무시한다
+     * @return 자산이 있는 플레이어의 자산 조회 결과. 플레이어 ID 순
+     * @throws NaspiRuntimeException 보유 종목이 리그에 없거나 현재가가 정해지지 않은 경우.
+     *     리그 종목 데이터 문제라 같은 리그의 모든 플레이어에 해당한다
+     */
+    @Transactional(readOnly = true)
+    public List<PlayerAsset> getPlayerAssets(long leagueId, Collection<Long> playerIds) {
+        if (playerIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> ids = Set.copyOf(playerIds);
+        List<Account> accounts = accountRepository.findAllByLeagueIdAndPlayerIdIn(leagueId, ids);
+        if (accounts.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, List<Holding>> holdingsByPlayer = holdingRepository
+                .findAllByLeagueIdAndPlayerIdIn(leagueId, ids).stream()
+                .collect(Collectors.groupingBy(Holding::getPlayerId));
+        Map<Long, LeagueStock> stocks = leagueStocks(leagueId);
+
+        return accounts.stream()
+                .sorted(Comparator.comparing(Account::getPlayerId))
+                .map(account -> evaluate(leagueId, account,
+                        holdingsByPlayer.getOrDefault(account.getPlayerId(), List.of()), stocks))
+                .toList();
+    }
+
+    private Map<Long, LeagueStock> leagueStocks(long leagueId) {
+        return stockQueryService.findAllByLeagueId(leagueId).stream()
+                .collect(Collectors.toMap(LeagueStock::stockId, Function.identity()));
+    }
+
+    private static PlayerAsset evaluate(long leagueId, Account account, List<Holding> holdings,
+            Map<Long, LeagueStock> stocks) {
         AssetValuation valuation = AssetValuation.evaluate(account, holdings,
-                currentPrices(leagueId, holdings, stocks), treasuryStockId(playerId, stocks));
+                currentPrices(leagueId, holdings, stocks),
+                treasuryStockId(account.getPlayerId(), stocks));
         return toPlayerAsset(valuation, stocks);
     }
 
