@@ -64,7 +64,21 @@ public enum ErrorCode {
     MEMBER_ALREADY_JOINED("102", "이미 가입한 회원입니다."),
 
     /** 회원을 찾을 수 없는 경우 (탈퇴 등으로 회원 정보가 삭제된 경우 포함). */
-    MEMBER_NOT_FOUND("103", "회원을 찾을 수 없습니다.");
+    MEMBER_NOT_FOUND("103", "회원을 찾을 수 없습니다."),
+
+
+    // market (3xx)
+    /** 종목 이름이 12자 이하의 글자·숫자·공백 규칙에 맞지 않는 경우. */
+    INVALID_STOCK_NAME("300", "종목 이름은 1~12자의 글자, 숫자, 공백만 사용할 수 있습니다."),
+
+    /** 종목 소개가 비어 있거나 50자를 넘는 경우. */
+    INVALID_STOCK_DESCRIPTION("301", "종목 소개는 1~50자로 입력해야 합니다."),
+
+    /** 같은 리그에 같은 이름의 종목이 이미 있는 경우. */
+    STOCK_NAME_DUPLICATED("302", "이미 사용 중인 종목 이름입니다."),
+
+    /** 이미 이 리그에 종목을 상장한 참여자가 다시 상장하려는 경우. */
+    STOCK_ALREADY_LISTED("303", "이미 종목을 상장했습니다.");
 
     private final String code;
     private final String message;
