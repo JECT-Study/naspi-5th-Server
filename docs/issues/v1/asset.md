@@ -3,7 +3,7 @@
 > 정책: [docs/policies/v1/asset.md](../../policies/v1/domain/asset.md)
 
 ### AST-01 리그가 시작되면 모든 참여자에게 총 1억 원 상당의 주식과 현금이 배분된다
-- Jira:
+- Jira: ND-11
 - 정책: [asset.md#초기-자산-배분](../../policies/v1/domain/asset.md#초기-자산-배분)
 - 선행: LEA-09, MKT-04
 - 내용: `LeagueStarted` 구독, 배분 완료 시 거래 개시 가능 상태로 전환
