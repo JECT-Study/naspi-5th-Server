@@ -16,7 +16,7 @@ import kr.ject.naspi.common.security.SecurityConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.CreatedLeague;
-import kr.ject.naspi.league.application.LeagueService;
+import kr.ject.naspi.league.application.LeagueCreationUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,7 +46,7 @@ class LeagueCreationControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private LeagueService leagueService;
+    private LeagueCreationUseCase leagueCreationUseCase;
 
     @MockitoBean
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
@@ -54,7 +54,7 @@ class LeagueCreationControllerTest {
     @Test
     @DisplayName("로그인한 회원은 리그 이름과 자신의 종목으로 리그를 만들고 초대 코드를 받는다")
     void create() throws Exception {
-        given(leagueService.create(MEMBER_ID, "우리끼리 주식왕", "나스피", "소개"))
+        given(leagueCreationUseCase.create(MEMBER_ID, "우리끼리 주식왕", "나스피", "소개"))
                 .willReturn(new CreatedLeague(3L, 9L, "A1B2C3D"));
 
         mockMvc.perform(post("/api/leagues")
@@ -70,7 +70,7 @@ class LeagueCreationControllerTest {
     @Test
     @DisplayName("리그 이름이 규칙에 맞지 않으면 리그 이름 오류 코드로 응답한다")
     void createWithInvalidLeagueName() throws Exception {
-        given(leagueService.create(MEMBER_ID, "우리끼리 주식왕", "나스피", "소개"))
+        given(leagueCreationUseCase.create(MEMBER_ID, "우리끼리 주식왕", "나스피", "소개"))
                 .willThrow(new NaspiBizException(ErrorCode.INVALID_LEAGUE_NAME));
 
         mockMvc.perform(post("/api/leagues")
@@ -91,7 +91,7 @@ class LeagueCreationControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("002"));
 
-        then(leagueService).should(never())
+        then(leagueCreationUseCase).should(never())
                 .create(anyLong(), anyString(), anyString(), anyString());
     }
 

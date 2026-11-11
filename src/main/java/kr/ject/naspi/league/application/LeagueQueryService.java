@@ -86,12 +86,14 @@ public class LeagueQueryService {
     }
 
     /**
-     * 리그를 시작할 수 있는지 확인
-     * 모든 플레이어사 상장을 마쳤으며, 상장을 마친 플레이어가 최소 인원 이상이여야 함
-     * */
+     * 리그를 시작할 수 있는지 확인한다.
+     * 모든 플레이어가 상장을 마쳤으며, 상장을 마친 플레이어가 최소 인원 이상이어야 한다.
+     */
     private static boolean startable(List<Player> players) {
-        long participants = players.stream().filter(Player::isListed).count();  // 상장을 마친 플레이어 수
-        boolean noWaiting = players.stream().allMatch(Player::isListed);        // 모든 참여자가 상자를 마쳤는지 여부
+        // 상장을 마친 플레이어 수
+        long participants = players.stream().filter(Player::isListed).count();
+        // 모든 플레이어가 상장을 마쳤는지 여부
+        boolean noWaiting = players.stream().allMatch(Player::isListed);
         return participants >= League.MIN_PARTICIPANTS_TO_START && noWaiting;
     }
 

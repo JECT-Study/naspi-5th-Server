@@ -8,7 +8,7 @@ import kr.ject.naspi.common.response.Result;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.CreatedLeague;
-import kr.ject.naspi.league.application.LeagueService;
+import kr.ject.naspi.league.application.LeagueCreationUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class LeagueCreationController {
 
-    private final LeagueService leagueService;
+    private final LeagueCreationUseCase leagueCreationUseCase;
 
     /**
      * 리그를 만들고 방장의 종목을 상장한다.
@@ -64,7 +64,7 @@ public class LeagueCreationController {
     public Result<CreateLeagueResponse> create(
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @Valid @RequestBody CreateLeagueRequest request) {
-        CreatedLeague created = leagueService.create(loginMember.memberId(),
+        CreatedLeague created = leagueCreationUseCase.create(loginMember.memberId(),
                 request.leagueName(), request.stockName(), request.stockDescription());
         return Result.success(new CreateLeagueResponse(created.leagueId(), created.inviteCode()));
     }

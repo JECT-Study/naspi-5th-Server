@@ -9,6 +9,7 @@ import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.CreatedLeague;
 import kr.ject.naspi.league.application.JoinedLeague;
+import kr.ject.naspi.league.application.LeagueCreationUseCase;
 import kr.ject.naspi.league.application.LeagueService;
 import kr.ject.naspi.market.application.LeagueDetail.DetailPlayer;
 import kr.ject.naspi.market.application.LeagueDetail.PlayerStock;
@@ -27,17 +28,21 @@ import org.springframework.test.context.ActiveProfiles;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({LeagueDetailService.class, LeagueCreatedListener.class, StockListingService.class,
+@Import({LeagueDetailService.class, StockListingService.class,
         MemberService.class, ClockConfig.class})
 @ComponentScan(basePackageClasses = LeagueService.class, useDefaultFilters = false,
         includeFilters = @ComponentScan.Filter(type = FilterType.REGEX,
-                pattern = ".*\\.(LeagueService|LeagueQueryService|InviteCodeIssuer)"))
+                pattern = ".*\\.(LeagueCreationUseCase|LeagueService"
+                        + "|LeagueQueryService|InviteCodeIssuer)"))
 class LeagueDetailServiceTest {
 
     private long kakaoId = 1000L;
 
     @Autowired
     private LeagueDetailService detailService;
+
+    @Autowired
+    private LeagueCreationUseCase leagueCreationUseCase;
 
     @Autowired
     private LeagueService leagueService;
@@ -50,7 +55,8 @@ class LeagueDetailServiceTest {
     void getDetail() {
         long host = member("방장");
         long guest = member("손님");
-        CreatedLeague league = leagueService.create(host, "리그", "나스피", "성장 가능성 무한대");
+        CreatedLeague league = leagueCreationUseCase.create(host, "리그", "나스피",
+                "성장 가능성 무한대");
         JoinedLeague joined = leagueService.join(guest, league.inviteCode());
 
         LeagueDetail detail = detailService.getDetail(guest, league.leagueId());
@@ -74,7 +80,8 @@ class LeagueDetailServiceTest {
     @Test
     @DisplayName("리그에 입장하지 않은 회원은 리그 상세를 조회할 수 없다")
     void getDetailByOutsider() {
-        CreatedLeague league = leagueService.create(member("방장"), "리그", "나스피", "소개");
+        CreatedLeague league = leagueCreationUseCase.create(member("방장"), "리그",
+                "나스피", "소개");
 
         assertThatThrownBy(() -> detailService.getDetail(member("외부인"), league.leagueId()))
                 .isInstanceOf(NaspiBizException.class)

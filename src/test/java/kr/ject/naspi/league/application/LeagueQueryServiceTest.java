@@ -11,6 +11,7 @@ import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
@@ -24,7 +25,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({LeagueQueryService.class, LeagueService.class, InviteCodeIssuer.class,
+@Import({LeagueQueryService.class, LeagueService.class, LeagueCreationUseCase.class,
+        InviteCodeIssuer.class, StockListingService.class,
         MemberService.class, ClockConfig.class})
 class LeagueQueryServiceTest {
 
@@ -37,14 +39,16 @@ class LeagueQueryServiceTest {
     private LeagueService leagueService;
 
     @Autowired
+    private LeagueCreationUseCase useCase;
+
+    @Autowired
     private TestEntityManager entityManager;
 
     @Test
     @DisplayName("초대 코드로 리그 이름, 상태, 입장한 사용자 수, 참여자(상장한 플레이어) 수를 조회한다")
     void getSummary() {
         long host = member("방장");
-        CreatedLeague league = leagueService.create(host, "우리 리그", "나스피", "소개");
-        leagueService.completeListing(league.hostPlayerId());
+        CreatedLeague league = useCase.create(host, "우리 리그", "나스피", "소개");
         leagueService.join(member("대기자"), league.inviteCode());
 
         LeagueSummary summary = queryService.getSummary(league.inviteCode().toLowerCase());
@@ -64,7 +68,7 @@ class LeagueQueryServiceTest {
     @Test
     @DisplayName("초대가 마감된(시작·만료된) 리그는 초대 코드로 조회할 수 없다")
     void getSummaryWithClosedCode() {
-        CreatedLeague league = leagueService.create(member("방장"), "리그", "나스피", "소개");
+        CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         entityManager.find(League.class, league.leagueId()).closeInvitation();
         entityManager.flush();
 
@@ -78,8 +82,7 @@ class LeagueQueryServiceTest {
     void getPlayers() {
         long host = member("방장");
         long guest = member("손님");
-        CreatedLeague league = leagueService.create(host, "리그", "나스피", "소개");
-        leagueService.completeListing(league.hostPlayerId());
+        CreatedLeague league = useCase.create(host, "리그", "나스피", "소개");
         JoinedLeague joined = leagueService.join(guest, league.inviteCode());
 
         LeaguePlayers players = queryService.getPlayers(guest, league.leagueId());
@@ -124,7 +127,7 @@ class LeagueQueryServiceTest {
     @Test
     @DisplayName("리그에 입장하지 않은 회원은 플레이어 목록을 조회할 수 없다")
     void getPlayersByOutsider() {
-        CreatedLeague league = leagueService.create(member("방장"), "리그", "나스피", "소개");
+        CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
 
         assertThatThrownBy(() -> queryService.getPlayers(member("외부인"), league.leagueId()))
                 .isInstanceOf(NaspiBizException.class)
@@ -136,7 +139,7 @@ class LeagueQueryServiceTest {
     void withdrawnMemberHasNoName() {
         long host = member("방장");
         long guest = member("손님");
-        CreatedLeague league = leagueService.create(host, "리그", "나스피", "소개");
+        CreatedLeague league = useCase.create(host, "리그", "나스피", "소개");
         JoinedLeague joined = leagueService.join(guest, league.inviteCode());
         entityManager.remove(entityManager.find(Member.class, guest));
         entityManager.flush();
@@ -150,8 +153,7 @@ class LeagueQueryServiceTest {
     }
 
     private CreatedLeague leagueWithParticipants(int count) {
-        CreatedLeague league = leagueService.create(member("방장"), "리그", "나스피", "소개");
-        leagueService.completeListing(league.hostPlayerId());
+        CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         for (int i = 1; i < count; i++) {
             JoinedLeague joined = leagueService.join(member("참여자"), league.inviteCode());
             leagueService.completeListing(joined.playerId());
