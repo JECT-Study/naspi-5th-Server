@@ -16,10 +16,10 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.cors.CorsConfiguration;
@@ -34,12 +34,15 @@ import tools.jackson.databind.json.JsonMapper;
  * 세션은 Spring Session을 통해 Redis에 보관되어 서버가 여러 대여도 같은 세션을 공유한다.
  *
  * <pre>
- * 프론트 로그인 버튼 → GET /oauth2/authorization/kakao → 카카오 인가 페이지
+ * 프론트 로그인 버튼 → GET /oauth2/authorization/kakao (Referer 의 프론트 출처를 세션에 저장) → 카카오 인가 페이지
  *   → GET /login/oauth2/code/kakao (카카오 콜백)
  *   → 기존 회원: 로그인 후 로그인 완료 경로로 이동
  *   → 신규 회원: 카카오 이름으로 자동 가입, 로그인 후 로그인 완료 경로로 이동
  *   → 카카오 이름에 한글이 없는 신규 회원: 가입 대기 상태로 이름 입력 경로로 이동 → POST /api/members/signup
  * </pre>
+ *
+ * <p>이동할 경로의 출처는 로그인을 시작한 프론트 출처다. 허용 출처가 아니거나 알 수 없으면 허용 출처의 첫 번째로 이동한다
+ * ({@link LoginRedirect}).
  */
 @Configuration
 @EnableWebSecurity
@@ -122,6 +125,8 @@ public class SecurityConfig {
      * @param http 보안 설정 빌더
      * @param kakaoLoginSuccessHandler 카카오 인증 성공 후 회원 로그인/가입 대기 처리
      * @param authProperties 로그인 설정
+     * @param loginRedirect 로그인을 시작한 프론트 출처 저장·이동
+     * @param clientRegistrationRepository 카카오 OAuth2 클라이언트 등록 정보
      * @param jsonMapper 401 응답 본문 변환
      * @param securityContextRepository 인증 정보 저장소
      * @return 보안 필터 체인
@@ -131,6 +136,8 @@ public class SecurityConfig {
             HttpSecurity http,
             AuthenticationSuccessHandler kakaoLoginSuccessHandler,
             AuthProperties authProperties,
+            LoginRedirect loginRedirect,
+            ClientRegistrationRepository clientRegistrationRepository,
             JsonMapper jsonMapper,
             SecurityContextRepository securityContextRepository) {
         http
@@ -141,10 +148,14 @@ public class SecurityConfig {
                 .securityContext(context -> context
                         .securityContextRepository(securityContextRepository))
                 .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(endpoint -> endpoint
+                                .authorizationRequestResolver(
+                                        new OriginSavingAuthorizationRequestResolver(
+                                                clientRegistrationRepository, loginRedirect)))
                         .authorizedClientRepository(new DiscardingAuthorizedClientRepository())
                         .successHandler(kakaoLoginSuccessHandler)
-                        .failureHandler(new SimpleUrlAuthenticationFailureHandler(
-                                authProperties.redirect().loginFailureUrl())))
+                        .failureHandler((request, response, exception) -> loginRedirect.redirect(
+                                request, response, authProperties.redirect().loginFailurePath())))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(new JsonAuthenticationEntryPoint(jsonMapper)))
                 // 로그아웃은 공통 응답 형식과 API 문서를 위해 컨트롤러(POST /api/auth/logout)가 처리한다.
@@ -153,6 +164,17 @@ public class SecurityConfig {
                 // TODO: CSRF 처리 방식 결정 (CookieCsrfTokenRepository 권장).
                 .csrf(AbstractHttpConfigurer::disable);
         return http.build();
+    }
+
+    /**
+     * 카카오 로그인 후 로그인을 시작한 프론트 출처로 이동시키는 리다이렉트를 등록한다.
+     *
+     * @param corsProperties 이동을 허용할 프론트 출처
+     * @return 로그인 리다이렉트
+     */
+    @Bean
+    public LoginRedirect loginRedirect(CorsProperties corsProperties) {
+        return new LoginRedirect(corsProperties);
     }
 
     /**

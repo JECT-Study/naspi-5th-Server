@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -153,7 +154,39 @@ class SecurityConfigTest {
                         .param("error", "access_denied")
                         .param("state", "unknown"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/login-failure"));
+                .andExpect(redirectedUrl("https://front.test/login-failure"));
+    }
+
+    @Test
+    @DisplayName("허용된 프론트 출처에서 카카오 로그인을 시작하면 로그인 후 그 출처로 돌아간다")
+    void kakaoLoginReturnsToStartedOrigin() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(get("/oauth2/authorization/kakao")
+                        .session(session)
+                        .header(HttpHeaders.REFERER, "https://local-front.test:5173/login"))
+                .andExpect(status().is3xxRedirection());
+
+        mockMvc.perform(get("/login/oauth2/code/kakao")
+                        .session(session)
+                        .param("error", "access_denied")
+                        .param("state", "unknown"))
+                .andExpect(redirectedUrl("https://local-front.test:5173/login-failure"));
+    }
+
+    @Test
+    @DisplayName("허용되지 않은 출처에서 카카오 로그인을 시작하면 로그인 후 기본 프론트 출처로 이동한다")
+    void kakaoLoginFromNotAllowedOrigin() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(get("/oauth2/authorization/kakao")
+                        .session(session)
+                        .header(HttpHeaders.REFERER, "https://evil.test/"))
+                .andExpect(status().is3xxRedirection());
+
+        mockMvc.perform(get("/login/oauth2/code/kakao")
+                        .session(session)
+                        .param("error", "access_denied")
+                        .param("state", "unknown"))
+                .andExpect(redirectedUrl("https://front.test/login-failure"));
     }
 
     /**

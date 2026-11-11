@@ -45,7 +45,7 @@ spring:
             user-name-attribute: id
 
 server:
-  # TLS 는 Gateway 에서 끝나므로 X-Forwarded-* 헤더로 원래 주소(https://api.naspi.my)를 복원한다.
+  # TLS 는 Gateway 에서 끝나므로 X-Forwarded-* 헤더로 원래 주소(prod https://api.naspi.my, dev https://dev.api.naspi.my)를 복원한다.
   # 없으면 카카오 redirect_uri 가 http:// 로 만들어져 카카오 콘솔 등록값과 어긋난다 (KOE006).
   forward-headers-strategy: framework
   servlet:
@@ -62,18 +62,19 @@ naspi:
   auth:
     # 로그인 유지 기간. 마지막 요청으로부터 이 기간 동안 요청이 없으면 로그아웃된다.
     login-session-timeout: 7d
-    # 카카오 로그인 후 이동할 프론트 경로. 환경 변수로 주입한다 (k8s: manifest 의 naspi-cm-common).
-    # 로컬 값은 아래 local 프로필에 있다.
+    # 카카오 로그인 후 이동할 프론트 경로. 출처는 로그인을 시작한 프론트 출처(Referer)를 따른다 (LoginRedirect).
+    # 허용 출처(naspi.cors.allowed-origins)가 아니거나 알 수 없으면(직접 접속 등) 허용 출처의 첫 번째로 이동한다.
     redirect:
       # 기존 회원 로그인 완료
-      login-success-url: ${NASPI_LOGIN_SUCCESS_URL:https://naspi.my/}
+      login-success-path: /
       # 카카오 이름에 한글이 없는 신규 회원. 이름 입력 후 POST /api/members/signup 호출
-      name-input-url: ${NASPI_NAME_INPUT_URL:https://naspi.my/signup}
+      name-input-path: /signup
       # 카카오 인증 실패 또는 사용자 취소
-      login-failure-url: ${NASPI_LOGIN_FAILURE_URL:https://naspi.my/login-failure}
+      login-failure-path: /login-failure
   cors:
-    # API 호출을 허용할 프론트 출처. 여러 개면 쉼표로 구분한다.
-    allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://naspi.my}
+    # API 호출과 로그인 후 이동을 허용할 프론트 출처. 여러 개면 쉼표로 구분하고, 첫 번째가 로그인 후 기본 이동 출처다.
+    # 프로필별 값은 아래 development / local 프로필에 있다. 환경 변수가 있으면 그 값을 쓴다.
+    allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://www.naspi.my,https://naspi.my}
   # Swagger UI·API 문서 접속 계정 (HTTP Basic). k8s: ID는 naspi-cm-common, 비밀번호는 naspi-secret-common
   # 로컬도 SWAGGER_PASSWORD 환경 변수를 직접 주입한다 (IDE 실행 설정 등).
   # 기본값을 빈 값으로 둬야 변수가 없을 때 시작에 실패한다. 기본값이 없으면 "${SWAGGER_PASSWORD}" 문자열이 비밀번호가 된다.
@@ -133,18 +134,8 @@ spring:
       port: 6379
 
 naspi:
-  auth:
-    # 로그인 유지 기간. 마지막 요청으로부터 이 기간 동안 요청이 없으면 로그아웃된다.
-    login-session-timeout: 7d
-    # 카카오 로그인 후 이동할 로컬 프론트 경로 (Vite 기본 포트 5173)
-    redirect:
-      # 기존 회원 로그인 완료
-      login-success-url: http://localhost:5173/
-      # 카카오 이름에 한글이 없는 신규 회원. 이름 입력 후 POST /api/members/signup 호출
-      name-input-url: http://localhost:5173/signup
-      # 카카오 인증 실패 또는 사용자 취소
-      login-failure-url: http://localhost:5173/login-failure
   cors:
+    # 로컬 프론트 (Vite 기본 포트 5173)
     allowed-origins: http://localhost:5173
 
 server:
@@ -161,3 +152,10 @@ spring:
   config:
     activate:
       on-profile: development
+
+# dev 서버(dev.api.naspi.my)는 로컬 프론트(local.naspi.my:5173, hosts 로 127.0.0.1 지정)와 배포된 프론트를 모두 받는다.
+# 첫 번째(local.naspi.my)가 로그인 후 기본 이동 출처다. 환경 변수(k8s: naspi-cm-common)가 있으면 그 값을 쓴다.
+naspi:
+  cors:
+    # localhost 는 dev.api.naspi.my 와 다른 사이트라 SameSite=Lax 세션 쿠키가 실리지 않는다 (로그인 필요 API 는 local.naspi.my 로)
+    allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://local.naspi.my:5173,http://localhost:5173,https://www.naspi.my,https://naspi.my}

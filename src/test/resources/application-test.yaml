@@ -15,11 +15,12 @@ spring:
 naspi:
   auth:
     redirect:
-      login-success-url: /
-      name-input-url: /signup
-      login-failure-url: /login-failure
+      login-success-path: /
+      name-input-path: /signup
+      login-failure-path: /login-failure
   cors:
-    allowed-origins: https://front.test
+    # 첫 번째가 로그인 후 기본 이동 출처
+    allowed-origins: https://front.test,https://local-front.test:5173
   # Swagger 접속 계정 (테스트 전용 값)
   swagger:
     username: swagger-test
