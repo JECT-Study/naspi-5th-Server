@@ -32,7 +32,7 @@ public class StockEditService {
      * <p>TODO: 리그가 대기실 상태인지 league에 확인한다 (ND-61).
      *
      * @param leagueId 리그 ID
-     * @param playerId 수정을 요청한 플레이어 ID
+     * @param memberId 수정을 요청한 회원 ID
      * @param stockId 종목 ID
      * @param name 새 종목 이름 (앞뒤 공백은 제거된다)
      * @param description 새 종목 소개
@@ -41,8 +41,10 @@ public class StockEditService {
      *         이름이 같은 리그에서 중복되는 경우
      */
     @Transactional
-    public StockDetail editInLobby(long leagueId, long playerId, long stockId, String name,
+    public StockDetail editInLobby(long leagueId, long memberId, long stockId, String name,
             String description) {
+        // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
+        long playerId = memberId;
         StockName stockName = StockName.of(name);
         StockDescription stockDescription = StockDescription.of(description);
         Stock stock = findOwnedStock(leagueId, playerId, stockId);
@@ -62,15 +64,17 @@ public class StockEditService {
      * <p>TODO: 리그가 진행 중인지 league에 확인한다 (ND-66).
      *
      * @param leagueId 리그 ID
-     * @param playerId 수정을 요청한 플레이어 ID
+     * @param memberId 수정을 요청한 회원 ID
      * @param stockId 종목 ID
      * @param description 새 종목 소개
      * @return 수정된 종목
      * @throws NaspiBizException 소개가 규칙에 맞지 않거나, 종목이 없거나, 본인의 종목이 아닌 경우
      */
     @Transactional
-    public StockDetail changeDescription(long leagueId, long playerId, long stockId,
+    public StockDetail changeDescription(long leagueId, long memberId, long stockId,
             String description) {
+        // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
+        long playerId = memberId;
         StockDescription stockDescription = StockDescription.of(description);
         Stock stock = findOwnedStock(leagueId, playerId, stockId);
 

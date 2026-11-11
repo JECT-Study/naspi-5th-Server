@@ -29,9 +29,6 @@ public class StockEditController {
     /**
      * 대기실에서 자신의 종목 이름과 소개를 수정한다.
      *
-     * <p>TODO: league 구현 후 {@code StockEditService}에서 league 서비스를 직접 호출해 리그가
-     *          대기실 상태인지 확인하고, 회원 ID와 리그 ID로 플레이어 ID를 찾는다 (ND-61).
-     *
      * @param loginMember 로그인한 회원
      * @param leagueId 리그 ID
      * @param stockId 종목 ID
@@ -75,17 +72,12 @@ public class StockEditController {
             @PathVariable long leagueId,
             @PathVariable long stockId,
             @RequestBody EditStockRequest request) {
-        // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
-        long playerId = loginMember.memberId();
         return Result.success(StockResponse.from(stockEditService.editInLobby(
-                leagueId, playerId, stockId, request.name(), request.description())));
+                leagueId, loginMember.memberId(), stockId, request.name(), request.description())));
     }
 
     /**
      * 진행 중인 리그에서 자신의 종목 소개를 수정한다.
-     *
-     * <p>TODO: league 구현 후 {@code StockEditService}에서 league 서비스를 직접 호출해 리그가
-     *          진행 중인지 확인하고, 회원 ID와 리그 ID로 플레이어 ID를 찾는다 (ND-66).
      *
      * @param loginMember 로그인한 회원
      * @param leagueId 리그 ID
@@ -123,9 +115,7 @@ public class StockEditController {
             @PathVariable long leagueId,
             @PathVariable long stockId,
             @RequestBody ChangeStockDescriptionRequest request) {
-        // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
-        long playerId = loginMember.memberId();
         return Result.success(StockResponse.from(stockEditService.changeDescription(
-                leagueId, playerId, stockId, request.description())));
+                leagueId, loginMember.memberId(), stockId, request.description())));
     }
 }

@@ -29,13 +29,6 @@ public class StockListingController {
     /**
      * 로그인한 회원이 리그에 자신의 종목을 상장한다.
      *
-     * <p>TODO: league 구현 후 {@code StockListingService}에서 league 서비스를 직접 호출해 연동한다.
-     * <ul>
-     *   <li>리그가 대기실 상태인지, 참여자가 10명이 아닌지 확인한다 (MKT-01).</li>
-     *   <li>회원 ID와 리그 ID로 대기자의 플레이어 ID를 찾는다. 지금은 회원 ID를 플레이어 ID 자리에 임시로 쓴다.</li>
-     *   <li>상장 후 대기자를 참여자로 전환한다 (LEA-05).</li>
-     * </ul>
-     *
      * @param loginMember 로그인한 회원
      * @param leagueId 리그 ID
      * @param request 종목 상장 요청
@@ -72,12 +65,8 @@ public class StockListingController {
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId,
             @RequestBody ListStockRequest request) {
-        // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
-        long listerPlayerId = loginMember.memberId();
         long stockId = stockListingService.list(
-                leagueId, listerPlayerId, request.name(), request.description());
-        // TODO: 상장 시 대기자 -> 참여자 전환 (StockListingService에서 league 서비스 호출, LEA-05).
-        //       연동 전에는 상장해도 대기자로 남는다.
+                leagueId, loginMember.memberId(), request.name(), request.description());
         return Result.success(new ListStockResponse(stockId));
     }
 }
