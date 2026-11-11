@@ -50,7 +50,7 @@ class LeagueJpaRepositoryTest {
         League reused = leagueRepository.save(newLeague());
         entityManager.flush();
 
-        assertThat(leagueRepository.findByInviteCode(CODE)).contains(reused);
+        assertThat(leagueRepository.findWithLockByInviteCode(CODE)).contains(reused);
         assertThat(entityManager.find(League.class, closed.getId()).getInviteCode()).isNull();
     }
 

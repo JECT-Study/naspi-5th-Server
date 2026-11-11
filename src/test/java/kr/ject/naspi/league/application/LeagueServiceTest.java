@@ -196,4 +196,34 @@ class LeagueServiceTest {
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_JOINED);
     }
+
+    @Test
+    @DisplayName("참여자 + 대기자가 10명이 될 때까지 입장할 수 있다")
+    void joinUpToMaxPlayers() {
+        CreatedLeague created = service.create(HOST_MEMBER_ID, "리그",
+                STOCK_NAME, STOCK_DESCRIPTION);
+
+        for (long memberId = 2; memberId <= League.MAX_PLAYERS; memberId++) {
+            service.join(memberId, created.inviteCode());
+        }
+
+        assertThat(entityManager.getEntityManager()
+                .createQuery("select count(p) from Player p where p.leagueId = :id", Long.class)
+                .setParameter("id", created.leagueId())
+                .getSingleResult()).isEqualTo(League.MAX_PLAYERS);
+    }
+
+    @Test
+    @DisplayName("참여자 + 대기자가 10명이면 추가로 입장할 수 없다")
+    void joinFullLeague() {
+        CreatedLeague created = service.create(HOST_MEMBER_ID, "리그",
+                STOCK_NAME, STOCK_DESCRIPTION);
+        for (long memberId = 2; memberId <= League.MAX_PLAYERS; memberId++) {
+            service.join(memberId, created.inviteCode());
+        }
+
+        assertThatThrownBy(() -> service.join(League.MAX_PLAYERS + 1L, created.inviteCode()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_FULL);
+    }
 }

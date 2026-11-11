@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>정책 (docs/policies/v1/domain/market.md "종목 상장"): 각 사용자는 하나의 리그에서 하나의 종목만
  * 상장할 수 있고, 이름과 소개는 필수이며, 이름은 같은 리그 안에서 중복될 수 없다.
  *
- * <p>TODO: 리그 상태(대기실인지, 참여자가 10명인지)와 회원의 플레이어 ID 해석은 league 구현 후 연동한다.
+ * <p>TODO: 리그 상태(대기실인지)와 회원의 플레이어 ID 해석은 league 구현 후 연동한다.
  * 지금은 호출하는 쪽이 검증을 마치고 {@code listerPlayerId}를 넘긴다고 가정한다.
  */
 @Service

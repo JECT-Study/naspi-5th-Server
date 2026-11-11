@@ -16,12 +16,29 @@ public interface LeagueRepository {
     League save(League league);
 
     /**
-     * 초대 코드로 리그를 찾는다. 초대가 마감된 리그는 코드가 비어 있어 찾을 수 없다.
+     * 리그 ID로 리그를 찾는다.
+     *
+     * @param id 리그 ID
+     * @return 리그, 없으면 빈 값
+     */
+    Optional<League> findById(Long id);
+
+    /**
+     * 초대 코드로 리그를 찾는다 (락 없음). 초대가 마감된 리그는 코드가 비어 있어 찾을 수 없다.
      *
      * @param inviteCode 초대 코드
      * @return 리그, 없으면 빈 값
      */
     Optional<League> findByInviteCode(InviteCode inviteCode);
+
+    /**
+     * 초대 코드로 리그를 찾아 비관적 쓰기 락을 건다. 초대가 마감된 리그는 코드가 비어 있어 찾을 수 없다.
+     * 락은 현재 트랜잭션이 끝날 때 풀리므로, 같은 리그에 동시에 입장하는 요청은 차례로 처리된다.
+     *
+     * @param inviteCode 초대 코드
+     * @return 리그, 없으면 빈 값
+     */
+    Optional<League> findWithLockByInviteCode(InviteCode inviteCode);
 
     /**
      * 초대 코드를 쓰고 있는 리그가 있는지 확인한다.

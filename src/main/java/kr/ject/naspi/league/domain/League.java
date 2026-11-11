@@ -29,6 +29,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class League {
 
+    /** 한 리그에 입장할 수 있는 최대 인원 (참여자 + 대기자). */
+    public static final int MAX_PLAYERS = 10;
+
+    /** 리그를 시작하려면 필요한 최소 참여자 수. */
+    public static final int MIN_PARTICIPANTS_TO_START = 3;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -1,5 +1,6 @@
 package kr.ject.naspi.league.domain;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -31,4 +32,28 @@ public interface PlayerRepository {
      * @return 입장 여부
      */
     boolean existsByLeagueIdAndMemberId(Long leagueId, Long memberId);
+
+    /**
+     * 리그에 입장한 플레이어(참여자 + 대기자) 수를 센다.
+     *
+     * @param leagueId 리그 ID
+     * @return 플레이어 수
+     */
+    long countByLeagueId(Long leagueId);
+
+    /**
+     * 리그에서 상장을 마친 참여자 수를 센다.
+     *
+     * @param leagueId 리그 ID
+     * @return 참여자 수
+     */
+    long countByLeagueIdAndListedTrue(Long leagueId);
+
+    /**
+     * 리그에 입장한 플레이어(참여자 + 대기자)를 모두 찾는다. 한 리그는 최대 10명이라 한 번에 조회한다.
+     *
+     * @param leagueId 리그 ID
+     * @return 플레이어 목록
+     */
+    List<Player> findAllByLeagueId(Long leagueId);
 }
