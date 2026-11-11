@@ -1,8 +1,8 @@
-package kr.ject.naspi.market.api.leaguedetail;
+package kr.ject.naspi.league.api.detail;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import kr.ject.naspi.market.application.LeagueDetail;
+import kr.ject.naspi.league.application.LeagueDetail;
 
 /**
  * 리그 상세 정보.

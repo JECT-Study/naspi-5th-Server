@@ -5,8 +5,10 @@ package kr.ject.naspi.market.application;
  *
  * @param stockId 종목 ID
  * @param name 종목 이름
+ * @param description 종목 소개
  * @param listerPlayerId 상장자 플레이어 ID
  * @param currentPrice 현재가 (1주당 원). 리그 시작 전에는 {@code null}
  */
-public record LeagueStock(long stockId, String name, long listerPlayerId, Long currentPrice) {
+public record LeagueStock(long stockId, String name, String description, long listerPlayerId,
+        Long currentPrice) {
 }

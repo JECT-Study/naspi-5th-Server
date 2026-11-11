@@ -1,4 +1,4 @@
-package kr.ject.naspi.market.application;
+package kr.ject.naspi.league.application;
 
 import java.time.LocalDateTime;
 import java.util.List;

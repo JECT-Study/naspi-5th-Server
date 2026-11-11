@@ -1,4 +1,4 @@
-package kr.ject.naspi.market.application;
+package kr.ject.naspi.league.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -7,12 +7,10 @@ import java.time.LocalDateTime;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.league.application.CreatedLeague;
-import kr.ject.naspi.league.application.JoinedLeague;
-import kr.ject.naspi.league.application.LeagueCreationUseCase;
-import kr.ject.naspi.league.application.LeagueService;
-import kr.ject.naspi.market.application.LeagueDetail.DetailPlayer;
-import kr.ject.naspi.market.application.LeagueDetail.PlayerStock;
+import kr.ject.naspi.league.application.LeagueDetail.DetailPlayer;
+import kr.ject.naspi.league.application.LeagueDetail.PlayerStock;
+import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
@@ -21,25 +19,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({LeagueDetailService.class, StockListingService.class,
-        MemberService.class, ClockConfig.class})
-@ComponentScan(basePackageClasses = LeagueService.class, useDefaultFilters = false,
-        includeFilters = @ComponentScan.Filter(type = FilterType.REGEX,
-                pattern = ".*\\.(LeagueCreationUseCase|LeagueService"
-                        + "|LeagueQueryService|InviteCodeIssuer|LeagueJoinLimit)"))
-class LeagueDetailServiceTest {
+@Import({LeagueDetailUseCase.class, LeagueQueryService.class, LeagueCreationUseCase.class,
+        LeagueService.class, LeagueJoinLimit.class, InviteCodeIssuer.class,
+        StockListingService.class, StockQueryService.class, MemberService.class,
+        ClockConfig.class})
+class LeagueDetailUseCaseTest {
 
     private long kakaoId = 1000L;
 
     @Autowired
-    private LeagueDetailService detailService;
+    private LeagueDetailUseCase detailUseCase;
 
     @Autowired
     private LeagueCreationUseCase leagueCreationUseCase;
@@ -59,7 +53,7 @@ class LeagueDetailServiceTest {
                 "성장 가능성 무한대");
         JoinedLeague joined = leagueService.join(guest, league.inviteCode());
 
-        LeagueDetail detail = detailService.getDetail(guest, league.leagueId());
+        LeagueDetail detail = detailUseCase.getDetail(guest, league.leagueId());
 
         assertThat(detail.startable()).isFalse();
         assertThat(detail.players()).hasSize(2);
@@ -83,7 +77,7 @@ class LeagueDetailServiceTest {
         CreatedLeague league = leagueCreationUseCase.create(member("방장"), "리그",
                 "나스피", "소개");
 
-        assertThatThrownBy(() -> detailService.getDetail(member("외부인"), league.leagueId()))
+        assertThatThrownBy(() -> detailUseCase.getDetail(member("외부인"), league.leagueId()))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
     }

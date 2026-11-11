@@ -1,4 +1,4 @@
-package kr.ject.naspi.market.api.leaguedetail;
+package kr.ject.naspi.league.api.detail;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.ject.naspi.common.response.Result;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.market.application.LeagueDetailService;
+import kr.ject.naspi.league.application.LeagueDetailUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,14 +14,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 리그 상세 조회. 플레이어 목록에 종목 정보를 합치므로 market 모듈에 둔다.
+ * 리그 상세 조회. 플레이어 목록에 각 참여자의 종목 정보를 합친다.
  */
 @Tag(name = "리그", description = "리그 생성, 초대 코드로 대기실 입장, 리그 조회")
 @RestController
 @RequiredArgsConstructor
 public class LeagueDetailController {
 
-    private final LeagueDetailService leagueDetailService;
+    private final LeagueDetailUseCase leagueDetailUseCase;
 
     /**
      * 리그 플레이어 목록과 각 참여자의 종목, 리그 시작 가능 여부를 조회한다.
@@ -62,6 +62,6 @@ public class LeagueDetailController {
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId) {
         return Result.success(LeagueDetailResponse.from(
-                leagueDetailService.getDetail(loginMember.memberId(), leagueId)));
+                leagueDetailUseCase.getDetail(loginMember.memberId(), leagueId)));
     }
 }

@@ -1,4 +1,4 @@
-package kr.ject.naspi.market.api.leaguedetail;
+package kr.ject.naspi.league.api.detail;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -15,10 +15,10 @@ import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.SecurityConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.market.application.LeagueDetail;
-import kr.ject.naspi.market.application.LeagueDetail.DetailPlayer;
-import kr.ject.naspi.market.application.LeagueDetail.PlayerStock;
-import kr.ject.naspi.market.application.LeagueDetailService;
+import kr.ject.naspi.league.application.LeagueDetail;
+import kr.ject.naspi.league.application.LeagueDetail.DetailPlayer;
+import kr.ject.naspi.league.application.LeagueDetail.PlayerStock;
+import kr.ject.naspi.league.application.LeagueDetailUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,7 +44,7 @@ class LeagueDetailControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private LeagueDetailService leagueDetailService;
+    private LeagueDetailUseCase leagueDetailUseCase;
 
     @MockitoBean
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
@@ -52,7 +52,7 @@ class LeagueDetailControllerTest {
     @Test
     @DisplayName("리그 플레이어는 플레이어 목록과 각 참여자의 종목, 리그 시작 가능 여부를 조회할 수 있다")
     void getDetail() throws Exception {
-        given(leagueDetailService.getDetail(MEMBER_ID, 3L)).willReturn(new LeagueDetail(3L, false,
+        given(leagueDetailUseCase.getDetail(MEMBER_ID, 3L)).willReturn(new LeagueDetail(3L, false,
                 List.of(new DetailPlayer(9L, "방장", true, true, NOW, NOW,
                                 new PlayerStock(11L, "나스피", "소개")),
                         new DetailPlayer(10L, "손님", false, false, NOW, null, null))));
@@ -72,7 +72,7 @@ class LeagueDetailControllerTest {
     @Test
     @DisplayName("리그에 입장하지 않은 회원이면 권한 없음 코드로 응답한다")
     void getDetailByOutsider() throws Exception {
-        given(leagueDetailService.getDetail(MEMBER_ID, 3L))
+        given(leagueDetailUseCase.getDetail(MEMBER_ID, 3L))
                 .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
 
         mockMvc.perform(get("/api/leagues/3/detail").with(loginMember()))
@@ -87,7 +87,7 @@ class LeagueDetailControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("003"));
 
-        then(leagueDetailService).should(never()).getDetail(anyLong(), anyLong());
+        then(leagueDetailUseCase).should(never()).getDetail(anyLong(), anyLong());
     }
 
     private static RequestPostProcessor loginMember() {
