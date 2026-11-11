@@ -56,7 +56,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 
 | Epic | 파일 | Task 수 |
 |---|---|---|
-| [COMMON] 개발 환경·운영 기반 | [tasks/common.md](tasks/common.md) | 1 |
+| [COMMON] 개발 환경·운영 기반 | [tasks/common.md](tasks/common.md) | 3 |
 
 ## v1 Epic
 
