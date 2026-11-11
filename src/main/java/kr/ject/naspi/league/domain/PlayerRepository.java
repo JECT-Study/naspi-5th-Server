@@ -1,5 +1,6 @@
 package kr.ject.naspi.league.domain;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -56,4 +57,13 @@ public interface PlayerRepository {
      * @return 플레이어 목록
      */
     List<Player> findAllByLeagueId(Long leagueId);
+
+    /**
+     * 회원이 입장한 리그 중 주어진 상태인 리그 수를 센다.
+     *
+     * @param memberId 회원 ID
+     * @param statuses 셀 리그 상태
+     * @return 리그 수
+     */
+    long countLeaguesByMemberIdAndStatusIn(Long memberId, Collection<LeagueStatus> statuses);
 }

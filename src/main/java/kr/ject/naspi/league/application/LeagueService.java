@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 다른 사용자는 초대 코드로 대기실에 대기자로 입장한다.
  *
- * <p>TODO: 동시 참여 리그 수 제한(LEA-02)과 대기실 7일 만료(LEA-08)는 아직 검증하지 않는다.
+ * <p>TODO: 대기실 7일 만료(LEA-08)는 아직 검증하지 않는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -28,6 +28,7 @@ public class LeagueService {
 
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
+    private final LeagueJoinLimit leagueJoinLimit;
     private final Clock clock;
 
     /**
@@ -35,12 +36,13 @@ public class LeagueService {
      *
      * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 참여자 + 대기자는 최대 10명이며,
      * 10명이면 입장할 수 없다. 동시에 입장해 10명을 넘지 않도록 리그 행을 잠근 뒤 인원을 센다.
+     * 회원은 대기실과 진행 중인 리그를 합쳐 최대 5개까지 참여할 수 있다.
      *
      * @param memberId 입장할 회원 ID
      * @param inviteCode 입력한 초대 코드 (대소문자 구분 없음)
      * @return 입장한 리그
      * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없거나 (이미 시작된 리그 포함),
-     *         이미 입장한 리그이거나, 리그 인원이 10명인 경우
+     *         이미 입장한 리그이거나, 이미 리그 5개에 참여 중이거나, 리그 인원이 10명인 경우
      */
     @Transactional
     public JoinedLeague join(long memberId, String inviteCode) {
@@ -54,6 +56,9 @@ public class LeagueService {
         if (playerRepository.existsByLeagueIdAndMemberId(league.getId(), memberId)) {
             throw new NaspiBizException(ErrorCode.LEAGUE_ALREADY_JOINED);
         }
+
+        // 동시 참여 리그 수 제한 확인
+        leagueJoinLimit.check(memberId);
 
         // 참여자 + 대기자 인원 제한 확인
         if (playerRepository.countByLeagueId(league.getId()) >= League.MAX_PLAYERS) {

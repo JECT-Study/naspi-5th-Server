@@ -20,8 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>정책 (docs/policies/v1/domain/league.md "리그 생성 및 초대"): 방장이 리그 이름을 지정하고
  * 상장을 완료하면 리그가 생성된다. 리그를 만들면 대기실과 공통 초대 코드 1개가 생긴다.
  * 리그와 방장은 league가 직접 만들고, 하위 모듈인 market에는 방장의 종목 상장만 요청하므로 UseCase로 만든다.
- *
- * <p>TODO: 동시 참여 리그 수 제한(LEA-02)은 아직 검증하지 않는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,6 +27,7 @@ public class LeagueCreationUseCase {
 
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
+    private final LeagueJoinLimit leagueJoinLimit;
     private final InviteCodeIssuer inviteCodeIssuer;
     private final StockListingService stockListingService;
     private final Clock clock;
@@ -45,11 +44,15 @@ public class LeagueCreationUseCase {
      * @param stockName 방장의 종목 이름
      * @param stockDescription 방장의 종목 소개
      * @return 생성된 리그
-     * @throws NaspiBizException 리그 이름이 규칙(1~12자)에 맞지 않거나, 방장의 종목이 상장 규칙에 맞지 않는 경우
+     * @throws NaspiBizException 리그 이름이 규칙(1~12자)에 맞지 않거나, 이미 리그 5개에 참여 중이거나,
+     *         방장의 종목이 상장 규칙에 맞지 않는 경우
      */
     @Transactional
     public CreatedLeague create(long memberId, String name, String stockName,
             String stockDescription) {
+        // 동시 참여 리그 수 제한 확인 (생성하면 방장으로 참여하므로)
+        leagueJoinLimit.check(memberId);
+
         LeagueName leagueName = LeagueName.of(name);
         InviteCode inviteCode = inviteCodeIssuer.issue();
 

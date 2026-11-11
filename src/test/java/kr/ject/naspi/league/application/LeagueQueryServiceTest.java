@@ -26,7 +26,7 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({LeagueQueryService.class, LeagueService.class, LeagueCreationUseCase.class,
-        InviteCodeIssuer.class, StockListingService.class,
+        InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
         MemberService.class, ClockConfig.class})
 class LeagueQueryServiceTest {
 

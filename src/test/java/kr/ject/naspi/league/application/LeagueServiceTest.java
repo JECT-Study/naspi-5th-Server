@@ -27,7 +27,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({LeagueService.class, LeagueCreationUseCase.class, InviteCodeIssuer.class,
-        StockListingService.class, LeagueServiceTest.FixedClock.class})
+        LeagueJoinLimit.class, StockListingService.class, LeagueServiceTest.FixedClock.class})
 class LeagueServiceTest {
 
     private static final long HOST_MEMBER_ID = 1L;

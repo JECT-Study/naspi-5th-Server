@@ -33,7 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 @ComponentScan(basePackageClasses = LeagueService.class, useDefaultFilters = false,
         includeFilters = @ComponentScan.Filter(type = FilterType.REGEX,
                 pattern = ".*\\.(LeagueCreationUseCase|LeagueService"
-                        + "|LeagueQueryService|InviteCodeIssuer)"))
+                        + "|LeagueQueryService|InviteCodeIssuer|LeagueJoinLimit)"))
 class LeagueDetailServiceTest {
 
     private long kakaoId = 1000L;
