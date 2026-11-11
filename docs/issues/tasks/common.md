@@ -36,3 +36,11 @@
 - 작업 내용: 모든 필터보다 먼저 실행되는 요청 로그 필터를 등록해 요청 메서드·URI·본문을 남긴다
 - 완료 조건 (확인 방법)
   - [ ] 인증 실패 등으로 막힌 요청도 로그에 남는다 — `./gradlew test --tests "kr.ject.naspi.global.logging.*"`
+
+### COM-03 하위 모듈 참조용 UseCase 규칙 추가
+- Jira:
+- 목적: 하위 모듈을 참조해야 하는 예외적인 경우를 Service와 구분해, 의존 방향을 지키면서도 하위 모듈을 참조할 수 있게 한다
+- 작업 내용: `application` 계층의 Service는 상위 모듈만 참조하고, 하위 모듈을 참조해야 하는 경우는 UseCase로 작성하도록 규칙 추가
+- 완료 조건 (확인 방법)
+  - [x] `application`의 Service는 상위 모듈만 참조할 수 있다 — `CLAUDE.md` "경계 규칙", `docs/policies/README.md` "모듈 간 의존 방향"
+  - [x] 하위 모듈을 참조해야 하는 경우는 UseCase(`{module}/application/XxxUseCase`)로 작성하며, UseCase는 상위·하위 모듈을 모두 참조할 수 있다 — `CLAUDE.md` "경계 규칙", `docs/policies/README.md` "모듈 간 의존 방향"
