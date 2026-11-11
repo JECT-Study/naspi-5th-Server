@@ -61,7 +61,7 @@
 {module}/
 ├── api/          웹 계층
 │   └── {기능}/   Controller, Request·Response DTO(record), 그 기능의 웹 지원 코드 (예: member의 auth/ — 카카오 로그인·가입)
-├── application/  Service (유스케이스, 트랜잭션 경계)
+├── application/  Service·UseCase (유스케이스, 트랜잭션 경계)
 ├── domain/       Entity, 값 객체, 도메인 규칙, Repository 인터페이스
 └── infra/        Repository 구현(Spring Data), 외부 연동
 ```
@@ -74,7 +74,8 @@
 
 ### 경계 규칙
 
-- 의존 방향: `member ← league ← market ← asset ← order`, `contents → league, market`. 반대 방향 import 금지.
+- 의존 방향: `member ← league ← market ← asset ← order`, `contents → league, market`. 상위 모듈(화살표 왼쪽) 참조는 가능하고, 하위 모듈 참조(반대 방향 import)는 금지한다.
+- `application` 계층의 Service는 상위 모듈만 참조한다. 하위 모듈을 참조해야 하는 경우는 Service 대신 UseCase(`{module}/application/XxxUseCase`)로 작성하며, UseCase는 상위 모듈과 하위 모듈을 모두 참조할 수 있다.
 - `websocket`은 최상위 소비자다 (`websocket → 도메인 모듈`). 어떤 모듈도 `websocket`을 import하지 않는다. 도메인 이벤트를 듣고 각 모듈 `application`으로 조회해 발행한다. 내부 구조는 다른 모듈과 같은 `api/application/domain/infra`이고, 토픽별 구현은 `application/topic/{도메인}/`에 둔다. 새 토픽은 기존 코드 수정 없이 리스너·`PeriodicTopic`·`TopicSubscriptionAuthorizer` 빈 추가로 만든다. 현재 내장 브로커라 단일 서버 전제이며, 다중 서버 시 `TopicMessagePublisher`를 Redis Pub/Sub 구현으로 교체한다.
 - 다른 모듈의 `domain`/`infra`를 직접 참조하지 않고 해당 모듈의 `application` 서비스를 통해 접근한다.
 - 역방향 흐름은 Spring 이벤트로 처리한다 (체결, 거래일 전환, 공시 게시, 회원 탈퇴, 리그 종료). 목록은 정책서 README 참고.
