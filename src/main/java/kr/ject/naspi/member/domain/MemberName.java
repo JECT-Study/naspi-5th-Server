@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
  *
  * <p>정책 (docs/policies/v1/member.md "회원 정보 - 이름"):
  * 최대 5자의 한글로만 구성하며 중복을 허용한다. 영어, 한자, 특수문자, 공백 등 한글이 아닌 문자는 사용할 수 없다.
+ * 자음 혹은 모음만 있는 글자(ㄱ, ㅏ 등, 호환용 자모)도 한글 한 글자로 취급한다.
  */
 @Embeddable
 @Getter
@@ -26,8 +27,12 @@ public class MemberName {
     /** 이름 최대 글자 수. */
     public static final int MAX_LENGTH = 5;
 
-    private static final Pattern VALID = Pattern.compile("^[가-힣]{1," + MAX_LENGTH + "}$");
-    private static final Pattern NON_HANGUL = Pattern.compile("[^가-힣]");
+    /** 한글 한 글자: 완성형 음절(가-힣)과 현대 자음·모음(ㄱ-ㅎ, ㅏ-ㅣ). */
+    private static final String HANGUL = "가-힣ㄱ-ㅎㅏ-ㅣ";
+
+    private static final Pattern VALID =
+            Pattern.compile("^[" + HANGUL + "]{1," + MAX_LENGTH + "}$");
+    private static final Pattern NON_HANGUL = Pattern.compile("[^" + HANGUL + "]");
 
     @Column(name = "name", nullable = false, length = MAX_LENGTH)
     private String value;
