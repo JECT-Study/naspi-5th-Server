@@ -25,6 +25,11 @@ public class ObservationConfig {
      * Security 관측은 항상 HTTP 요청 관측을 부모로 가진다), 나머지는 현재 처리 중인 요청이 제외 대상일 때만
      * 막는다. 스케줄러·이벤트 리스너처럼 요청 밖에서 시작된 관측은 그대로 남는다.
      *
+     * <p>Redis 명령 관측({@code lettuce})은 부모가 없으면 막는다. 헬스체크의 Redis 상태 확인 명령은 lettuce
+     * 스레드에서 부모 없이 시작되어 어느 요청에서 나왔는지 알 수 없고, 호출마다 스팬 1개짜리 트레이스로 남기
+     * 때문이다. 대가: lettuce는 관측을 만든 뒤에 부모를 붙이므로 이 판정 시점에는 부모가 항상 없다. 그래서
+     * 헬스체크뿐 아니라 일반 요청의 세션 조회·저장을 포함한 모든 Redis 명령 스팬이 빠진다.
+     *
      * @return 관측 여부 판정
      */
     @Bean
@@ -36,7 +41,8 @@ public class ObservationConfig {
             if (context.getParentObservation() instanceof Observation parent) {
                 return !parent.isNoop();
             }
-            return !name.startsWith("spring.security.") && !isHandlingExcludedRequest();
+            return !name.startsWith("spring.security.") && !name.equals("lettuce")
+                    && !isHandlingExcludedRequest();
         };
     }
 

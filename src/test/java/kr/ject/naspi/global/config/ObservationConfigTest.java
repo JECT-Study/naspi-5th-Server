@@ -61,7 +61,7 @@ class ObservationConfigTest {
     }
 
     @Test
-    @DisplayName("헬스체크·actuator 요청에서는 HTTP 요청·Security 관측(스팬)이 시작되지 않는다")
+    @DisplayName("헬스체크·actuator 요청에서는 관측(스팬)이 하나도 시작되지 않는다")
     void probesAreNotObserved() {
         call(port, "/livez");
         call(port, "/readyz");
@@ -69,8 +69,7 @@ class ObservationConfigTest {
         call(managementPort, "/actuator/prometheus");
         call(port, "/actuator/health");
 
-        // Redis 상태 확인 명령의 관측(lettuce)은 요청 스레드 밖에서 시작되어 요청과 연결할 수 없으므로 대상에서 뺀다.
-        assertThat(recorded.names).filteredOn(name -> !name.equals("lettuce")).isEmpty();
+        assertThat(recorded.names).isEmpty();
     }
 
     @Test
@@ -127,6 +126,20 @@ class ObservationConfigTest {
 
         assertThat(recorded.names)
                 .containsExactly("test.parent", "jdbc.connection", "jdbc.query", "jdbc.result-set");
+    }
+
+    @Test
+    @DisplayName("Redis 명령 관측(lettuce)은 만들 때 부모가 없으면 시작되지 않고, 부모가 있으면 시작된다")
+    void redisCommandIsObservedOnlyWithParent() {
+        // 판정 규칙만 검증한다. 실제 lettuce는 관측을 만든 뒤에 부모를 붙여 항상 앞의 경우에 해당한다.
+        Observation.createNotStarted("lettuce", observationRegistry).observe(() -> {});
+
+        assertThat(recorded.names).isEmpty();
+
+        Observation.createNotStarted("test.parent", observationRegistry).observe(() ->
+                Observation.createNotStarted("lettuce", observationRegistry).observe(() -> {}));
+
+        assertThat(recorded.names).containsExactly("test.parent", "lettuce");
     }
 
     private int call(int targetPort, String path) {
