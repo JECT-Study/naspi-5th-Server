@@ -11,6 +11,7 @@ import kr.ject.naspi.league.application.LeagueDetail.DetailPlayer;
 import kr.ject.naspi.league.application.LeagueDetail.PlayerStock;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockQueryService;
+import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
@@ -26,7 +27,8 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @Import({LeagueDetailUseCase.class, LeagueQueryService.class, LeagueCreationUseCase.class,
         LeagueService.class, LeagueJoinLimit.class, InviteCodeIssuer.class,
-        StockListingService.class, StockQueryService.class, MemberService.class,
+        StockListingService.class, StockQueryService.class, LocalStockSnapshotCache.class,
+        MemberService.class,
         ClockConfig.class})
 class LeagueDetailUseCaseTest {
 

@@ -1,5 +1,6 @@
 package kr.ject.naspi.market.domain;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,6 +41,14 @@ public interface StockRepository {
      * @return 종목 목록
      */
     List<Stock> findAllByLeagueId(Long leagueId);
+
+    /**
+     * 여러 리그의 종목을 한 번에 조회한다.
+     *
+     * @param leagueIds 리그 ID 목록
+     * @return 종목 목록
+     */
+    List<Stock> findAllByLeagueIdIn(Collection<Long> leagueIds);
 
     /**
      * 종목을 ID로 조회한다.

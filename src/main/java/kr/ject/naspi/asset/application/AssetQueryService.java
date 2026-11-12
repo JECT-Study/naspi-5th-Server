@@ -31,15 +31,12 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>대기 중인 주문은 order가 별도 API로 제공한다 (ORD-08). 이 서비스는 order를 참조하지 않는다.
  *
- * <p>TODO: 로그인한 회원 본인의 자산만 조회할 수 있어야 한다. league의 Player 구현 후 연동한다.
+ * <p>본인 확인은 하지 않는다. 호출하는 쪽이 본인 확인을 마친 {@code playerId}를 넘긴다.
  * <ul>
- *   <li>API는 경로로 {@code playerId}를 받지 않는다 ({@code GET /api/leagues/{leagueId}/assets/me}).
- *       {@code @AuthenticationPrincipal LoginMember}의 회원 ID로 league application에서 해당 리그의
- *       플레이어 ID를 조회해 이 서비스에 넘긴다.</li>
- *   <li>해당 리그의 플레이어가 아닌 회원은 거절한다 (오류 코드는 league 대역에 추가).</li>
- *   <li>웹소켓 내 자산 토픽 구독 권한({@code AssetTopicAuthorizer})도 같은 조회로 교체한다.</li>
+ *   <li>REST: {@link MyAssetQueryService}가 로그인 회원 ID로 플레이어를 찾아 넘긴다.</li>
+ *   <li>웹소켓: 구독할 때 {@code AssetTopicAuthorizer}가 본인 플레이어인지 확인하고, 허용된 구독의
+ *       {@code playerId}만 {@link #getPlayerAssets}로 넘긴다.</li>
  * </ul>
- * 지금은 호출하는 쪽이 검증을 마친 {@code playerId}를 넘긴다고 가정한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -51,7 +48,7 @@ public class AssetQueryService {
 
     /**
      * 참여자의 현금, 보유 주식, 예약 자산, 주문 가능 자산과 현재가 기준 평가액·평가 손익·수익률,
-     * 총자산과 총자산 평가 손익을 조회한다.
+     * 총자산과 총자산 평가 손익·수익률을 조회한다.
      *
      * @param leagueId 리그 ID
      * @param playerId 플레이어 ID
@@ -60,7 +57,7 @@ public class AssetQueryService {
      * @throws NaspiRuntimeException 보유 종목이 리그에 없거나 현재가가 정해지지 않은 경우
      */
     @Transactional(readOnly = true)
-    public PlayerAsset getPlayerAsset(long leagueId, long playerId) {
+    PlayerAsset getPlayerAsset(long leagueId, long playerId) {
         Account account = accountRepository.findByLeagueIdAndPlayerId(leagueId, playerId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.ASSET_NOT_FOUND));
         List<Holding> holdings = holdingRepository.findAllByLeagueIdAndPlayerId(leagueId, playerId);
@@ -69,7 +66,7 @@ public class AssetQueryService {
 
     /**
      * 같은 리그 참여자 여러 명의 자산을 한 번에 조회한다. 웹소켓 주기 발행처럼 한 리그의 여러 구독자에게
-     * 보낼 때 쓴다.
+     * 보낼 때 쓴다. 넘기는 플레이어는 구독할 때 본인 확인을 마친 플레이어여야 한다.
      *
      * <p>리그의 종목·현재가는 한 번만 조회하고, 계좌와 보유 주식도 플레이어별이 아니라 한 번에 조회한다.
      * 초기 자산이 배분되지 않은 플레이어(리그 시작 전 등)는 오류 없이 결과에서 빠진다.
@@ -153,7 +150,7 @@ public class AssetQueryService {
         return new PlayerAsset(valuation.playerId(), valuation.deposit(),
                 valuation.reservedDeposit(), valuation.orderableDeposit(),
                 valuation.stockValuation(), valuation.totalAsset(), valuation.totalProfit(),
-                holdings);
+                valuation.totalReturnRate(), holdings);
     }
 
     private static HoldingAsset toHoldingAsset(HoldingValuation holding, LeagueStock stock) {

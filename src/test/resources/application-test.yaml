@@ -25,6 +25,10 @@ naspi:
   swagger:
     username: swagger-test
     password: swagger-test-pw
+  market:
+    current-price:
+      # 백그라운드 갱신이 테스트 데이터에 끼어들지 않도록 끈다. 갱신은 서비스를 직접 호출해 검증한다
+      refresh-interval: 0s
 
 management:
   server:

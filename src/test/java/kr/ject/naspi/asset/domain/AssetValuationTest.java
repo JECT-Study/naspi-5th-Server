@@ -110,9 +110,9 @@ class AssetValuationTest {
     }
 
     @Test
-    @DisplayName("평가 손익은 평가 금액에서 매입 금액을 뺀 금액이고, 수익률은 평가 손익 ÷ 매입 금액 × 100이다")
+    @DisplayName("평가 손익은 평가 금액 - 보유 수량 × 시초가 10,000원이고, 수익률은 평가 손익 ÷ (보유 수량 × 시초가) × 100이다")
     void profitAndReturnRate() {
-        // 초기 배분 2,500주의 매입 금액 = 2,500 × 10,000원
+        // 2,500주의 평가 기준 금액 = 2,500 × 10,000원
         Holding gain = holding(TREASURY_STOCK_ID, 2_500, 0);
         Holding loss = holding(OTHER_STOCK_ID, 1_250, 0);
         Account account = Account.open(LEAGUE_ID, PLAYER_ID, 62_500_000);
@@ -147,7 +147,7 @@ class AssetValuationTest {
                 .isEqualTo(new BigDecimal("10.0"));
     }
 
-    @ParameterizedTest(name = "평가 손익 {0}원 ÷ 매입 금액 {1}원 → {2}%")
+    @ParameterizedTest(name = "평가 손익 {0}원 ÷ 기준 금액 {1}원 → {2}%")
     @CsvSource({
         "1234, 10000, 12.3",
         "1235, 10000, 12.4",
@@ -158,23 +158,26 @@ class AssetValuationTest {
         "0, 10000, 0.0",
     })
     @DisplayName("수익률은 소수점 첫째 자리까지 반올림하고, 음수는 절댓값 기준으로 반올림한다")
-    void returnRateRounding(long profit, long purchaseAmount, String expected) {
-        assertThat(AssetValuation.returnRate(profit, purchaseAmount))
+    void returnRateRounding(long profit, long baseAmount, String expected) {
+        assertThat(AssetValuation.returnRate(profit, baseAmount))
                 .isEqualTo(new BigDecimal(expected));
     }
 
     @Test
-    @DisplayName("매입 금액이 수익률 계산 기준이며, 매입 금액이 다르면 같은 평가 금액도 수익률이 다르다")
-    void returnRateUsesPurchaseAmount() {
+    @DisplayName("평가 손익과 수익률은 매입 금액과 관계없이 시초가를 기준으로 계산한다 (매입 금액은 기록만 한다)")
+    void profitIgnoresPurchaseAmount() {
         // 이동평균 매입 단가 11,000원 (10,000원 100주 + 12,000원 100주)
         Holding holding = withPurchaseAmount(holding(OTHER_STOCK_ID, 200, 0), 2_200_000);
+        Account account = Account.open(LEAGUE_ID, PLAYER_ID, 50_000_000);
 
-        AssetValuation valuation = evaluate(holding);
+        AssetValuation valuation = AssetValuation.evaluate(account, List.of(holding),
+                Map.of(OTHER_STOCK_ID, 12_000L), TREASURY_STOCK_ID);
 
-        // 200 × 10,000 - 2,200,000 = -200,000 → -200,000 ÷ 2,200,000 × 100 = -9.09...
+        // 200 × 12,000 - 200 × 10,000 = 400,000 → 400,000 ÷ 2,000,000 × 100 = 20.0
         HoldingValuation result = valuation.holdings().getFirst();
-        assertThat(result.profit()).isEqualTo(-200_000);
-        assertThat(result.returnRate()).isEqualTo(new BigDecimal("-9.1"));
+        assertThat(result.purchaseAmount()).isEqualTo(2_200_000);
+        assertThat(result.profit()).isEqualTo(400_000);
+        assertThat(result.returnRate()).isEqualTo(new BigDecimal("20.0"));
     }
 
     @ParameterizedTest(name = "현금 {0}원, 평가 금액 {1}원 → 총자산 평가 손익 {2}원")
@@ -192,6 +195,26 @@ class AssetValuationTest {
                 Map.of(OTHER_STOCK_ID, 10_000L), TREASURY_STOCK_ID);
 
         assertThat(valuation.totalProfit()).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "현금 {0}원, 평가 금액 {1}원 → 총자산 수익률 {2}%")
+    @CsvSource({
+        "50000000, 50000000, 0.0",
+        "60000000, 52500000, 12.5",
+        "40000000, 45000000, -15.0",
+        "50000000, 50120000, 0.1",
+        "50000000, 49870000, -0.1",
+        "50000000, 49950000, -0.1",
+    })
+    @DisplayName("총자산 수익률은 총자산 평가 손익 ÷ 1억 원 × 100이고, 소수점 첫째 자리까지 절댓값 기준으로 반올림한다")
+    void totalReturnRate(long deposit, long stockValuation, String expected) {
+        Account account = Account.open(LEAGUE_ID, PLAYER_ID, deposit);
+        Holding holding = holding(OTHER_STOCK_ID, stockValuation / 10_000, 0);
+
+        AssetValuation valuation = AssetValuation.evaluate(account, List.of(holding),
+                Map.of(OTHER_STOCK_ID, 10_000L), TREASURY_STOCK_ID);
+
+        assertThat(valuation.totalReturnRate()).isEqualTo(new BigDecimal(expected));
     }
 
     @Test
