@@ -1,5 +1,8 @@
 package kr.ject.naspi.member.application;
 
+import java.util.Collection;
+import java.util.Map;
+import java.util.stream.Collectors;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.member.domain.Member;
@@ -30,6 +33,17 @@ public class MemberService {
      */
     public String getName(long memberId) {
         return getMember(memberId).getName().getValue();
+    }
+
+    /**
+     * 여러 회원의 이름을 한 번에 조회한다.
+     *
+     * @param memberIds 회원 ID 목록
+     * @return 회원 ID별 이름. 탈퇴 등으로 없는 회원은 빠진다
+     */
+    public Map<Long, String> getNames(Collection<Long> memberIds) {
+        return memberRepository.findAllByIdIn(memberIds).stream()
+                .collect(Collectors.toMap(Member::getId, member -> member.getName().getValue()));
     }
 
     /**
