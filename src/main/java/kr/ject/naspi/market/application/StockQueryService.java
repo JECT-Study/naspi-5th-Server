@@ -33,6 +33,7 @@ public class StockQueryService {
 
     private static LeagueStock toLeagueStock(Stock stock) {
         return new LeagueStock(stock.getId(), stock.getName().getValue(),
+                stock.getDescription().getValue(),
                 stock.getListerPlayerId(), stock.getCurrentPrice());
     }
 }

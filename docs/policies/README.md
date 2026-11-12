@@ -27,7 +27,8 @@ member ← league ← market ← asset ← order
                      ↖ contents
 ```
 
-역방향 흐름은 이벤트로 처리한다.
+상위 모듈(화살표 왼쪽) 참조는 가능하고 하위 모듈 참조는 금지한다. 역방향 흐름은 이벤트로 처리한다.
+`application` 계층의 Service는 상위 모듈만 참조하고, 하위 모듈을 참조해야 하는 경우는 UseCase(`XxxUseCase`)로 작성한다. UseCase는 하위 모듈도 참조할 수 있다.
 
 | 이벤트 | 발행 | 구독 |
 |---|---|---|

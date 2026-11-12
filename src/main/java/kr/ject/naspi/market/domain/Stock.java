@@ -71,4 +71,34 @@ public class Stock {
             StockDescription description) {
         return new Stock(leagueId, listerPlayerId, name, description);
     }
+
+    /**
+     * 종목 이름과 소개를 수정한다. 이름 중복 검사는 호출하는 쪽이 맡는다.
+     *
+     * @param name 새 종목 이름
+     * @param description 새 종목 소개
+     */
+    public void edit(StockName name, StockDescription description) {
+        this.name = name;
+        this.description = description;
+    }
+
+    /**
+     * 종목 소개만 수정한다.
+     *
+     * @param description 새 종목 소개
+     */
+    public void changeDescription(StockDescription description) {
+        this.description = description;
+    }
+
+    /**
+     * 종목을 상장한 플레이어인지 확인한다.
+     *
+     * @param playerId 플레이어 ID
+     * @return 상장자이면 {@code true}
+     */
+    public boolean isListedBy(long playerId) {
+        return listerPlayerId == playerId;
+    }
 }

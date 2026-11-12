@@ -1,5 +1,7 @@
 package kr.ject.naspi.member.domain;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -31,6 +33,14 @@ public interface MemberRepository {
      * @return 회원, 없으면 빈 값
      */
     Optional<Member> findById(Long id);
+
+    /**
+     * 여러 회원 ID로 회원을 찾는다. 탈퇴 등으로 없는 회원은 결과에서 빠진다.
+     *
+     * @param ids 회원 ID 목록
+     * @return 찾은 회원 목록
+     */
+    List<Member> findAllByIdIn(Collection<Long> ids);
 
     /**
      * 카카오 회원 번호로 회원을 찾는다.
