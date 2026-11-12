@@ -57,3 +57,4 @@
   - [ ] JSON 로그에 traceId, spanId 가 포함된다 — 요청 후 로그 확인
   - [ ] `/actuator/**`, `/livez`, `/readyz` 요청은 트레이스에서 제외된다 — `./gradlew test`
   - [ ] DB 쿼리가 JDBC 스팬으로 남는다 — `./gradlew test --tests "kr.ject.naspi.global.config.ObservationConfigTest"`
+  - [ ] 요청 안의 Redis 명령(세션 조회·저장)은 요청 트레이스에 스팬으로 남고, 헬스체크의 Redis 상태 확인처럼 부모 없는 Redis 스팬은 내보내지 않는다 — `./gradlew test --tests "kr.ject.naspi.global.config.ObservationConfigTest"`
