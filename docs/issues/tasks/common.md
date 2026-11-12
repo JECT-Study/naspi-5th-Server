@@ -33,7 +33,7 @@
 ### COM-02 웹 요청 로깅 추가
 - Jira: ND-64
 - 목적: 운영 중 요청 흐름과 오류 원인을 로그로 추적할 수 있게 한다
-- 작업 내용: 모든 필터보다 먼저 실행되는 요청 로그 필터를 등록해 요청 메서드·URI·본문을 남긴다
+- 작업 내용: 트레이스 시작 필터 다음, 다른 필터보다 먼저 실행되는 요청 로그 필터를 등록해 요청 메서드·URI·본문을 남긴다
 - 완료 조건 (확인 방법)
   - [ ] 인증 실패 등으로 막힌 요청도 로그에 남는다 — `./gradlew test --tests "kr.ject.naspi.global.logging.*"`
 
@@ -44,3 +44,17 @@
 - 완료 조건 (확인 방법)
   - [x] `application`의 Service는 상위 모듈만 참조할 수 있다 — `CLAUDE.md` "경계 규칙", `docs/policies/README.md` "모듈 간 의존 방향"
   - [x] 하위 모듈을 참조해야 하는 경우는 UseCase(`{module}/application/XxxUseCase`)로 작성하며, UseCase는 상위·하위 모듈을 모두 참조할 수 있다 — `CLAUDE.md` "경계 규칙", `docs/policies/README.md` "모듈 간 의존 방향"
+
+### COM-04 관측성(헬스체크·메트릭·트레이스) 추가
+- Jira: ND-70
+- 목적: GKE 에서 Grafana Alloy 가 수집해 Grafana Cloud 로 보낼 수 있도록 헬스체크·메트릭·트레이스를 노출한다
+- 작업 내용: actuator 를 management 포트(9090)로 분리하고 health·prometheus 만 노출, 메인 포트에 /livez·/readyz 추가, OTLP/HTTP 트레이스 export
+- 완료 조건 (확인 방법)
+  - [ ] 메인 포트(8080)에서 `/livez`, `/readyz` 가 인증 없이 200 을 반환한다 — `curl localhost:8080/livez`
+  - [ ] actuator 엔드포인트는 8080 으로 노출되지 않고 9090 에서만 접근된다 — `curl localhost:9090/actuator/prometheus`
+  - [ ] readiness 에 DB·Redis 상태가 포함된다 — `curl localhost:9090/actuator/health/readiness`
+  - [ ] 모든 메트릭에 `application=naspi-server` 태그가 붙는다 — `curl localhost:9090/actuator/prometheus`
+  - [ ] JSON 로그에 traceId, spanId 가 포함된다 — 요청 후 로그 확인
+  - [ ] `/actuator/**`, `/livez`, `/readyz` 요청은 트레이스에서 제외된다 — `./gradlew test`
+  - [ ] DB 쿼리가 JDBC 스팬으로 남는다 — `./gradlew test --tests "kr.ject.naspi.global.config.ObservationConfigTest"`
+  - [ ] 요청 안의 Redis 명령(세션 조회·저장)은 요청 트레이스에 스팬으로 남고, 헬스체크의 Redis 상태 확인처럼 부모 없는 Redis 스팬은 내보내지 않는다 — `./gradlew test --tests "kr.ject.naspi.global.config.ObservationConfigTest"`

@@ -15,6 +15,7 @@
 | API 문서 | springdoc-openapi (Swagger UI) 3.0.x | `/swagger-ui/index.html` |
 | 코드 스타일 | Checkstyle (Google Java Style, 4칸 들여쓰기), Lombok | |
 | 로깅 | Logback, Logstash JSON 포맷 | `development`, `production` 프로필에서만 JSON |
+| 관측성 | Spring Boot Actuator, Micrometer(Prometheus), Micrometer Tracing + OpenTelemetry(OTLP), datasource-micrometer | management 포트 9090 (`/actuator/health`, `/actuator/prometheus`), 메인 포트에 `/livez`·`/readyz`. Grafana Alloy 가 수집 |
 | 테스트 | JUnit 5, Spring Boot Test | |
 | 배포 | Jib → Docker Hub → k8s (GitOps manifest 레포) | GitHub Actions |
 

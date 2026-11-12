@@ -25,3 +25,14 @@ naspi:
   swagger:
     username: swagger-test
     password: swagger-test-pw
+
+management:
+  server:
+    # RANDOM_PORT 테스트는 실제 서버를 띄운다. 9090 고정이면 로컬에서 앱 실행 중이거나
+    # 컨텍스트가 여러 개 뜰 때 포트가 충돌하므로 임의 포트를 쓴다.
+    port: 0
+  tracing:
+    export:
+      otlp:
+        # 테스트에서는 트레이스를 외부로 보내지 않는다
+        enabled: false

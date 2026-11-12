@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -113,6 +114,30 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth.anyRequest().hasRole(SWAGGER_ROLE))
                 .httpBasic(Customizer.withDefaults())
                 .userDetailsService(new InMemoryUserDetailsManager(swaggerUser))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(AbstractHttpConfigurer::disable);
+        return http.build();
+    }
+
+    /**
+     * 헬스체크·메트릭 경로를 인증 없이 허용한다.
+     *
+     * <p>대상은 management 포트의 actuator 엔드포인트와 메인 포트의 k8s probe 경로({@code /livez},
+     * {@code /readyz})다. management 포트가 분리되어 있으면 {@link EndpointRequest}는 management 포트로
+     * 들어온 요청에만 일치하므로, 외부에 공개된 메인 포트의 {@code /actuator/**}는 기본 체인에서 인증을 요구한다.
+     *
+     * @param http 보안 설정 빌더
+     * @return 관측성 경로 전용 보안 필터 체인
+     */
+    @Bean
+    @Order(2)
+    public SecurityFilterChain observabilitySecurityFilterChain(HttpSecurity http) {
+        http
+                .securityMatchers(matchers -> matchers
+                        .requestMatchers(EndpointRequest.toAnyEndpoint())
+                        .requestMatchers("/livez", "/readyz"))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(AbstractHttpConfigurer::disable);
