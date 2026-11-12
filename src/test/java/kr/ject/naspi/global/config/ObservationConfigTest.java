@@ -2,14 +2,19 @@ package kr.ject.naspi.global.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import kr.ject.naspi.global.logging.WebLoggingFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -74,6 +79,28 @@ class ObservationConfigTest {
         assertThat(call(port, "/api/members/me")).isEqualTo(401);
 
         assertThat(recorded.names).contains("http.server.requests", "spring.security.filterchains");
+    }
+
+    @Test
+    @DisplayName("인증 실패로 막힌 요청도 요청·응답 로그가 남고, 로그에 traceId가 붙는다")
+    void requestLogHasTraceId() {
+        Logger logger = (Logger) LoggerFactory.getLogger(WebLoggingFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            assertThat(call(port, "/api/members/me")).isEqualTo(401);
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list).hasSize(2);
+        assertThat(appender.list.get(0).getFormattedMessage())
+                .startsWith("[REQUEST] GET /api/members/me");
+        assertThat(appender.list.get(1).getFormattedMessage())
+                .startsWith("[RESPONSE] GET /api/members/me 401");
+        assertThat(appender.list)
+                .allSatisfy(event -> assertThat(event.getMDCPropertyMap()).containsKey("traceId"));
     }
 
     @Test
