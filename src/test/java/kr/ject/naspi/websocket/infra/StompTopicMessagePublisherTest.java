@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.util.Map;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.websocket.domain.TopicEnvelope;
@@ -30,13 +29,12 @@ class StompTopicMessagePublisherTest {
             messagingTemplate, Clock.fixed(NOW, ClockConfig.KST));
 
     @Test
-    @DisplayName("메시지를 발행 대상 토픽으로 보내고, 본문에는 종류·데이터·발행 시각(KST)을 담는다")
+    @DisplayName("메시지를 발행 대상 토픽으로 보내고, 본문에는 종류·데이터·발행 시각(UTC)을 담는다")
     void publishesEnvelopeToDestination() {
         publisher.publish(new TopicMessage("/topic/leagues/1/ranking", "RANKING", Map.of("a", 1)));
 
         verify(messagingTemplate).convertAndSend("/topic/leagues/1/ranking",
-                new TopicEnvelope("RANKING", Map.of("a", 1),
-                        OffsetDateTime.ofInstant(NOW, ClockConfig.KST)));
+                new TopicEnvelope("RANKING", Map.of("a", 1), NOW));
     }
 
     @Test

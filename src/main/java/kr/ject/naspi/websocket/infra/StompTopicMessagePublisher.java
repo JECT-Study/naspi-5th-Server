@@ -1,7 +1,6 @@
 package kr.ject.naspi.websocket.infra;
 
 import java.time.Clock;
-import java.time.OffsetDateTime;
 import kr.ject.naspi.websocket.application.TopicMessagePublisher;
 import kr.ject.naspi.websocket.domain.TopicEnvelope;
 import kr.ject.naspi.websocket.domain.TopicMessage;
@@ -28,7 +27,7 @@ public class StompTopicMessagePublisher implements TopicMessagePublisher {
     @Override
     public void publish(TopicMessage message) {
         TopicEnvelope envelope =
-                new TopicEnvelope(message.type(), message.payload(), OffsetDateTime.now(clock));
+                new TopicEnvelope(message.type(), message.payload(), clock.instant());
         try {
             messagingTemplate.convertAndSend(message.destination(), envelope);
         } catch (MessagingException e) {

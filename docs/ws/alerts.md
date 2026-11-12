@@ -90,7 +90,7 @@ destination:/topic/leagues/1/players/1/alerts
 | --- | --- | --- | --- |
 | type | String | 메시지 종류 | 이 토픽은 항상 `ALERT` |
 | payload | Object | 데이터 | 아래 표 참고 |
-| publishedAt | String | 발행 시각 (KST) | ISO-8601, 예: `2026-11-09T14:32:05.123456+09:00` |
+| publishedAt | Number | 발행 시각 | UTC epoch 밀리초, 예: `1794202325123` (= 2026-11-09 14:32:05.123 KST) |
 
 #### payload
 
@@ -121,7 +121,7 @@ message-id:a1b2c3-0
     "message": "진영전자 10주가 12,500원에 체결되었습니다.",
     "url": "/leagues/1/stocks/1"
   },
-  "publishedAt": "2026-11-09T14:32:05.123456+09:00"
+  "publishedAt": 1794202325123
 }^@
 ```
 
@@ -198,7 +198,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 export type TopicEnvelope<T> = {
   type: string;
   payload: T;
-  publishedAt: string;
+  publishedAt: number; // UTC epoch 밀리초
 };
 
 export const stompClient = new Client({
@@ -238,7 +238,7 @@ export function subscribeTopic<T>(
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
-    const publishedAt = Date.parse(envelope.publishedAt);
+    const publishedAt = envelope.publishedAt;
     if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
     lastPublishedAt = publishedAt;
     onMessage(envelope.payload, envelope);
@@ -276,7 +276,7 @@ export type Alert = {
   alertType: AlertType;
   message: string;
   url: string;
-  publishedAt: string; // 메시지 공통 필드에서 가져온다
+  publishedAt: number; // UTC epoch 밀리초 // 메시지 공통 필드에서 가져온다
 };
 
 /** 리그에서 나에게 오는 알림을 받는다. 최신 알림이 앞에 온다. playerId는 지금은 로그인 회원 ID다. */
