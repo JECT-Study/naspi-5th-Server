@@ -39,7 +39,8 @@ import tools.jackson.databind.json.JsonMapper;
  * 요청 본문을 미리 읽으므로 폼({@code application/x-www-form-urlencoded}) 요청의
  * {@code getParameter}로는 본문 값을 읽을 수 없다. 현재 API는 JSON만 받는다.
  *
- * <p>모든 필터보다 먼저 실행되도록 등록한다 ({@link kr.ject.naspi.common.config.FilterConfig}).
+ * <p>트레이스를 시작하는 HTTP 관측 필터 바로 뒤, 다른 필터보다 먼저 실행되도록 등록한다
+ * ({@link kr.ject.naspi.common.config.FilterConfig}). 그래서 로그에 traceId가 붙는다.
  */
 @Slf4j
 @RequiredArgsConstructor

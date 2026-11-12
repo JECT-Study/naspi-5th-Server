@@ -29,12 +29,20 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	// STOMP WebSocket (실시간 메시지 발행, websocket 모듈)
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+	// 관측성: 헬스체크·메트릭(actuator, Prometheus), 트레이스(OTLP export)
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry'
+	implementation 'io.micrometer:micrometer-tracing-bridge-otel'
+	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+	// JDBC 스팬 (2.2.x = Spring Boot 4.0 기준 빌드)
+	implementation 'net.ttddyy.observation:datasource-micrometer-spring-boot:2.2.1'
 	implementation 'com.github.ulisesbocchio:jasypt-spring-boot-starter:4.0.4'
 	// Swagger UI / OpenAPI 문서 (springdoc 3.0.x = Spring Boot 4.0.x 대응)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'com.h2database:h2'
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
