@@ -56,3 +56,4 @@
   - [ ] 모든 메트릭에 `application=naspi-server` 태그가 붙는다 — `curl localhost:9090/actuator/prometheus`
   - [ ] JSON 로그에 traceId, spanId 가 포함된다 — 요청 후 로그 확인
   - [ ] `/actuator/**`, `/livez`, `/readyz` 요청은 트레이스에서 제외된다 — `./gradlew test`
+  - [ ] DB 쿼리가 JDBC 스팬으로 남는다 — `./gradlew test --tests "kr.ject.naspi.global.config.ObservationConfigTest"`
