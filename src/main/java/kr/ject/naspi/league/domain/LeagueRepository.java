@@ -26,6 +26,15 @@ public interface LeagueRepository {
     Optional<League> findById(Long id);
 
     /**
+     * 리그 ID로 리그를 찾아 비관적 쓰기 락을 건다. 리그 시작 중에 같은 리그로 입장하거나
+     * 대기실이 만료 처리되는 요청이 끼어들지 않게 한다.
+     *
+     * @param id 리그 ID
+     * @return 리그, 없으면 빈 값
+     */
+    Optional<League> findWithLockById(Long id);
+
+    /**
      * 초대 코드로 리그를 찾는다 (락 없음). 초대가 마감된 리그는 코드가 비어 있어 찾을 수 없다.
      *
      * @param inviteCode 초대 코드

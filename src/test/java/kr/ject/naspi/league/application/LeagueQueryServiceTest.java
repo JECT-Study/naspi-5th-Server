@@ -11,6 +11,7 @@ import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
@@ -26,7 +27,8 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @Import({LeagueQueryService.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
-        MemberService.class, MutableClock.Config.class})
+        StockQueryService.class,
+        MemberService.class, LeagueStartUseCase.class, MutableClock.Config.class})
 class LeagueQueryServiceTest {
 
     private long kakaoId = 1000L;
@@ -45,6 +47,19 @@ class LeagueQueryServiceTest {
 
     @Autowired
     private MutableClock clock;
+
+    @Autowired
+    private LeagueStartUseCase leagueStartUseCase;
+
+    @Test
+    @DisplayName("이미 시작된 리그는 시작 가능으로 표시하지 않는다")
+    void startedLeagueNotStartable() {
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        leagueStartUseCase.start(host, league.leagueId());
+
+        assertThat(queryService.getPlayers(host, league.leagueId()).startable()).isFalse();
+    }
 
     @Test
     @DisplayName("초대 코드로 리그 이름, 상태, 입장한 사용자 수, 참여자(상장한 플레이어) 수를 조회한다")

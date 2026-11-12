@@ -18,6 +18,10 @@ interface LeagueJpaRepository extends Repository<League, Long>, LeagueRepository
 
     @Override
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<League> findWithLockById(Long id);
+
+    @Override
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<League> findWithLockByInviteCode(InviteCode inviteCode);
 
     @Override

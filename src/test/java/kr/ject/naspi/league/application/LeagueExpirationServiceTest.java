@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.LongStream;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.LeagueRepository;
 import kr.ject.naspi.league.domain.LeagueStatus;
+import kr.ject.naspi.league.domain.Player;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +23,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
@@ -77,8 +79,7 @@ class LeagueExpirationServiceTest {
     @DisplayName("7일 안에 시작된 리그는 만료되지 않는다")
     void keepStartedLeague() {
         League started = persist("AAAAAAA", NOW.minusDays(8));
-        // TODO: 리그 시작(LEA-09) 구현 후 도메인 메서드로 바꾼다
-        ReflectionTestUtils.setField(started, "status", LeagueStatus.STARTED);
+        started.start(listedPlayers(started.getId()), NOW.minusDays(7).minusHours(1));
         entityManager.flush();
 
         int expired = service.expireOverdueWaitingRooms();
@@ -100,6 +101,17 @@ class LeagueExpirationServiceTest {
         League reissued = persist("AAAAAAA", NOW);
         assertThat(leagueRepository.findByInviteCode(InviteCode.of("AAAAAAA")))
                 .contains(reissued);
+    }
+
+    /** 리그 시작 조건(상장을 마친 참여자 3명)을 만족하는 플레이어 목록. 저장하지 않는다. */
+    private static List<Player> listedPlayers(long leagueId) {
+        return LongStream.rangeClosed(1, League.MIN_PARTICIPANTS_TO_START)
+                .mapToObj(memberId -> {
+                    Player player = Player.enter(leagueId, memberId, NOW.minusDays(8));
+                    player.completeListing(NOW.minusDays(8));
+                    return player;
+                })
+                .toList();
     }
 
     private League persist(String code, LocalDateTime createdAt) {

@@ -12,6 +12,7 @@ import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
+import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
 import kr.ject.naspi.member.application.MemberService;
@@ -88,19 +89,9 @@ public class LeagueQueryService {
                         player.getId().equals(league.getHostPlayerId()), player.isListed(),
                         player.getJoinedAt(), player.getListedAt()))
                 .toList();
-        return new LeaguePlayers(league.getId(), startable(players), result);
-    }
-
-    /**
-     * 리그를 시작할 수 있는지 확인한다.
-     * 모든 플레이어가 상장을 마쳤으며, 상장을 마친 플레이어가 최소 인원 이상이어야 한다.
-     */
-    private static boolean startable(List<Player> players) {
-        // 상장을 마친 플레이어 수
-        long participants = players.stream().filter(Player::isListed).count();
-        // 모든 플레이어가 상장을 마쳤는지 여부
-        boolean noWaiting = players.stream().allMatch(Player::isListed);
-        return participants >= League.MIN_PARTICIPANTS_TO_START && noWaiting;
+        // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
+        boolean startable = league.getStatus() == LeagueStatus.WAITING && League.canStart(players);
+        return new LeaguePlayers(league.getId(), startable, result);
     }
 
     /** 리그를 찾는다. 만료된 대기실은 접근할 수 없으므로 없는 리그로 취급한다. */
