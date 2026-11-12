@@ -34,8 +34,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry'
 	implementation 'io.micrometer:micrometer-tracing-bridge-otel'
 	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
-	// JDBC 스팬 (2.x = Spring Boot 4.x 대응)
-	implementation 'net.ttddyy.observation:datasource-micrometer-spring-boot:2.3.0'
+	// JDBC 스팬 (2.2.x = Spring Boot 4.0 기준 빌드)
+	implementation 'net.ttddyy.observation:datasource-micrometer-spring-boot:2.2.1'
 	implementation 'com.github.ulisesbocchio:jasypt-spring-boot-starter:4.0.4'
 	// Swagger UI / OpenAPI 문서 (springdoc 3.0.x = Spring Boot 4.0.x 대응)
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
