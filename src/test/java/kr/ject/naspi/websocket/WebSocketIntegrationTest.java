@@ -147,7 +147,7 @@ class WebSocketIntegrationTest {
         Map<String, Object> message = received.poll(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
         assertThat(message).isNotNull();
         assertThat(message).containsEntry("type", "TEST_EVENT").containsEntry("payload", "체결");
-        assertThat(message.get("publishedAt")).isInstanceOf(Long.class);
+        assertThat(message).containsKey("publishedAt");
     }
 
     @Test

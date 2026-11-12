@@ -1,7 +1,6 @@
 package kr.ject.naspi.websocket.domain;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
 /**
  * 클라이언트가 받는 메시지 본문.
@@ -11,8 +10,7 @@ import java.time.Instant;
  *
  * @param type 메시지 종류
  * @param payload 데이터
- * @param publishedAt 발행 시각 (JSON: UTC epoch 밀리초)
+ * @param publishedAt 발행 시각 (KST)
  */
-public record TopicEnvelope(String type, Object payload,
-        @JsonFormat(shape = JsonFormat.Shape.NUMBER_INT) Instant publishedAt) {
+public record TopicEnvelope(String type, Object payload, OffsetDateTime publishedAt) {
 }

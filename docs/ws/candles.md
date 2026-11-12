@@ -88,7 +88,7 @@ destination:/topic/leagues/1/stocks/1/candles
 | --- | --- | --- | --- |
 | type | String | 메시지 종류 | 이 토픽은 항상 `CANDLE_CHART` |
 | payload | Object | 데이터 | 아래 표 참고 |
-| publishedAt | Number | 발행 시각 | UTC epoch 밀리초, 예: `1794202325123` (= 2026-11-09 14:32:05.123 KST) |
+| publishedAt | String | 발행 시각 (KST) | ISO-8601, 예: `2026-11-09T14:32:05.123456+09:00` |
 
 #### payload
 
@@ -103,7 +103,7 @@ destination:/topic/leagues/1/stocks/1/candles
 | series | Array | 봉 단위별 캔들 목록 | `MINUTE_10`, `HOUR_1`, `DAY_1` 세 개 |
 | series[].interval | String | 봉 단위 | `MINUTE_10`(10분봉), `HOUR_1`(1시간봉), `DAY_1`(1일봉) |
 | series[].candles | Array | 캔들 목록 | 시간 오름차순. `[이전 봉, 현재 봉]` |
-| series[].candles[].startedAt | Number | 봉 시작 시각 | UTC epoch 밀리초. 봉 경계는 KST 기준 |
+| series[].candles[].startedAt | String | 봉 시작 시각 (KST) | ISO-8601 |
 | series[].candles[].openPrice | Long | 시가 (원) | |
 | series[].candles[].highPrice | Long | 고가 (원) | |
 | series[].candles[].lowPrice | Long | 저가 (원) | |
@@ -133,27 +133,27 @@ message-id:a1b2c3-0
       {
         "interval": "MINUTE_10",
         "candles": [
-          { "startedAt": 1794201600000, "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
-          { "startedAt": 1794202200000, "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
+          { "startedAt": "2026-11-09T14:20:00+09:00", "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
+          { "startedAt": "2026-11-09T14:30:00+09:00", "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
         ]
       },
       {
         "interval": "HOUR_1",
         "candles": [
-          { "startedAt": 1794196800000, "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
-          { "startedAt": 1794200400000, "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
+          { "startedAt": "2026-11-09T13:00:00+09:00", "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
+          { "startedAt": "2026-11-09T14:00:00+09:00", "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
         ]
       },
       {
         "interval": "DAY_1",
         "candles": [
-          { "startedAt": 1794096000000, "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
-          { "startedAt": 1794182400000, "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
+          { "startedAt": "2026-11-08T09:00:00+09:00", "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
+          { "startedAt": "2026-11-09T09:00:00+09:00", "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
         ]
       }
     ]
   },
-  "publishedAt": 1794202325123
+  "publishedAt": "2026-11-09T14:32:05.123456+09:00"
 }^@
 ```
 
@@ -231,7 +231,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 export type TopicEnvelope<T> = {
   type: string;
   payload: T;
-  publishedAt: number; // UTC epoch 밀리초
+  publishedAt: string;
 };
 
 export const stompClient = new Client({
@@ -271,7 +271,7 @@ export function subscribeTopic<T>(
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
-    const publishedAt = envelope.publishedAt;
+    const publishedAt = Date.parse(envelope.publishedAt);
     if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
     lastPublishedAt = publishedAt;
     onMessage(envelope.payload, envelope);
@@ -306,7 +306,7 @@ import { subscribeTopic } from './stompClient';
 export type CandleInterval = 'MINUTE_10' | 'HOUR_1' | 'DAY_1';
 
 export type Candle = {
-  startedAt: number; // UTC epoch 밀리초
+  startedAt: string;
   openPrice: number;
   highPrice: number;
   lowPrice: number;

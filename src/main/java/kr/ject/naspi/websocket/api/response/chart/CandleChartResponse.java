@@ -1,7 +1,6 @@
 package kr.ject.naspi.websocket.api.response.chart;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -43,14 +42,14 @@ public record CandleChartResponse(String stockName, List<Series> series) {
     /**
      * 캔들 하나. 금액은 원, 거래량은 주 단위.
      *
-     * @param startedAt 봉 시작 시각 (JSON: UTC epoch 밀리초)
+     * @param startedAt 봉 시작 시각 (KST)
      * @param openPrice 시가
      * @param highPrice 고가
      * @param lowPrice 저가
      * @param closePrice 종가
      * @param volume 거래량
      */
-    public record Candle(@JsonFormat(shape = JsonFormat.Shape.NUMBER_INT) Instant startedAt,
-            long openPrice, long highPrice, long lowPrice, long closePrice, long volume) {
+    public record Candle(OffsetDateTime startedAt, long openPrice, long highPrice,
+            long lowPrice, long closePrice, long volume) {
     }
 }

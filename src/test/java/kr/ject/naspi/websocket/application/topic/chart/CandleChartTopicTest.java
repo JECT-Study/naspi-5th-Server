@@ -78,10 +78,10 @@ class CandleChartTopicTest {
     @DisplayName("09:00 이전은 전날 09:00에 시작한 거래일의 1일봉에 속한다")
     void dayCandleStartsAtNineKst() {
         assertThat(CandleChartTopic.startOf(CandleInterval.DAY_1,
-                kst("2026-11-09T08:59:59")))
+                OffsetDateTime.parse("2026-11-09T08:59:59+09:00")))
                 .isEqualTo(kst("2026-11-08T09:00:00"));
         assertThat(CandleChartTopic.startOf(CandleInterval.DAY_1,
-                kst("2026-11-09T09:00:00")))
+                OffsetDateTime.parse("2026-11-09T09:00:00+09:00")))
                 .isEqualTo(kst("2026-11-09T09:00:00"));
     }
 
@@ -155,13 +155,13 @@ class CandleChartTopicTest {
                 .candles();
     }
 
-    private static List<Instant> times(CandleChartResponse response,
+    private static List<OffsetDateTime> times(CandleChartResponse response,
             CandleInterval interval) {
         return candles(response, interval).stream().map(Candle::startedAt).toList();
     }
 
-    private static Instant kst(String localDateTime) {
-        return OffsetDateTime.parse(localDateTime + "+09:00").toInstant();
+    private static OffsetDateTime kst(String localDateTime) {
+        return OffsetDateTime.parse(localDateTime + "+09:00");
     }
 
     /** 테스트에서 시각을 앞으로 옮길 수 있는 KST 시계. */
