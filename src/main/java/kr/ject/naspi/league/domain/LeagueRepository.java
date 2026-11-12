@@ -1,5 +1,7 @@
 package kr.ject.naspi.league.domain;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -47,4 +49,15 @@ public interface LeagueRepository {
      * @return 존재 여부
      */
     boolean existsByInviteCode(InviteCode inviteCode);
+
+    /**
+     * 주어진 상태이면서 기준 일시 이전에(같은 시각 포함) 생성된 리그를 모두 찾아 비관적 쓰기 락을 건다.
+     * 만료 처리 중에 같은 대기실로 입장하는 요청이 끼어들지 않게 한다.
+     *
+     * @param status 리그 상태
+     * @param createdAt 기준 생성 일시
+     * @return 리그 목록
+     */
+    List<League> findAllWithLockByStatusAndCreatedAtLessThanEqual(LeagueStatus status,
+            LocalDateTime createdAt);
 }

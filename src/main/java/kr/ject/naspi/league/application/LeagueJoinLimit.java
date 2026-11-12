@@ -1,9 +1,12 @@
 package kr.ject.naspi.league.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.Set;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.PlayerRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +16,7 @@ import org.springframework.stereotype.Component;
  * 회원이 동시에 참여할 수 있는 리그 수 제한.
  *
  * <p>정책 (docs/policies/v1/domain/league.md "리그 생성 및 초대"): 동시 참여 가능한 리그는 최대 5개이며,
- * 대기실과 진행 중인 리그를 포함하고 종료된 리그는 제외한다. 리그 생성과 대기실 입장 시 모두 확인한다.
+ * 대기실과 진행 중인 리그를 포함하고 종료된 리그와 만료된 대기실은 제외한다. 리그 생성과 대기실 입장 시 모두 확인한다.
  *
  * <p>같은 회원이 동시에 여러 리그를 생성·입장하는 경우는 막지 않는다.
  */
@@ -29,6 +32,7 @@ class LeagueJoinLimit {
             EnumSet.of(LeagueStatus.WAITING, LeagueStatus.STARTED);
 
     private final PlayerRepository playerRepository;
+    private final Clock clock;
 
     /**
      * 회원이 리그에 하나 더 참여할 수 있는지 확인한다.
@@ -37,8 +41,11 @@ class LeagueJoinLimit {
      * @throws NaspiBizException 이미 대기실과 진행 중인 리그를 합쳐 5개에 참여 중인 경우
      */
     void check(long memberId) {
+        // 만료 처리가 아직 저장되지 않은 대기실도 생성 후 7일이 지났으면 제외한다.
+        LocalDateTime expiredBoundary = LocalDateTime.now(clock)
+                .minus(League.WAITING_ROOM_LIFETIME);
         long joined = playerRepository.countLeaguesByMemberIdAndStatusIn(memberId,
-                COUNTED_STATUSES);
+                COUNTED_STATUSES, expiredBoundary);
         if (joined >= MAX_JOINED_LEAGUES) {
             throw new NaspiBizException(ErrorCode.LEAGUE_JOIN_LIMIT_EXCEEDED);
         }

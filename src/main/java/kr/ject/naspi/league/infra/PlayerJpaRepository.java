@@ -1,5 +1,6 @@
 package kr.ject.naspi.league.infra;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
@@ -17,7 +18,10 @@ interface PlayerJpaRepository extends Repository<Player, Long>, PlayerRepository
     @Query("""
             select count(p) from Player p, League l
             where l.id = p.leagueId and p.memberId = :memberId and l.status in :statuses
+              and (l.status <> kr.ject.naspi.league.domain.LeagueStatus.WAITING
+                   or l.createdAt > :waitingCreatedAfter)
             """)
     long countLeaguesByMemberIdAndStatusIn(@Param("memberId") Long memberId,
-            @Param("statuses") Collection<LeagueStatus> statuses);
+            @Param("statuses") Collection<LeagueStatus> statuses,
+            @Param("waitingCreatedAfter") LocalDateTime waitingCreatedAfter);
 }

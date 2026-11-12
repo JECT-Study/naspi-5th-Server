@@ -24,6 +24,9 @@ naspi:
   swagger:
     username: swagger-test
     password: swagger-test-pw
+  # 주기 작업(대기실 만료 등)이 테스트 데이터·관측 기록에 끼어들지 않도록 끈다
+  scheduling:
+    enabled: false
 
 management:
   server:

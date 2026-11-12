@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import java.time.LocalDateTime;
-import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
@@ -27,7 +26,7 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @Import({LeagueQueryService.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
-        MemberService.class, ClockConfig.class})
+        MemberService.class, MutableClock.Config.class})
 class LeagueQueryServiceTest {
 
     private long kakaoId = 1000L;
@@ -43,6 +42,9 @@ class LeagueQueryServiceTest {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @Autowired
+    private MutableClock clock;
 
     @Test
     @DisplayName("초대 코드로 리그 이름, 상태, 입장한 사용자 수, 참여자(상장한 플레이어) 수를 조회한다")
@@ -75,6 +77,29 @@ class LeagueQueryServiceTest {
         assertThatThrownBy(() -> queryService.getSummary(league.inviteCode()))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("생성 후 7일이 지난 대기실은 초대 코드로 조회할 수 없다")
+    void getSummaryOfExpiredWaitingRoom() {
+        CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
+        clock.advance(League.WAITING_ROOM_LIFETIME);
+
+        assertThatThrownBy(() -> queryService.getSummary(league.inviteCode()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("만료된 대기실에는 참여했던 회원도 접근할 수 없다")
+    void getPlayersOfExpiredWaitingRoom() {
+        long host = member("방장");
+        CreatedLeague league = useCase.create(host, "리그", "나스피", "소개");
+        clock.advance(League.WAITING_ROOM_LIFETIME);
+
+        assertThatThrownBy(() -> queryService.getPlayers(host, league.leagueId()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
     }
 
     @Test

@@ -1,5 +1,7 @@
 package kr.ject.naspi.league.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,7 @@ public class LeagueQueryService {
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
     private final MemberService memberService;
+    private final Clock clock;
 
     /**
      * 초대 코드로 리그 간단 정보를 조회한다. 입장하기 전에 어떤 리그인지 확인하는 용도로,
@@ -38,10 +41,13 @@ public class LeagueQueryService {
      *
      * @param inviteCode 입력한 초대 코드 (대소문자 구분 없음)
      * @return 리그 이름, 상태, 입장 인원, 참여자 수
-     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없는 경우 (형식 오류, 이미 시작된 리그 포함)
+     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없는 경우
+     *         (형식 오류, 이미 시작된 리그, 만료된 대기실 포함)
      */
     public LeagueSummary getSummary(String inviteCode) {
+        LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findByInviteCode(InviteCode.of(inviteCode))
+                .filter(found -> found.isOpenForInvitation(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INVITE_CODE_NOT_FOUND));
         return new LeagueSummary(league.getId(), league.getName().getValue(),
                 league.getStatus().name(),
@@ -58,7 +64,7 @@ public class LeagueQueryService {
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
      * @return 참여일시 순 플레이어 목록과 시작 가능 여부
-     * @throws NaspiBizException 리그가 없거나, 조회하는 회원이 리그에 입장하지 않은 경우
+     * @throws NaspiBizException 리그가 없거나 (만료된 대기실 포함), 조회하는 회원이 리그에 입장하지 않은 경우
      */
     public LeaguePlayers getPlayers(long memberId, long leagueId) {
         League league = getLeague(leagueId);
@@ -97,8 +103,11 @@ public class LeagueQueryService {
         return participants >= League.MIN_PARTICIPANTS_TO_START && noWaiting;
     }
 
+    /** 리그를 찾는다. 만료된 대기실은 접근할 수 없으므로 없는 리그로 취급한다. */
     private League getLeague(long leagueId) {
+        LocalDateTime now = LocalDateTime.now(clock);
         return leagueRepository.findById(leagueId)
+                .filter(found -> !found.isExpired(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
     }
 }

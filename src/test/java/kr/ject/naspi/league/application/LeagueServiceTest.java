@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
+import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
@@ -115,6 +117,18 @@ class LeagueServiceTest {
         assertThatThrownBy(() -> service.join(GUEST_MEMBER_ID, created.inviteCode()))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("생성 후 7일이 지난 대기실의 초대 코드로는 입장할 수 없다 (만료 처리 전이어도)")
+    void joinExpiredWaitingRoom() {
+        League overdue = entityManager.persistAndFlush(League.create(LeagueName.of("리그"),
+                InviteCode.of("AAAAAAA"), NOW.minusDays(7)));
+
+        assertThatThrownBy(() -> service.join(GUEST_MEMBER_ID, "AAAAAAA"))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+        assertThat(overdue.getStatus()).isEqualTo(LeagueStatus.WAITING);
     }
 
     @Test
