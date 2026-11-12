@@ -111,6 +111,39 @@ logging:
     format:
       console: logstash
 
+# 관측성 (actuator, 메트릭, 트레이스)
+management:
+  server:
+    # actuator 는 Gateway 로 공개된 8080 이 아닌 별도 포트로만 노출한다 (Alloy 가 scrape).
+    port: 9090
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        # k8s probe 가 실제 서비스 포트를 확인하도록 메인 포트(8080)에 /livez, /readyz 를 추가로 연다.
+        add-additional-paths: true
+      group:
+        # DB·Redis 에 연결할 수 없으면 트래픽을 받지 않는다.
+        readiness:
+          include: readinessState,db,redis
+  metrics:
+    tags:
+      application: naspi-server
+  tracing:
+    sampling:
+      # 트레이스 수집 비율 (0.0 ~ 1.0). 트래픽이 늘면 환경 변수로 낮춘다.
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          # 트레이스를 보낼 OTLP(HTTP) 수신 주소. 클러스터 안의 Alloy 가 받아 Tempo 로 넘긴다.
+          endpoint: ${OTLP_TRACING_ENDPOINT:http://alloy.monitoring.svc:4318/v1/traces}
+
 ---
 spring:
   config:
@@ -153,6 +186,13 @@ server:
       cookie:
         # 로컬은 http 이므로 secure 쿠키를 끈다 (Safari 는 localhost 에서도 secure 쿠키를 받지 않는다).
         secure: false
+
+management:
+  tracing:
+    export:
+      otlp:
+        # 로컬에는 Alloy 가 없으므로 트레이스를 보내지 않는다 (연결 실패 로그 방지). traceId 는 계속 생성되어 로그에 남는다.
+        enabled: false
 
 ---
 # k8s 배포 환경(JAVA_ARGS 의 spring.profiles.active)에서만 콘솔 로그를 Logstash JSON 형식으로 출력
