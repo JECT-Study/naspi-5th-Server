@@ -61,3 +61,19 @@
 - Jira:
 - 내용: Flyway 등 마이그레이션 도구 도입, 로컬 H2 / 운영 PostgreSQL 호환
 - 결정 필요: `ddl-auto` 사용 범위
+
+### GLB-09 시스템은 카카오 로그인 후 환경(dev, prod)별로 정해진 프론트 URL로만 이동시킨다
+- Jira:
+- 목적: 로그인을 시작한 출처(Referer) 기반 리다이렉트를 없애고, 이동 대상을 환경별 설정값으로 고정한다
+- 배경: 프론트 개발계 배포 환경이 없어 로컬 프론트(`https://local.naspi.my:5173`)에서 dev 서버(`dev.api.naspi.my`)로 테스트하려고 임시로 출처 기반 이동을 넣었다 (`LoginRedirect`)
+- 내용
+  - `LoginRedirect`, `OriginSavingAuthorizationRequestResolver`를 제거하고, 성공·실패 핸들러가 설정된 URL로 바로 이동한다
+  - `naspi.auth.redirect.*-path`를 전체 URL(`*-url`)로 되돌리고 `NASPI_LOGIN_*` 환경 변수로 주입한다
+  - 환경별 값은 naspi-manifest overlay에 둔다: prod `common/overlay/prod/naspi-cm-common.yaml` (이미 있음), dev `common/overlay/dev/naspi-cm-common.yaml`
+  - CORS 허용 출처(`NASPI_CORS_ALLOWED_ORIGINS`)도 환경별로 정리한다 (dev에서 `local.naspi.my`, `localhost` 유지 여부 포함)
+- 선행: 프론트 개발계 배포 환경 구성
+- 완료 조건 (확인 방법)
+  - [ ] 로그인 성공·이름 입력·실패 시 Referer와 무관하게 설정된 URL로 이동한다 — `./gradlew test --tests "kr.ject.naspi.common.security.SecurityConfigTest" --tests "kr.ject.naspi.member.api.auth.KakaoLoginSuccessHandlerTest"`
+  - [ ] 출처 기반 리다이렉트 코드가 남아 있지 않다 — `grep -rn "LoginRedirect\|OriginSavingAuthorizationRequestResolver" src/` 결과 없음
+  - [ ] dev, prod ConfigMap에 각 환경의 `NASPI_LOGIN_*`, `NASPI_CORS_ALLOWED_ORIGINS` 값이 있다 — naspi-manifest에서 `kubectl kustomize common/overlay/dev`, `kubectl kustomize common/overlay/prod`
+- 결정 필요: 개발계 프론트 배포 주소(dev 리다이렉트 URL), prod 리다이렉트 출처(`naspi.my` / `www.naspi.my`) 통일

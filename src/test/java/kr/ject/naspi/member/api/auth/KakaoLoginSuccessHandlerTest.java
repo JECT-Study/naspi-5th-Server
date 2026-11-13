@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import kr.ject.naspi.common.security.AuthProperties;
+import kr.ject.naspi.common.security.CorsProperties;
 import kr.ject.naspi.common.security.LoginMember;
+import kr.ject.naspi.common.security.LoginRedirect;
 import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.member.application.MemberAuthService;
 import org.junit.jupiter.api.AfterEach;
@@ -32,6 +34,7 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 class KakaoLoginSuccessHandlerTest {
 
     private static final long KAKAO_ID = 12345L;
+    private static final String FRONT = "https://front.test";
     private static final AuthProperties PROPERTIES = new AuthProperties(Duration.ofDays(7),
             new AuthProperties.Redirect("/home", "/name", "/fail"));
 
@@ -40,7 +43,8 @@ class KakaoLoginSuccessHandlerTest {
             memberAuthService,
             new LoginSession(new HttpSessionSecurityContextRepository(), PROPERTIES),
             new SignupSession(),
-            PROPERTIES);
+            PROPERTIES,
+            new LoginRedirect(new CorsProperties(List.of(FRONT))));
 
     private final MockHttpServletRequest request = new MockHttpServletRequest();
     private final MockHttpServletResponse response = new MockHttpServletResponse();
@@ -57,7 +61,7 @@ class KakaoLoginSuccessHandlerTest {
 
         handler.onAuthenticationSuccess(request, response, kakaoAuthentication("홍길동"));
 
-        assertThat(response.getRedirectedUrl()).isEqualTo("/home");
+        assertThat(response.getRedirectedUrl()).isEqualTo(FRONT + "/home");
         assertThat(savedContext().getAuthentication().getPrincipal())
                 .isEqualTo(new LoginMember(7L));
         assertThat(session().getAttribute(SignupSession.ATTRIBUTE)).isNull();
@@ -73,7 +77,7 @@ class KakaoLoginSuccessHandlerTest {
 
         handler.onAuthenticationSuccess(request, response, kakaoAuthentication("홍길동"));
 
-        assertThat(response.getRedirectedUrl()).isEqualTo("/home");
+        assertThat(response.getRedirectedUrl()).isEqualTo(FRONT + "/home");
         assertThat(savedContext().getAuthentication().getPrincipal())
                 .isEqualTo(new LoginMember(8L));
         assertThat(session().getAttribute(SignupSession.ATTRIBUTE)).isNull();
@@ -88,7 +92,7 @@ class KakaoLoginSuccessHandlerTest {
 
         handler.onAuthenticationSuccess(request, response, kakaoAuthentication("John"));
 
-        assertThat(response.getRedirectedUrl()).isEqualTo("/name");
+        assertThat(response.getRedirectedUrl()).isEqualTo(FRONT + "/name");
         assertThat(savedContext()).isNull();
         assertThat(session().getAttribute(SignupSession.ATTRIBUTE))
                 .isEqualTo(new PendingSignup(KAKAO_ID));

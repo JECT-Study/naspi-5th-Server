@@ -4,6 +4,8 @@ import java.util.Comparator;
 import java.util.List;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockRepository;
+import kr.ject.naspi.market.domain.StockSnapshot;
+import kr.ject.naspi.market.domain.StockSnapshotCache;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,24 +18,33 @@ import org.springframework.transaction.annotation.Transactional;
 public class StockQueryService {
 
     private final StockRepository stockRepository;
+    private final StockSnapshotCache cache;
 
     /**
      * 리그의 종목을 모두 조회한다. 한 리그의 종목은 최대 10개라 한 번에 조회한다.
+     *
+     * <p>화면 표시용이다. 진행 중인 리그는 현재가 캐시에서 읽으므로 DB보다 최대 캐시 갱신 주기만큼 늦을 수 있다.
+     * 캐시에 없는 리그(대기실, 종료, 갱신 전)는 DB에서 읽는다. 거래 로직은 이 메서드를 쓰지 않는다
+     * (docs/design/asset-realtime.md 3장).
      *
      * @param leagueId 리그 ID
      * @return 종목 ID 순으로 정렬된 리그 종목 목록
      */
     @Transactional(readOnly = true)
     public List<LeagueStock> findAllByLeagueId(long leagueId) {
-        return stockRepository.findAllByLeagueId(leagueId).stream()
-                .sorted(Comparator.comparing(Stock::getId))
-                .map(StockQueryService::toLeagueStock)
-                .toList();
+        return cache.findByLeagueId(leagueId)
+                .map(snapshots -> snapshots.stream()
+                        .map(StockQueryService::toLeagueStock)
+                        .toList())
+                .orElseGet(() -> stockRepository.findAllByLeagueId(leagueId).stream()
+                        .sorted(Comparator.comparing(Stock::getId))
+                        .map(StockSnapshot::from)
+                        .map(StockQueryService::toLeagueStock)
+                        .toList());
     }
 
-    private static LeagueStock toLeagueStock(Stock stock) {
-        return new LeagueStock(stock.getId(), stock.getName().getValue(),
-                stock.getDescription().getValue(),
-                stock.getListerPlayerId(), stock.getCurrentPrice());
+    private static LeagueStock toLeagueStock(StockSnapshot stock) {
+        return new LeagueStock(stock.stockId(), stock.name(), stock.description(),
+                stock.listerPlayerId(), stock.currentPrice());
     }
 }
