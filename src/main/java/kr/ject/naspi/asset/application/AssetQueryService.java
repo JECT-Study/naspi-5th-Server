@@ -156,7 +156,7 @@ public class AssetQueryService {
     private static HoldingAsset toHoldingAsset(HoldingValuation holding, LeagueStock stock) {
         return new HoldingAsset(holding.stockId(), stock.name(), holding.treasuryStock(),
                 holding.quantity(), holding.reservedQuantity(), holding.orderableQuantity(),
-                holding.evaluationPrice(), holding.valuation(), holding.profit(),
-                holding.returnRate());
+                holding.evaluationPrice(), holding.averagePrice(), holding.valuation(),
+                holding.profit(), holding.returnRate());
     }
 }

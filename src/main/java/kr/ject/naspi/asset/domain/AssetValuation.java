@@ -19,16 +19,15 @@ import java.util.Objects;
  *
  * <p>손익 (docs/policies/v1/domain/asset.md "자산 조회"):
  * <ul>
- *   <li>{@code 평가 기준 금액 = 보유 수량 × 시초가 10,000원}</li>
- *   <li>{@code 평가 손익 = 평가 금액 - 평가 기준 금액}</li>
- *   <li>{@code 수익률(%) = 평가 손익 ÷ 평가 기준 금액 × 100}, 소수점 첫째 자리까지 반올림.
+ *   <li>{@code 평균 매입가 = 매입 금액 ÷ 보유 수량}, 소수점 둘째 자리까지 반올림 (표시용)</li>
+ *   <li>{@code 평가 손익 = 평가 금액 - 매입 금액}</li>
+ *   <li>{@code 수익률(%) = 평가 손익 ÷ 매입 금액 × 100}, 소수점 첫째 자리까지 반올림.
  *       음수는 절댓값 기준으로 반올림한다 (-12.35% → -12.4%)</li>
  *   <li>{@code 총자산 평가 손익 = 총자산 - 1억 원}. 이미 매도해 현금으로 바뀐 손익을 포함한다</li>
  *   <li>{@code 총자산 수익률(%) = 총자산 평가 손익 ÷ 1억 원 × 100}. 반올림은 수익률과 같다</li>
  * </ul>
  *
- * <p>TODO: 종목별 손익의 기준을 매입 금액(이동평균법)으로 할지와 평균 매입가(평단가) 표시는 미정이다
- * (정책서 "평가 손익 및 수익률"의 미정). 정해질 때까지 시초가를 기준으로 계산한다. 매입 금액은 계속 기록해 둔다.
+ * <p>매입 금액은 이동평균법으로 관리한다. 체결 시 갱신은 정산(AST-05)이 맡고, 여기서는 저장된 값을 쓴다.
  *
  * @param playerId 플레이어 ID
  * @param deposit 예수금. 예약금을 포함한 전체 현금
@@ -54,6 +53,9 @@ public record AssetValuation(
 
     /** 수익률 소수점 자릿수. */
     static final int RETURN_RATE_SCALE = 1;
+
+    /** 평균 매입가 소수점 자릿수. */
+    static final int AVERAGE_PRICE_SCALE = 2;
 
     /**
      * 목록을 복사해 변경할 수 없게 만든다.
@@ -105,7 +107,7 @@ public record AssetValuation(
      * 음수도 -12.35 → -12.4가 된다.
      *
      * @param profit 평가 손익
-     * @param baseAmount 수익률의 기준 금액 (종목: 평가 기준 금액, 총자산: 1억 원)
+     * @param baseAmount 수익률의 기준 금액 (종목: 매입 금액, 총자산: 1억 원)
      * @return 소수점 첫째 자리까지의 수익률. 기준 금액이 0이면 0.0
      */
     static BigDecimal returnRate(long profit, long baseAmount) {
@@ -116,6 +118,21 @@ public record AssetValuation(
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(baseAmount), RETURN_RATE_SCALE,
                         RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 평균 매입가를 계산한다. 소수점 셋째 자리에서 반올림해 둘째 자리까지 남긴다.
+     *
+     * @param purchaseAmount 매입 금액
+     * @param quantity 보유 수량
+     * @return 1주당 평균 매입가. 보유 수량이 0이면 0.00
+     */
+    static BigDecimal averagePrice(long purchaseAmount, long quantity) {
+        if (quantity == 0) {
+            return BigDecimal.ZERO.setScale(AVERAGE_PRICE_SCALE);
+        }
+        return BigDecimal.valueOf(purchaseAmount)
+                .divide(BigDecimal.valueOf(quantity), AVERAGE_PRICE_SCALE, RoundingMode.HALF_UP);
     }
 
     private static void validateOwner(Account account, Holding holding) {
@@ -144,8 +161,9 @@ public record AssetValuation(
      * @param orderableQuantity 매도 주문 가능 수량. 자사주는 최소 유지분 1,000주 제외
      * @param evaluationPrice 평가 가격 (1주당 원)
      * @param valuation 평가액 ({@code 보유 수량 × 평가 가격})
-     * @param purchaseAmount 매입 금액. 기록만 하고 손익 계산에는 쓰지 않는다 (클래스 TODO 참고)
-     * @param profit 평가 손익 ({@code 평가액 - 보유 수량 × 시초가})
+     * @param purchaseAmount 매입 금액 (이동평균법)
+     * @param averagePrice 평균 매입가 ({@code 매입 금액 ÷ 보유 수량}). 소수점 둘째 자리까지
+     * @param profit 평가 손익 ({@code 평가액 - 매입 금액})
      * @param returnRate 수익률(%). 소수점 첫째 자리까지
      */
     public record HoldingValuation(
@@ -157,14 +175,14 @@ public record AssetValuation(
             long evaluationPrice,
             long valuation,
             long purchaseAmount,
+            BigDecimal averagePrice,
             long profit,
             BigDecimal returnRate) {
 
         static HoldingValuation of(Holding holding, long evaluationPrice, boolean treasuryStock) {
             long valuation = Math.multiplyExact(holding.getQuantity(), evaluationPrice);
-            long baseAmount = Math.multiplyExact(holding.getQuantity(),
-                    InitialAllocation.LISTING_PRICE);
-            long profit = Math.subtractExact(valuation, baseAmount);
+            long purchaseAmount = holding.getPurchaseAmount();
+            long profit = Math.subtractExact(valuation, purchaseAmount);
             return new HoldingValuation(
                     holding.getStockId(),
                     treasuryStock,
@@ -173,9 +191,10 @@ public record AssetValuation(
                     holding.orderableQuantity(treasuryStock),
                     evaluationPrice,
                     valuation,
-                    holding.getPurchaseAmount(),
+                    purchaseAmount,
+                    AssetValuation.averagePrice(purchaseAmount, holding.getQuantity()),
                     profit,
-                    AssetValuation.returnRate(profit, baseAmount)
+                    AssetValuation.returnRate(profit, purchaseAmount)
             );
         }
     }

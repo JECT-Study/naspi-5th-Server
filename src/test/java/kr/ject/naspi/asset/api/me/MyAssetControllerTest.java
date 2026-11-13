@@ -54,7 +54,8 @@ class MyAssetControllerTest {
                 50_000_000, 1_000_000, 49_000_000, 52_500_000, 102_500_000, 2_500_000,
                 new BigDecimal("2.5"),
                 List.of(new HoldingAsset(11L, "나스피", true, 2_500, 0, 1_500, 12_000,
-                        30_000_000, 5_000_000, new BigDecimal("20.0")))));
+                        new BigDecimal("10000.00"), 30_000_000, 5_000_000,
+                        new BigDecimal("20.0")))));
 
         mockMvc.perform(get("/api/leagues/3/assets/me").with(loginMember()))
                 .andExpect(status().isOk())
@@ -68,6 +69,7 @@ class MyAssetControllerTest {
                 .andExpect(jsonPath("$.data.holdings[0].stockName").value("나스피"))
                 .andExpect(jsonPath("$.data.holdings[0].treasuryStock").value(true))
                 .andExpect(jsonPath("$.data.holdings[0].quantity").value(2_500))
+                .andExpect(jsonPath("$.data.holdings[0].averagePrice").value(10000.00))
                 .andExpect(jsonPath("$.data.holdings[0].valuation").value(30_000_000))
                 .andExpect(jsonPath("$.data.holdings[0].profit").value(5_000_000))
                 .andExpect(jsonPath("$.data.holdings[0].returnRate").value(20.0));

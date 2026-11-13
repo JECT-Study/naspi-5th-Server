@@ -35,18 +35,20 @@ record MyAssetResponse(long playerId, long deposit, long orderableDeposit, long 
      * @param quantity 보유 수량 (예약 수량 포함)
      * @param orderableQuantity 매도 주문 가능 수량
      * @param currentPrice 현재가
+     * @param averagePrice 평균 매입가 (이동평균법, 매입 금액 ÷ 보유 수량). 소수점 둘째 자리까지
      * @param valuation 평가 금액 (보유 수량 × 현재가)
-     * @param profit 평가 손익 (평가 금액 - 보유 수량 × 시초가 10,000원)
+     * @param profit 평가 손익 (평가 금액 - 매입 금액)
      * @param returnRate 수익률(%). 소수점 첫째 자리까지
      */
     record Holding(long stockId, String stockName, boolean treasuryStock, long quantity,
-            long orderableQuantity, long currentPrice, long valuation, long profit,
-            BigDecimal returnRate) {
+            long orderableQuantity, long currentPrice, BigDecimal averagePrice,
+            long valuation, long profit, BigDecimal returnRate) {
 
         static Holding from(HoldingAsset holding) {
             return new Holding(holding.stockId(), holding.stockName(), holding.treasuryStock(),
                     holding.quantity(), holding.orderableQuantity(), holding.currentPrice(),
-                    holding.valuation(), holding.profit(), holding.returnRate());
+                    holding.averagePrice(), holding.valuation(), holding.profit(),
+                    holding.returnRate());
         }
     }
 }
