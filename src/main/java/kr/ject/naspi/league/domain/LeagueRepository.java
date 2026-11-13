@@ -1,5 +1,6 @@
 package kr.ject.naspi.league.domain;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -47,4 +48,12 @@ public interface LeagueRepository {
      * @return 존재 여부
      */
     boolean existsByInviteCode(InviteCode inviteCode);
+
+    /**
+     * 상태가 같은 리그의 ID를 모두 조회한다.
+     *
+     * @param status 리그 상태
+     * @return 리그 ID 목록
+     */
+    List<Long> findIdsByStatus(LeagueStatus status);
 }

@@ -13,12 +13,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record AuthProperties(Duration loginSessionTimeout, Redirect redirect) {
 
     /**
-     * 카카오 로그인 결과별로 이동할 프론트 경로.
+     * 카카오 로그인 결과별로 이동할 프론트 경로. 출처는 로그인을 시작한 프론트 출처를 따른다 ({@link LoginRedirect}).
      *
-     * @param loginSuccessUrl 기존 회원 로그인 완료
-     * @param nameInputUrl 이름 입력 화면 (카카오 이름에 한글이 없는 신규 회원)
-     * @param loginFailureUrl 카카오 인증 실패 또는 사용자 취소
+     * @param loginSuccessPath 기존 회원 로그인 완료
+     * @param nameInputPath 이름 입력 화면 (카카오 이름에 한글이 없는 신규 회원)
+     * @param loginFailurePath 카카오 인증 실패 또는 사용자 취소
      */
-    public record Redirect(String loginSuccessUrl, String nameInputUrl, String loginFailureUrl) {
+    public record Redirect(String loginSuccessPath, String nameInputPath, String loginFailurePath) {
     }
 }

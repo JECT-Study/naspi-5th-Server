@@ -12,7 +12,7 @@
 | 프로토콜 | STOMP 1.2 over WebSocket (SockJS 미사용) |
 | 인증 | 로그인 세션 쿠키 `SESSION` ([2. 연결 인증](#2-연결-인증)) |
 | 구독 | `/topic/leagues/{leagueId}/players/{playerId}/assets` |
-| 구독 권한 | 본인만 (`playerId`가 로그인 회원 ID와 같아야 함) |
+| 구독 권한 | 본인만 (`playerId`가 로그인 회원의 해당 리그 플레이어 ID와 같아야 함) |
 | 메시지 종류 (`type`) | `ASSET` |
 | 전달 주기 | 1초마다 (더미). 구독자가 없으면 보내지 않습니다 |
 | 발행 (클라이언트 → 서버) | 없음 |
@@ -55,15 +55,13 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 | **변수** | **타입** | **설명** |
 | --- | --- | --- |
 | leagueId | Long | 리그 ID |
-| playerId | Long | 리그 참여자 ID. **지금은 로그인 회원 ID를 넣습니다** |
+| playerId | Long | 내 플레이어 ID. 회원 ID가 아닙니다. `GET /api/leagues/{leagueId}/assets/me` 응답의 `playerId`를 씁니다 |
 
 ### 구독 권한
 
-**본인만** 구독할 수 있습니다. 지금은 리그 참여자 기능이 없어 `playerId`를 **로그인 회원 ID**와 비교합니다. 다르면 구독이 거부됩니다.
+**본인만** 구독할 수 있습니다. 서버가 로그인 회원과 `leagueId`로 본인의 플레이어 ID를 찾아 경로의 `playerId`와 비교합니다. 다르거나 그 리그에 입장하지 않은 회원이면 구독이 거부됩니다.
 
-> TODO: 리그 모듈이 생기면 `playerId`가 로그인 회원의 해당 리그 참여자 ID인지 확인하도록 바뀝니다. 그때는 `playerId`에 회원 ID가 아니라 참여자 ID를 넣어야 합니다.
->
-> TODO: 지금은 프론트가 로그인 회원 ID를 받을 수 있는 REST API가 없습니다. 참여자 조회 API와 함께 추가될 예정입니다.
+화면에 들어오면 먼저 `GET /api/leagues/{leagueId}/assets/me`로 현재 자산을 받고, 응답의 `playerId`로 구독합니다.
 
 권한이 없으면 `ERROR` 프레임을 받고 **연결 전체가 끊깁니다**([5. 에러](#5-에러)).
 
@@ -183,7 +181,7 @@ content-length:0
 1. **다른 사람의 `playerId`로 구독한 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 `playerId`를 꼭 확인합니다.
 2. **없는 리그 ID로 구독한 경우:** 지금은 리그 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
 3. **더미 응답:** 리그와 관계없이 항상 위 예시와 같은 값을 보냅니다. 값도 바뀌지 않습니다.
-4. **연결이 끊긴 동안의 자산 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 자산을 받습니다. (TODO: 자산 조회 REST API 추가 예정)
+4. **연결이 끊긴 동안의 자산 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API(`GET /api/leagues/{leagueId}/assets/me`)로 현재 자산을 받습니다.
 
 ---
 
@@ -294,7 +292,7 @@ export type Asset = {
   holdings: Holding[];
 };
 
-/** 리그에서 내 자산을 실시간으로 받는다. playerId는 지금은 로그인 회원 ID다. */
+/** 리그에서 내 자산을 실시간으로 받는다. playerId는 GET /api/leagues/{leagueId}/assets/me 응답의 playerId다. */
 export function useMyAsset(leagueId: number, playerId: number) {
   const [asset, setAsset] = useState<Asset | null>(null);
 

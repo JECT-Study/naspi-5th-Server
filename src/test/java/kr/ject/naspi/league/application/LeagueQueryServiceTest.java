@@ -152,6 +152,22 @@ class LeagueQueryServiceTest {
                 .extracting(LeaguePlayer::name).isNull();
     }
 
+    @Test
+    @DisplayName("리그에 입장한 회원은 본인의 플레이어 ID를 찾을 수 있고, 입장하지 않은 회원은 찾을 수 없다")
+    void findPlayerId() {
+        long host = member("방장");
+        CreatedLeague league = useCase.create(host, "리그", "나스피", "소개");
+        long guest = member("손님");
+        JoinedLeague joined = leagueService.join(guest, league.inviteCode());
+        long outsider = member("외부인");
+
+        assertThat(queryService.findPlayerId(host, league.leagueId()))
+                .contains(league.hostPlayerId());
+        assertThat(queryService.findPlayerId(guest, league.leagueId()))
+                .contains(joined.playerId());
+        assertThat(queryService.findPlayerId(outsider, league.leagueId())).isEmpty();
+    }
+
     private CreatedLeague leagueWithParticipants(int count) {
         CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         for (int i = 1; i < count; i++) {

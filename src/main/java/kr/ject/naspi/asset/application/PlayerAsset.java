@@ -13,11 +13,13 @@ import java.util.List;
  * @param stockValuation 보유 주식 평가액 합계
  * @param totalAsset 총자산 ({@code 예수금 + 보유 주식 평가액})
  * @param totalProfit 총자산 평가 손익 ({@code 총자산 - 1억 원})
+ * @param totalReturnRate 총자산 수익률(%) ({@code 총자산 평가 손익 ÷ 1억 원 × 100}).
+ *     소수점 첫째 자리까지 반올림 (예: {@code 2.5}, {@code -12.4})
  * @param holdings 보유 종목. 종목 ID 순
  */
 public record PlayerAsset(long playerId, long deposit, long reservedDeposit,
         long orderableDeposit, long stockValuation, long totalAsset, long totalProfit,
-        List<HoldingAsset> holdings) {
+        BigDecimal totalReturnRate, List<HoldingAsset> holdings) {
 
     /**
      * 목록을 복사해 변경할 수 없게 만든다.
@@ -36,12 +38,13 @@ public record PlayerAsset(long playerId, long deposit, long reservedDeposit,
      * @param reservedQuantity 예약 수량. 미체결 매도 주문에 묶인 수량
      * @param orderableQuantity 매도 주문 가능 수량. 자사주는 최소 유지분 1,000주 제외
      * @param currentPrice 현재가
+     * @param averagePrice 평균 매입가 (이동평균법, {@code 매입 금액 ÷ 보유 수량}). 소수점 둘째 자리까지
      * @param valuation 평가액 ({@code 보유 수량 × 현재가})
      * @param profit 평가 손익 ({@code 평가액 - 매입 금액})
      * @param returnRate 수익률(%). 소수점 첫째 자리까지 반올림 (예: {@code 12.3}, {@code -12.4})
      */
     public record HoldingAsset(long stockId, String stockName, boolean treasuryStock,
             long quantity, long reservedQuantity, long orderableQuantity, long currentPrice,
-            long valuation, long profit, BigDecimal returnRate) {
+            BigDecimal averagePrice, long valuation, long profit, BigDecimal returnRate) {
     }
 }

@@ -19,6 +19,7 @@ import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
+import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +31,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({AssetQueryService.class, StockQueryService.class,
+@Import({AssetQueryService.class, StockQueryService.class, LocalStockSnapshotCache.class,
         InitialAssetAllocationService.class})
 class AssetQueryServiceTest {
 
@@ -82,6 +83,7 @@ class AssetQueryServiceTest {
         assertThat(asset.stockValuation()).isEqualTo(52_500_000);
         assertThat(asset.totalAsset()).isEqualTo(102_500_000);
         assertThat(asset.totalProfit()).isEqualTo(2_500_000);
+        assertThat(asset.totalReturnRate()).isEqualTo(new BigDecimal("2.5"));
     }
 
     @Test
