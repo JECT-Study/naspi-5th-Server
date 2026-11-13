@@ -61,9 +61,8 @@
 
 ### COM-05 PR 빌드 검증 워크플로 추가
 - Jira: ND-79
-- 목적: 머지 후 `build.yml`에서야 드러나던 컴파일·이미지 빌드 실패를 PR 단계에서 확인한다
-- 작업 내용: `development/**` 대상 PR에서 컴파일(main·test), bootJar, Jib 이미지 생성(push 없이 tar)을 실행하는 `verify.yml` 추가
+- 목적: 머지 후 `build.yml`에서야 드러나던 컴파일·패키징 실패를 PR 단계에서 확인한다
+- 작업 내용: `development/**` 대상 PR에서 컴파일(main·test)과 실행 jar(bootJar) 생성을 실행하는 `verify.yml` 추가. checkstyle·테스트는 기존 `check.yml`·`test.yml`이 담당한다
 - 완료 조건 (확인 방법)
   - [x] PR에서 컴파일과 실행 jar 생성을 검증한다 — `.github/workflows/verify.yml`, `./gradlew assemble testClasses`
-  - [x] PR에서 Docker Hub push 없이 `build.yml`과 같은 Jib 설정으로 이미지를 만든다 — `./gradlew jibBuildTar`
   - [ ] 저장소 브랜치 보호에서 `verify`를 `development/**` 필수 상태 검사로 지정한다 — GitHub Settings → Branches
