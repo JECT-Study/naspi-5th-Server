@@ -58,3 +58,12 @@
   - [ ] `/actuator/**`, `/livez`, `/readyz` 요청은 트레이스에서 제외된다 — `./gradlew test`
   - [ ] DB 쿼리가 JDBC 스팬으로 남는다 — `./gradlew test --tests "kr.ject.naspi.global.config.ObservationConfigTest"`
   - [ ] 요청 안의 Redis 명령(세션 조회·저장)은 요청 트레이스에 스팬으로 남고, 헬스체크의 Redis 상태 확인처럼 부모 없는 Redis 스팬은 내보내지 않는다 — `./gradlew test --tests "kr.ject.naspi.global.config.ObservationConfigTest"`
+
+### COM-05 PR 빌드 검증 워크플로 추가
+- Jira: ND-79
+- 목적: 머지 후 `build.yml`에서야 드러나던 컴파일·이미지 빌드 실패를 PR 단계에서 확인한다
+- 작업 내용: `development/**` 대상 PR에서 컴파일(main·test), bootJar, Jib 이미지 생성(push 없이 tar)을 실행하는 `verify.yml` 추가
+- 완료 조건 (확인 방법)
+  - [x] PR에서 컴파일과 실행 jar 생성을 검증한다 — `.github/workflows/verify.yml`, `./gradlew assemble testClasses`
+  - [x] PR에서 Docker Hub push 없이 `build.yml`과 같은 Jib 설정으로 이미지를 만든다 — `./gradlew jibBuildTar`
+  - [ ] 저장소 브랜치 보호에서 `verify`를 `development/**` 필수 상태 검사로 지정한다 — GitHub Settings → Branches
