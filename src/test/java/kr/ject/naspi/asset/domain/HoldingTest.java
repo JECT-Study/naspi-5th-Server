@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -88,6 +89,52 @@ class HoldingTest {
         Holding holding = holding(1_250);
 
         assertThatThrownBy(() -> holding.reserveForSell(quantity, false))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("매도 주문이 취소·만료되면 미체결 잔량만큼 예약 수량을 해제하고 보유 수량은 그대로 둔다")
+    void releaseForSell() {
+        Holding holding = holding(1_250);
+        holding.reserveForSell(400, false);
+
+        holding.releaseForSell(150);
+
+        assertThat(holding.getQuantity()).isEqualTo(1_250);
+        assertThat(holding.getReservedQuantity()).isEqualTo(250);
+        assertThat(holding.orderableQuantity(false)).isEqualTo(1_000);
+    }
+
+    @Test
+    @DisplayName("자사주 매도 주문을 해제하면 그만큼 다시 매도할 수 있다")
+    void releaseTreasuryStock() {
+        Holding holding = holding(2_500);
+        holding.reserveForSell(1_500, true);
+
+        holding.releaseForSell(1_500);
+
+        assertThat(holding.orderableQuantity(true)).isEqualTo(1_500);
+    }
+
+    @Test
+    @DisplayName("예약 수량보다 많이 해제하려 하면 데이터 오류로 보고 해제하지 않는다")
+    void rejectOverRelease() {
+        Holding holding = holding(1_250);
+        holding.reserveForSell(400, false);
+
+        assertThatThrownBy(() -> holding.releaseForSell(401))
+                .isInstanceOf(NaspiRuntimeException.class);
+        assertThat(holding.getReservedQuantity()).isEqualTo(400);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, -1})
+    @DisplayName("해제 수량은 양수여야 한다")
+    void rejectNonPositiveRelease(long quantity) {
+        Holding holding = holding(1_250);
+        holding.reserveForSell(400, false);
+
+        assertThatThrownBy(() -> holding.releaseForSell(quantity))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

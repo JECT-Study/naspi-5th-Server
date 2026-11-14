@@ -7,6 +7,7 @@ import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
@@ -21,7 +22,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * 예약 규칙 자체는 {@code AccountTest}, {@code HoldingTest}가 검증한다. 여기서는 조회·자사주 판단과 저장만 확인한다.
+ * 예약·해제 규칙 자체는 {@code AccountTest}, {@code HoldingTest}가 검증한다. 여기서는 조회·자사주 판단과 저장만
+ * 확인한다.
  */
 @ActiveProfiles("test")
 @DataJpaTest
@@ -100,6 +102,40 @@ class AssetReservationServiceTest {
         assertThatThrownBy(() -> service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 1))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.STOCK_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("매수 주문이 취소·만료되면 미체결 잔량에 묶인 현금을 해제한다")
+    void releaseCashForBuy() {
+        final long accountId = entityManager.persistAndGetId(
+                Account.open(LEAGUE_ID, PLAYER_ID, 1_000_000), Long.class);
+        service.reserveCashForBuy(LEAGUE_ID, PLAYER_ID, 10_000, 80);
+
+        long released = service.releaseCashForBuy(LEAGUE_ID, PLAYER_ID, 10_000, 30);
+
+        assertThat(released).isEqualTo(300_000);
+        assertThat(reload(Account.class, accountId).getReservedDeposit()).isEqualTo(500_000);
+    }
+
+    @Test
+    @DisplayName("매도 주문이 취소·만료되면 미체결 잔량만큼 예약 주식을 해제한다")
+    void releaseStockForSell() {
+        long stockId = listStock(LEAGUE_ID, OTHER_PLAYER_ID);
+        final long holdingId = holding(stockId, 1_250);
+        service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 400);
+
+        service.releaseStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 400);
+
+        assertThat(reload(Holding.class, holdingId).getReservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("해제할 계좌나 보유 주식이 없으면 데이터 오류로 본다")
+    void rejectReleaseWithoutAsset() {
+        assertThatThrownBy(() -> service.releaseCashForBuy(LEAGUE_ID, PLAYER_ID, 10_000, 1))
+                .isInstanceOf(NaspiRuntimeException.class);
+        assertThatThrownBy(() -> service.releaseStockForSell(LEAGUE_ID, PLAYER_ID, 100L, 1))
+                .isInstanceOf(NaspiRuntimeException.class);
     }
 
     private long listStock(long leagueId, long listerPlayerId) {

@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -91,6 +92,32 @@ public class Account {
         }
         long amount = price * quantity;
         reservedDeposit += amount;
+        return amount;
+    }
+
+    /**
+     * 취소·만료된 매수 주문의 미체결 잔량에 묶인 현금 {@code 예약 기준 가격 × 잔량}을 해제한다
+     * (docs/policies/v1/domain/asset.md "취소·만료"). 예수금은 바뀌지 않는다.
+     * 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @param price 주문의 예약 기준 가격. 양수
+     * @param quantity 미체결 잔량. 양수
+     * @return 해제한 금액
+     * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     * @throws NaspiRuntimeException 해제할 금액이 예약금보다 많은 경우 (예약·해제 기록이 어긋난 데이터 오류)
+     */
+    public long releaseForBuy(long price, long quantity) {
+        if (price <= 0 || quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "가격과 수량은 양수여야 합니다: price=" + price + ", quantity=" + quantity);
+        }
+        if (quantity > reservedDeposit / price) {
+            throw new NaspiRuntimeException("해제할 금액이 예약금보다 많습니다: playerId=" + playerId
+                    + ", reservedDeposit=" + reservedDeposit + ", price=" + price
+                    + ", quantity=" + quantity);
+        }
+        long amount = price * quantity;
+        reservedDeposit -= amount;
         return amount;
     }
 }

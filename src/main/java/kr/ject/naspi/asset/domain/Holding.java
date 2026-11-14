@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -127,5 +128,26 @@ public class Holding {
                     ? ErrorCode.TREASURY_STOCK_MIN_SHARES : ErrorCode.INSUFFICIENT_QUANTITY);
         }
         reservedQuantity += orderQuantity;
+    }
+
+    /**
+     * 취소·만료된 매도 주문의 미체결 잔량만큼 예약 수량을 해제한다
+     * (docs/policies/v1/domain/asset.md "취소·만료"). 보유 수량은 바뀌지 않는다.
+     * 호출하는 쪽은 보유 주식을 락으로 조회해야 한다.
+     *
+     * @param remainingQuantity 미체결 잔량. 양수
+     * @throws IllegalArgumentException 수량이 0 이하인 경우
+     * @throws NaspiRuntimeException 해제할 수량이 예약 수량보다 많은 경우 (예약·해제 기록이 어긋난 데이터 오류)
+     */
+    public void releaseForSell(long remainingQuantity) {
+        if (remainingQuantity <= 0) {
+            throw new IllegalArgumentException("해제 수량은 양수여야 합니다: " + remainingQuantity);
+        }
+        if (remainingQuantity > reservedQuantity) {
+            throw new NaspiRuntimeException("해제할 수량이 예약 수량보다 많습니다: playerId=" + playerId
+                    + ", stockId=" + stockId + ", reservedQuantity=" + reservedQuantity
+                    + ", quantity=" + remainingQuantity);
+        }
+        reservedQuantity -= remainingQuantity;
     }
 }
