@@ -120,4 +120,52 @@ public class Account {
         reservedDeposit -= amount;
         return amount;
     }
+
+    /**
+     * 매수 체결을 정산한다. 체결 수량에 묶여 있던 예약 현금 {@code 예약 기준 가격 × 체결 수량}을 풀고, 실제 체결 금액
+     * {@code 체결가 × 체결 수량}만큼 현금을 줄인다 (docs/policies/v1/domain/asset.md "주문 가능 자산 및 정산").
+     * 체결가가 예약 기준 가격보다 낮으면 그 차액만큼 주문 가능 현금이 늘어난다.
+     * 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @param reservedPrice 매수 주문의 예약 기준 가격
+     * @param price 체결가. 예약 기준 가격 이하
+     * @param quantity 체결 수량. 양수
+     * @return 실제 체결 금액
+     * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     * @throws NaspiRuntimeException 체결가가 예약 기준 가격보다 높거나, 풀 금액이 예약금보다 많은 경우 (데이터 오류)
+     */
+    public long settleBuy(long reservedPrice, long price, long quantity) {
+        if (reservedPrice <= 0 || price <= 0 || quantity <= 0) {
+            throw new IllegalArgumentException("가격과 수량은 양수여야 합니다: reservedPrice="
+                    + reservedPrice + ", price=" + price + ", quantity=" + quantity);
+        }
+        if (price > reservedPrice) {
+            throw new NaspiRuntimeException("매수 체결가가 예약 기준 가격보다 높습니다: playerId=" + playerId
+                    + ", reservedPrice=" + reservedPrice + ", price=" + price);
+        }
+        releaseForBuy(reservedPrice, quantity);
+        // 체결가 ≤ 예약 기준 가격이고 예약금 ≤ 예수금이므로 곱셈이 넘치지 않고 예수금도 음수가 되지 않는다.
+        long amount = price * quantity;
+        deposit -= amount;
+        return amount;
+    }
+
+    /**
+     * 매도 체결을 정산한다. 실제 체결 금액 {@code 체결가 × 체결 수량}만큼 현금을 늘린다.
+     * 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @param price 체결가. 양수
+     * @param quantity 체결 수량. 양수
+     * @return 실제 체결 금액
+     * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     */
+    public long settleSell(long price, long quantity) {
+        if (price <= 0 || quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "가격과 수량은 양수여야 합니다: price=" + price + ", quantity=" + quantity);
+        }
+        long amount = Math.multiplyExact(price, quantity);
+        deposit = Math.addExact(deposit, amount);
+        return amount;
+    }
 }

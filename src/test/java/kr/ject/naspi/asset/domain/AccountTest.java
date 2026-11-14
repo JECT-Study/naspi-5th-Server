@@ -118,4 +118,71 @@ class AccountTest {
         assertThatThrownBy(() -> account.releaseForBuy(price, quantity))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("매수 체결은 체결 수량의 예약 현금을 풀고 실제 체결 금액만큼 현금을 줄여, 체결가가 낮으면 차액만큼 주문 가능 현금이 늘어난다")
+    void settleBuyBelowReservedPrice() {
+        // 10,000원 × 80주 예약 후 9,500원에 50주 체결
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_000, 80);
+
+        long amount = account.settleBuy(10_000, 9_500, 50);
+
+        assertThat(amount).isEqualTo(475_000);
+        assertThat(account.getDeposit()).isEqualTo(525_000);
+        assertThat(account.getReservedDeposit()).isEqualTo(300_000);
+        assertThat(account.orderableDeposit()).isEqualTo(225_000);
+    }
+
+    @Test
+    @DisplayName("예약 기준 가격과 같은 가격에 체결되면 주문 가능 현금은 그대로다")
+    void settleBuyAtReservedPrice() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_000, 80);
+
+        account.settleBuy(10_000, 10_000, 80);
+
+        assertThat(account.getDeposit()).isEqualTo(200_000);
+        assertThat(account.getReservedDeposit()).isZero();
+        assertThat(account.orderableDeposit()).isEqualTo(200_000);
+    }
+
+    @Test
+    @DisplayName("매수 체결가가 예약 기준 가격보다 높거나 예약보다 많이 체결되면 데이터 오류로 보고 정산하지 않는다")
+    void rejectInvalidBuySettlement() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_000, 80);
+
+        assertThatThrownBy(() -> account.settleBuy(10_000, 10_100, 10))
+                .isInstanceOf(NaspiRuntimeException.class);
+        assertThatThrownBy(() -> account.settleBuy(10_000, 10_000, 81))
+                .isInstanceOf(NaspiRuntimeException.class);
+        assertThat(account.getDeposit()).isEqualTo(1_000_000);
+        assertThat(account.getReservedDeposit()).isEqualTo(800_000);
+    }
+
+    @Test
+    @DisplayName("매수 체결의 가격과 수량은 양수여야 한다")
+    void rejectNonPositiveBuySettlement() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_000, 80);
+
+        assertThatThrownBy(() -> account.settleBuy(0, 5_000, 10))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> account.settleBuy(10_000, 0, 10))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> account.settleBuy(10_000, 9_500, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("매도 체결은 실제 체결 금액만큼 현금을 늘린다")
+    void settleSell() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+
+        long amount = account.settleSell(9_500, 50);
+
+        assertThat(amount).isEqualTo(475_000);
+        assertThat(account.getDeposit()).isEqualTo(1_475_000);
+    }
 }

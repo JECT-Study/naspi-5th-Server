@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.exception.NaspiBizException;
@@ -32,12 +33,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 동시에 들어온 주문이 계좌·보유 주식 락으로 차례로 처리되는지 검증한다. 각 스레드가 자기 트랜잭션을 커밋해야
+ * 동시에 들어온 주문·체결이 계좌·보유 주식 락으로 차례로 처리되는지 검증한다. 각 스레드가 자기 트랜잭션을 커밋해야
  * 하므로 테스트 트랜잭션을 쓰지 않는다.
  */
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({AssetReservationService.class, StockQueryService.class, LocalStockSnapshotCache.class})
+@Import({AssetReservationService.class, AssetSettlementService.class, StockQueryService.class,
+        LocalStockSnapshotCache.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class AssetReservationConcurrencyTest {
 
@@ -47,6 +49,9 @@ class AssetReservationConcurrencyTest {
 
     @Autowired
     private AssetReservationService service;
+
+    @Autowired
+    private AssetSettlementService settlementService;
 
     @Autowired
     private EntityManager entityManager;
@@ -97,6 +102,48 @@ class AssetReservationConcurrencyTest {
 
         assertThat(accepted).isEqualTo(7);
         assertThat(find(Holding.class, holdingId).getReservedQuantity()).isEqualTo(1_400);
+    }
+
+    @Test
+    @DisplayName("두 참여자 사이의 반대 방향 체결이 동시에 정산되어도 멈추지 않고 모두 정산된다")
+    void concurrentOppositeSettlements() throws Exception {
+        // A·B가 서로 10주씩 사고파는 체결 10건(방향 5건씩)을 동시에 정산 → 서로 같은 수량을 같은 가격에 주고받으므로
+        // 정산 후 현금·보유 수량은 처음과 같고 예약은 모두 풀린다.
+        long otherPlayerId = PLAYER_ID + 1;
+        long stockId = 100L;
+        Account first = Account.open(LEAGUE_ID, PLAYER_ID, 1_000_000);
+        first.reserveForBuy(10_000, 50);
+        Account second = Account.open(LEAGUE_ID, otherPlayerId, 1_000_000);
+        second.reserveForBuy(10_000, 50);
+        Holding firstHolding = Holding.allocate(LEAGUE_ID, PLAYER_ID, stockId, 1_250);
+        firstHolding.reserveForSell(50, false);
+        Holding secondHolding = Holding.allocate(LEAGUE_ID, otherPlayerId, stockId, 1_250);
+        secondHolding.reserveForSell(50, false);
+        final long firstId = persist(first);
+        final long secondId = persist(second);
+        final long firstHoldingId = persist(firstHolding);
+        final long secondHoldingId = persist(secondHolding);
+        AtomicInteger sequence = new AtomicInteger();
+
+        long settled = runConcurrently(() -> {
+            boolean firstBuys = sequence.getAndIncrement() % 2 == 0;
+            long buyer = firstBuys ? PLAYER_ID : otherPlayerId;
+            long seller = firstBuys ? otherPlayerId : PLAYER_ID;
+            settlementService.settle(
+                    new TradeSettlement(LEAGUE_ID, stockId, buyer, seller, 10_000, 10_000, 10));
+        });
+
+        assertThat(settled).isEqualTo(REQUESTS);
+        for (long accountId : List.of(firstId, secondId)) {
+            Account account = find(Account.class, accountId);
+            assertThat(account.getDeposit()).isEqualTo(1_000_000);
+            assertThat(account.getReservedDeposit()).isZero();
+        }
+        for (long holdingId : List.of(firstHoldingId, secondHoldingId)) {
+            Holding holding = find(Holding.class, holdingId);
+            assertThat(holding.getQuantity()).isEqualTo(1_250);
+            assertThat(holding.getReservedQuantity()).isZero();
+        }
     }
 
     /**

@@ -138,6 +138,72 @@ class HoldingTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    @DisplayName("매수 체결은 보유 수량을 늘리고 매입 금액에 체결가 × 체결 수량을 더한다 (이동평균법)")
+    void settleBuy() {
+        Holding holding = holding(1_250);
+
+        holding.settleBuy(12_000, 250);
+
+        assertThat(holding.getQuantity()).isEqualTo(1_500);
+        assertThat(holding.getPurchaseAmount()).isEqualTo(12_500_000 + 3_000_000);
+    }
+
+    @Test
+    @DisplayName("매도 체결은 보유·예약 수량을 함께 줄이고 매입 금액을 매도 후 수량 비율로 줄이며 원 미만은 절사한다")
+    void settleSell() {
+        // 매입 금액 40,001원, 4주 → 1주 매도 → 40,001 × 3 ÷ 4 = 30,000.75 → 30,000원
+        Holding holding = holding(3);
+        holding.settleBuy(10_001, 1);
+        holding.reserveForSell(1, false);
+
+        holding.settleSell(1);
+
+        assertThat(holding.getQuantity()).isEqualTo(3);
+        assertThat(holding.getReservedQuantity()).isZero();
+        assertThat(holding.getPurchaseAmount()).isEqualTo(30_000);
+    }
+
+    @Test
+    @DisplayName("전량 매도하면 매입 금액은 0이 되고, 이후 매수는 0부터 다시 계산한다")
+    void settleSellAllThenBuy() {
+        Holding holding = holding(1_250);
+        holding.reserveForSell(1_250, false);
+
+        holding.settleSell(1_250);
+
+        assertThat(holding.getQuantity()).isZero();
+        assertThat(holding.getPurchaseAmount()).isZero();
+
+        holding.settleBuy(8_000, 100);
+
+        assertThat(holding.getPurchaseAmount()).isEqualTo(800_000);
+    }
+
+    @Test
+    @DisplayName("자사주는 접수 시 남긴 최소 유지분 1,000주가 매도 체결 후에도 유지된다")
+    void treasuryStockMinSharesKeptAfterSettlement() {
+        Holding holding = holding(2_500);
+        holding.reserveForSell(1_500, true);
+
+        holding.settleSell(1_500);
+
+        assertThat(holding.getQuantity()).isEqualTo(1_000);
+        assertThat(holding.orderableQuantity(true)).isZero();
+    }
+
+    @Test
+    @DisplayName("매도 체결 수량이 예약 수량을 넘으면 데이터 오류로 보고 정산하지 않는다")
+    void rejectSellSettlementOverReserved() {
+        Holding holding = holding(2_500);
+        holding.reserveForSell(1_500, true);
+
+        assertThatThrownBy(() -> holding.settleSell(1_501))
+                .isInstanceOf(NaspiRuntimeException.class);
+        assertThat(holding.getQuantity()).isEqualTo(2_500);
+        assertThat(holding.getReservedQuantity()).isEqualTo(1_500);
+    }
+
     private static Holding holding(long quantity) {
         return Holding.allocate(1L, 10L, 100L, quantity);
     }
