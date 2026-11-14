@@ -133,7 +133,17 @@ public enum ErrorCode {
     INSUFFICIENT_QUANTITY("402", "매도 가능한 수량이 부족합니다."),
 
     /** 보유 수량으로는 매도할 수 있지만 자사주 최소 유지분 1,000주를 남기지 못하는 경우. */
-    TREASURY_STOCK_MIN_SHARES("403", "자사주는 1,000주 이상 남겨야 합니다.");
+    TREASURY_STOCK_MIN_SHARES("403", "자사주는 1,000주 이상 남겨야 합니다."),
+
+    // order (5xx)
+    /** 주문 가격이 100원 이상의 100원 단위가 아닌 경우. */
+    INVALID_ORDER_PRICE("500", "주문 가격은 100원 이상의 100원 단위여야 합니다."),
+
+    /** 주문 수량이 1주 이상의 정수가 아닌 경우. */
+    INVALID_ORDER_QUANTITY("501", "주문 수량은 1주 이상이어야 합니다."),
+
+    /** 이미 종료된 주문처럼 허용되지 않는 상태로 바꾸려는 경우. */
+    INVALID_ORDER_STATUS_TRANSITION("502", "처리할 수 없는 주문 상태입니다.");
 
     private final String code;
     private final String message;
