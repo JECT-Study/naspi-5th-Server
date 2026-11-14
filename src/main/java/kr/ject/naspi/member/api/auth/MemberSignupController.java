@@ -53,7 +53,7 @@ public class MemberSignupController {
                     **요청**
                     - 카카오 로그인에서 받은 세션 쿠키가 필요하다. \
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
-                    - 이름: 1~5자 한글. 영어·숫자·특수문자·공백 불가.
+                    - 이름: 1~5자 한글 (자음·모음만 있는 글자도 한 글자). 영어·숫자·특수문자·공백 불가.
 
                     **성공 시** HTTP 200, `code` `"000"`. 가입한 회원으로 로그인된다 (로그인 유지 7일).
 

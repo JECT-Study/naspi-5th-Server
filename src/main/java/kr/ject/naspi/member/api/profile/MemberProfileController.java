@@ -75,7 +75,7 @@ public class MemberProfileController {
                     **요청**
                     - 로그인 세션 쿠키가 필요하다. \
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
-                    - 이름: 1~5자 한글. 영어·숫자·특수문자·공백 불가. 다른 회원과 같은 이름도 가능.
+                    - 이름: 1~5자 한글 (자음·모음만 있는 글자도 한 글자). 영어·숫자·특수문자·공백 불가. 다른 회원과 같은 이름도 가능.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data.name`에 수정된 이름.
 

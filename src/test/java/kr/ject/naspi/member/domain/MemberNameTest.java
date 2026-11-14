@@ -28,13 +28,20 @@ class MemberNameTest {
 
         @ParameterizedTest
         @NullAndEmptySource
-        @ValueSource(strings = {"여섯글자이름", "Kim", "홍길동1", "홍 길동", "홍길동!", "金", "ㄱㄴ"})
+        @ValueSource(strings = {"여섯글자이름", "Kim", "홍길동1", "홍 길동", "홍길동!", "金", "ㄱㄴㄷㄹㅁㅂ"})
         @DisplayName("한글이 아니거나 5자를 넘으면 INVALID_MEMBER_NAME 예외가 발생한다")
         void invalidName(String value) {
             assertThatThrownBy(() -> MemberName.of(value))
                     .isInstanceOf(NaspiBizException.class)
                     .extracting("errorCode")
                     .isEqualTo(ErrorCode.INVALID_MEMBER_NAME);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"ㄱ", "ㅏ", "ㅋㅋㅋ", "ㅎㅏㅎㅏ", "홍ㄱ동", "ㄱㄴㄷㄹㅁ"})
+        @DisplayName("자음 혹은 모음만 있는 글자도 한 글자로 취급해 1~5자이면 생성된다")
+        void jamoName(String value) {
+            assertThat(MemberName.of(value).getValue()).isEqualTo(value);
         }
 
         @Test
@@ -54,9 +61,13 @@ class MemberNameTest {
             "남궁민수다섯글, 남궁민수다",
             "홍Gil동, 홍동",
             "Kim 철수, 철수",
-            "홍길동ABC순신이, 홍길동순신"
+            "홍길동ABC순신이, 홍길동순신",
+            "ㅋㅋㅋ, ㅋㅋㅋ",
+            "홍ㅋ동, 홍ㅋ동",
+            "Kim ㅎㅎ 철수야, ㅎㅎ철수야",
+            "ㅋㅋㅋㅋㅋㅋ, ㅋㅋㅋㅋㅋ"
         })
-        @DisplayName("한글이 아닌 문자를 제외한 뒤 5자를 초과하는 부분을 절사한다")
+        @DisplayName("한글이 아닌 문자를 제외한 뒤 5자를 초과하는 부분을 절사한다 (자음·모음만 있는 글자도 한 글자)")
         void normalize(String kakaoName, String expected) {
             assertThat(MemberName.fromKakaoName(kakaoName))
                     .hasValueSatisfying(name -> assertThat(name.getValue()).isEqualTo(expected));
@@ -64,7 +75,7 @@ class MemberNameTest {
 
         @ParameterizedTest
         @NullAndEmptySource
-        @ValueSource(strings = {"John Smith", "123", "ㅋㅋㅋ"})
+        @ValueSource(strings = {"John Smith", "123", "金"})
         @DisplayName("한글이 없으면 빈 값을 반환해 직접 입력을 받게 한다")
         void noHangul(String kakaoName) {
             assertThat(MemberName.fromKakaoName(kakaoName)).isEmpty();
