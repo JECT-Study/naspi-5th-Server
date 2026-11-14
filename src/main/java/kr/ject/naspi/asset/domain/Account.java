@@ -6,6 +6,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -66,5 +68,29 @@ public class Account {
      */
     public long orderableDeposit() {
         return deposit - reservedDeposit;
+    }
+
+    /**
+     * 매수 주문에 쓸 현금 {@code 예약 기준 가격 × 주문 수량}을 예약한다. 주문 가능 현금을 넘으면 거절한다
+     * (docs/policies/v1/domain/asset.md "매수 주문의 현금 예약"). 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @param price 예약 기준 가격. 양수
+     * @param quantity 주문 수량. 양수
+     * @return 예약한 금액
+     * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     * @throws NaspiBizException 주문 가능 현금이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_DEPOSIT})
+     */
+    public long reserveForBuy(long price, long quantity) {
+        if (price <= 0 || quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "가격과 수량은 양수여야 합니다: price=" + price + ", quantity=" + quantity);
+        }
+        // 곱하기 전에 나눗셈으로 비교해 가격 × 수량이 long 범위를 넘는 경우도 함께 거절한다.
+        if (quantity > orderableDeposit() / price) {
+            throw new NaspiBizException(ErrorCode.INSUFFICIENT_DEPOSIT);
+        }
+        long amount = price * quantity;
+        reservedDeposit += amount;
+        return amount;
     }
 }

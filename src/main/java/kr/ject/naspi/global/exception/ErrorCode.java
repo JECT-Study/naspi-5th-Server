@@ -118,7 +118,10 @@ public enum ErrorCode {
 
     // asset (4xx)
     /** 리그 참여자의 자산이 없는 경우 (리그 시작 전이라 초기 자산이 배분되지 않은 경우 포함). */
-    ASSET_NOT_FOUND("400", "자산 정보를 찾을 수 없습니다.");
+    ASSET_NOT_FOUND("400", "자산 정보를 찾을 수 없습니다."),
+
+    /** 매수 주문에 필요한 현금이 주문 가능 현금보다 많은 경우. */
+    INSUFFICIENT_DEPOSIT("401", "주문 가능한 현금이 부족합니다.");
 
     private final String code;
     private final String message;
