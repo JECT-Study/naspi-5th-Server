@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
@@ -92,6 +93,27 @@ public class LeagueQueryService {
         // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
         boolean startable = league.getStatus() == LeagueStatus.WAITING && League.canStart(players);
         return new LeaguePlayers(league.getId(), startable, result);
+    }
+
+    /**
+     * 리그에 입장한 회원의 플레이어 ID를 조회한다. 다른 모듈이 로그인 회원 본인의 플레이어를 찾을 때 쓴다
+     * (클라이언트가 보낸 플레이어 ID를 믿지 않는다).
+     *
+     * @param memberId 회원 ID
+     * @param leagueId 리그 ID
+     * @return 플레이어 ID. 리그에 입장하지 않은 회원(탈퇴 포함)이면 빈 값
+     */
+    public Optional<Long> findPlayerId(long memberId, long leagueId) {
+        return playerRepository.findByLeagueIdAndMemberId(leagueId, memberId).map(Player::getId);
+    }
+
+    /**
+     * 진행 중(시작 후 종료 전)인 리그의 ID를 모두 조회한다. market의 현재가 캐시 갱신에 쓴다.
+     *
+     * @return 진행 중인 리그 ID 목록
+     */
+    public List<Long> findStartedLeagueIds() {
+        return leagueRepository.findIdsByStatus(LeagueStatus.STARTED);
     }
 
     /** 리그를 찾는다. 만료·삭제된 대기실은 접근할 수 없으므로 없는 리그로 취급한다. */

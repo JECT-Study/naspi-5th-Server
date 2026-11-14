@@ -56,13 +56,13 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 
 | Epic | 파일 | Task 수 |
 |---|---|---|
-| [COMMON] 개발 환경·운영 기반 | [tasks/common.md](tasks/common.md) | 3 |
+| [COMMON] 개발 환경·운영 기반 | [tasks/common.md](tasks/common.md) | 5 |
 
 ## v1 Epic
 
 | Epic | 파일 | 스토리 수 |
 |---|---|---|
-| [기반] 공통·인프라 (Jira 유형: Task) | [v1/global.md](v1/global.md) | 8 |
+| [기반] 공통·인프라 (Jira 유형: Task) | [v1/global.md](v1/global.md) | 9 |
 | [회원] | [v1/member.md](v1/member.md) | 7 |
 | [리그] | [v1/league.md](v1/league.md) | 16 |
 | [시장] | [v1/market.md](v1/market.md) | 9 |

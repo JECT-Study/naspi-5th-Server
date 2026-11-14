@@ -60,6 +60,14 @@ public interface LeagueRepository {
     boolean existsByInviteCode(InviteCode inviteCode);
 
     /**
+     * 상태가 같은 리그의 ID를 모두 조회한다.
+     *
+     * @param status 리그 상태
+     * @return 리그 ID 목록
+     */
+    List<Long> findIdsByStatus(LeagueStatus status);
+
+    /**
      * 주어진 상태이면서 기준 일시 이전에(같은 시각 포함) 생성된 리그를 모두 찾아 비관적 쓰기 락을 건다.
      * 만료 처리 중에 같은 대기실로 입장하는 요청이 끼어들지 않게 한다.
      *

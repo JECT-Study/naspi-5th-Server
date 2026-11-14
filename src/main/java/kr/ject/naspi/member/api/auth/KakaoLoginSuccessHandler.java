@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
 import kr.ject.naspi.common.security.AuthProperties;
+import kr.ject.naspi.common.security.LoginRedirect;
 import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.member.application.MemberAuthService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Component;
  * <p>개인정보처리방침·서비스이용약관은 카카오 동의 화면에서 필수로 동의받으므로 인증을 마치면 동의한 것으로 본다.
  *
  * <ul>
+ *   <li>이동할 프론트 출처는 로그인을 시작한 출처를 따른다 ({@link LoginRedirect}).</li>
  *   <li>기존 회원: 회원으로 로그인하고 로그인 완료 경로로 이동한다. 다시 가입되지 않는다.</li>
  *   <li>신규 회원: 카카오 이름으로 가입한 뒤 로그인하고 로그인 완료 경로로 이동한다.</li>
  *   <li>카카오 이름에 한글이 없는 신규 회원: 로그인시키지 않고 가입 대기 정보만 세션에 둔 뒤 이름 입력 경로로 이동한다.
@@ -33,6 +35,7 @@ public class KakaoLoginSuccessHandler implements AuthenticationSuccessHandler {
     private final LoginSession loginSession;
     private final SignupSession signupSession;
     private final AuthProperties authProperties;
+    private final LoginRedirect loginRedirect;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
@@ -48,10 +51,10 @@ public class KakaoLoginSuccessHandler implements AuthenticationSuccessHandler {
         signupSession.remove(request);
         if (memberId.isPresent()) {
             loginSession.login(request, response, memberId.get());
-            response.sendRedirect(authProperties.redirect().loginSuccessUrl());
+            loginRedirect.redirect(request, response, authProperties.redirect().loginSuccessPath());
             return;
         }
         signupSession.save(request, new PendingSignup(profile.kakaoId()));
-        response.sendRedirect(authProperties.redirect().nameInputUrl());
+        loginRedirect.redirect(request, response, authProperties.redirect().nameInputPath());
     }
 }

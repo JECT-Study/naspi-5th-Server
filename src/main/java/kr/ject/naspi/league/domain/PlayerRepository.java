@@ -43,6 +43,15 @@ public interface PlayerRepository {
     boolean existsByLeagueIdAndMemberId(Long leagueId, Long memberId);
 
     /**
+     * 리그에 입장한 회원의 플레이어를 찾는다.
+     *
+     * @param leagueId 리그 ID
+     * @param memberId 회원 ID
+     * @return 플레이어, 입장하지 않았으면 빈 값
+     */
+    Optional<Player> findByLeagueIdAndMemberId(Long leagueId, Long memberId);
+
+    /**
      * 리그에 입장한 플레이어(참여자 + 대기자) 수를 센다.
      *
      * @param leagueId 리그 ID

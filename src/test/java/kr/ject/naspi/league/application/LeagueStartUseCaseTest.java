@@ -10,6 +10,7 @@ import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockQueryService;
+import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +26,7 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @RecordApplicationEvents
 @Import({LeagueStartUseCase.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
-        StockQueryService.class,
+        StockQueryService.class, LocalStockSnapshotCache.class,
         MutableClock.Config.class})
 class LeagueStartUseCaseTest {
 

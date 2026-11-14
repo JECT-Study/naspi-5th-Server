@@ -11,6 +11,7 @@ import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockQueryService;
+import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +24,8 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @Import({LeagueLeaveUseCase.class, LeagueStartUseCase.class, LeagueService.class,
         LeagueCreationUseCase.class, InviteCodeIssuer.class, LeagueJoinLimit.class,
-        StockListingService.class, StockQueryService.class, MutableClock.Config.class})
+        StockListingService.class, StockQueryService.class, LocalStockSnapshotCache.class,
+        MutableClock.Config.class})
 class LeagueLeaveUseCaseTest {
 
     private static final long HOST_MEMBER_ID = 1L;
