@@ -10,6 +10,10 @@ spring:
     url: ${DB_URL:jdbc:postgresql://naspi-db-svc:5432/naspi}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  jpa:
+    # OSIV 를 끈다. 영속성 컨텍스트와 DB 커넥션은 트랜잭션(application 계층) 안에서만 유지하고,
+    # 응답에 필요한 데이터는 트랜잭션 안에서 DTO 로 변환해 내보낸다 (트랜잭션 밖 지연 로딩 시 LazyInitializationException).
+    open-in-view: false
   # 로그인 세션 저장소. 접속 정보는 환경 변수로 주입한다 (k8s: manifest 의 naspi-cm-common).
   data:
     redis:
