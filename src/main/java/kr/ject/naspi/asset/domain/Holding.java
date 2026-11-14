@@ -7,6 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -97,5 +99,33 @@ public class Holding {
             return available;
         }
         return Math.max(0, available - TREASURY_STOCK_MIN_SHARES);
+    }
+
+    /**
+     * 매도 주문 수량만큼 주식을 예약한다. 매도 가능 수량({@link #orderableQuantity})을 넘으면 거절한다
+     * (docs/policies/v1/domain/asset.md "주문 가능 자산 및 정산", "자사주 최소 유지분").
+     * 호출하는 쪽은 보유 주식을 락으로 조회해야 한다.
+     *
+     * <p>체결은 예약된 수량 안에서만 보유 수량을 줄이므로(보유·예약이 같이 줄어듦), 접수 시 남긴 자사주
+     * 최소 유지분은 체결 후에도 유지된다.
+     *
+     * @param orderQuantity 매도 주문 수량. 양수
+     * @param treasuryStock 자사주(본인이 상장한 종목) 여부
+     * @throws IllegalArgumentException 수량이 0 이하인 경우
+     * @throws NaspiBizException 자사주 최소 유지분을 남기지 못하는 경우
+     *     ({@link ErrorCode#TREASURY_STOCK_MIN_SHARES}), 그 밖에 매도 가능 수량이 부족한 경우
+     *     ({@link ErrorCode#INSUFFICIENT_QUANTITY})
+     */
+    public void reserveForSell(long orderQuantity, boolean treasuryStock) {
+        if (orderQuantity <= 0) {
+            throw new IllegalArgumentException("매도 수량은 양수여야 합니다: " + orderQuantity);
+        }
+        if (orderQuantity > orderableQuantity(treasuryStock)) {
+            boolean blockedByMinShares = treasuryStock
+                    && orderQuantity <= quantity - reservedQuantity;
+            throw new NaspiBizException(blockedByMinShares
+                    ? ErrorCode.TREASURY_STOCK_MIN_SHARES : ErrorCode.INSUFFICIENT_QUANTITY);
+        }
+        reservedQuantity += orderQuantity;
     }
 }

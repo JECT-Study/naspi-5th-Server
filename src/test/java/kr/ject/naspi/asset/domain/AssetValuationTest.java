@@ -269,7 +269,7 @@ class AssetValuationTest {
 
     private static Holding holding(long stockId, long quantity, long reservedQuantity) {
         Holding holding = Holding.allocate(LEAGUE_ID, PLAYER_ID, stockId, quantity);
-        // 예약은 주문 접수(AST-03, AST-04) 구현 전이라 필드를 직접 설정한다.
+        // 매도 가능 수량 계산식의 경계(예약 규칙으로는 만들 수 없는 상태 포함)를 보려고 필드를 직접 설정한다.
         ReflectionTestUtils.setField(holding, "reservedQuantity", reservedQuantity);
         return holding;
     }

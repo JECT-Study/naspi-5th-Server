@@ -1,10 +1,13 @@
 package kr.ject.naspi.market.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.List;
 import java.util.Map;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
@@ -57,6 +60,25 @@ class StockQueryServiceTest {
         assertThat(service.findAllByLeagueId(1L))
                 .extracting(LeagueStock::stockId, LeagueStock::currentPrice)
                 .containsExactly(tuple(stockId, 10_500L));
+    }
+
+    @Test
+    @DisplayName("상장자 여부는 리그 종목의 상장자 플레이어로 판단한다")
+    void isListedBy() {
+        long stockId = list(1L, 10L, "가나다");
+
+        assertThat(service.isListedBy(1L, stockId, 10L)).isTrue();
+        assertThat(service.isListedBy(1L, stockId, 11L)).isFalse();
+    }
+
+    @Test
+    @DisplayName("다른 리그의 종목은 상장자 여부를 확인할 수 없다")
+    void isListedByStockInOtherLeague() {
+        long stockId = list(2L, 10L, "가나다");
+
+        assertThatThrownBy(() -> service.isListedBy(1L, stockId, 10L))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.STOCK_NOT_FOUND);
     }
 
     private long list(long leagueId, long listerPlayerId, String name) {
