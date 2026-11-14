@@ -52,7 +52,7 @@ class MyAssetController {
                     - `holdings`: 보유 수량이 있는 종목, 종목 ID 순
                       - `stockName`, `treasuryStock`(내 종목 여부), `quantity`(보유 수량), \
                     `orderableQuantity`(매도 가능 수량), `currentPrice`
-                      - `averagePrice`: 평균 매입가(평단가, 이동평균법), 소수점 둘째 자리까지 (예: `11000.00`)
+                      - `averagePrice`: 평균 매입가(평단가, 이동평균법), 원 미만 절사 (예: `11000`)
                       - `valuation`(평가 금액), `profit`(평가 손익 = 평가 금액 - 매입 금액), \
                     `returnRate`(수익률 % = 평가 손익 ÷ 매입 금액 × 100)
 
