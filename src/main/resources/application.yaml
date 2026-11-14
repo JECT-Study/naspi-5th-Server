@@ -201,3 +201,17 @@ spring:
   config:
     activate:
       on-profile: development
+
+---
+# 개발 서버(development)에서 기동 시 엔티티 기준으로 테이블·컬럼을 추가한다.
+# DB 마이그레이션 도구가 정해지기 전까지의 임시 설정이다. update 는 추가만 하며 컬럼 삭제·타입 변경·
+# 기존 CHECK 제약(enum 값 목록 등) 변경은 하지 않으므로, 그런 변경은 배포 전에 SQL 로 직접 반영한다.
+# 운영(production)은 스키마를 자동 변경하지 않는다 (기본값 none).
+# 로컬·테스트(H2 인메모리)는 Spring Boot 기본값(create-drop)을 그대로 쓴다.
+spring:
+  config:
+    activate:
+      on-profile: development
+  jpa:
+    hibernate:
+      ddl-auto: update
