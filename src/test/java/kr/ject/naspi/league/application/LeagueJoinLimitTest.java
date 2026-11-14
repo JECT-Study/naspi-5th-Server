@@ -3,9 +3,9 @@ package kr.ject.naspi.league.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
@@ -23,7 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({LeagueCreationUseCase.class, LeagueService.class, LeagueJoinLimit.class,
-        InviteCodeIssuer.class, StockListingService.class, ClockConfig.class})
+        InviteCodeIssuer.class, StockListingService.class, MutableClock.Config.class})
 class LeagueJoinLimitTest {
 
     private static final long MEMBER_ID = 1L;
@@ -37,6 +37,9 @@ class LeagueJoinLimitTest {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @Autowired
+    private MutableClock clock;
 
     private long otherHostId = HOST_MEMBER_ID;
 
@@ -92,6 +95,44 @@ class LeagueJoinLimitTest {
 
         assertThat(created.leagueId()).isNotZero();
         assertThat(entered.leagueId()).isNotZero();
+    }
+
+    @Test
+    @DisplayName("만료된 대기실은 참여 개수에서 제외된다")
+    void expiredLeagueExcluded() {
+        CreatedLeague expiring = useCase.create(MEMBER_ID, "만료될 리그", "나스피", "소개");
+        clock.advance(League.WAITING_ROOM_LIFETIME);
+        joinLeagues(LeagueJoinLimit.MAX_JOINED_LEAGUES - 1);
+        entityManager.find(League.class, expiring.leagueId()).expire(LocalDateTime.now(clock));
+        entityManager.flush();
+
+        CreatedLeague created = useCase.create(MEMBER_ID, "리그", "나스피", "소개");
+
+        assertThat(created.leagueId()).isNotZero();
+    }
+
+    @Test
+    @DisplayName("생성 후 7일이 지난 대기실은 만료 처리 전이어도 참여 개수에서 제외된다")
+    void overdueWaitingRoomExcluded() {
+        useCase.create(MEMBER_ID, "만료될 리그", "나스피", "소개");
+        clock.advance(League.WAITING_ROOM_LIFETIME);
+        joinLeagues(LeagueJoinLimit.MAX_JOINED_LEAGUES - 1);
+
+        CreatedLeague created = useCase.create(MEMBER_ID, "리그", "나스피", "소개");
+
+        assertThat(created.leagueId()).isNotZero();
+    }
+
+    @Test
+    @DisplayName("생성 후 7일이 지나지 않은 대기실은 참여 개수에 포함된다")
+    void waitingRoomBeforeExpiryCounted() {
+        useCase.create(MEMBER_ID, "리그", "나스피", "소개");
+        clock.advance(League.WAITING_ROOM_LIFETIME.minusSeconds(1));
+        joinLeagues(LeagueJoinLimit.MAX_JOINED_LEAGUES - 1);
+
+        assertThatThrownBy(() -> useCase.create(MEMBER_ID, "리그", "나스피", "소개"))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_JOIN_LIMIT_EXCEEDED);
     }
 
     /** 회원이 직접 만든 리그와 초대받은 리그를 섞어 count개에 참여시킨다. */

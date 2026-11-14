@@ -29,6 +29,9 @@ naspi:
     current-price:
       # 백그라운드 갱신이 테스트 데이터에 끼어들지 않도록 끈다. 갱신은 서비스를 직접 호출해 검증한다
       refresh-interval: 0s
+  # 주기 작업(대기실 만료 등)이 테스트 데이터·관측 기록에 끼어들지 않도록 끈다
+  scheduling:
+    enabled: false
 
 management:
   server:

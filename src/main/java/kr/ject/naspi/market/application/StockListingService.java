@@ -41,6 +41,9 @@ public class StockListingService {
      */
     @Transactional
     public long list(long leagueId, long memberId, String name, String description) {
+        // TODO(ND-76): 만료된 대기실(생성 후 7일 경과, LEA-08)에는 상장할 수 없도록 막는다.
+        //       league 서비스에서 리그 행을 잠그고 League#isOpenForInvitation(now)로 확인해
+        //       아니면 LEAGUE_NOT_FOUND를 던진다. 만료 스케줄러도 같은 행을 잠그므로 만료 직전 상장과 겹치지 않는다.
         // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
         long listerPlayerId = memberId;
         StockName stockName = StockName.of(name);

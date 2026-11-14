@@ -6,10 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.LongStream;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
+import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
@@ -22,7 +26,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
@@ -96,8 +99,7 @@ class LeagueServiceTest {
     void joinStartedLeague() {
         CreatedLeague created = createLeague();
         League league = entityManager.find(League.class, created.leagueId());
-        // TODO: 리그 시작(LEA-09) 구현 후 도메인 메서드로 바꾼다
-        ReflectionTestUtils.setField(league, "status", LeagueStatus.STARTED);
+        league.start(listedPlayers(created.leagueId()), NOW);
         entityManager.flush();
 
         assertThatThrownBy(() -> service.join(GUEST_MEMBER_ID, created.inviteCode()))
@@ -115,6 +117,18 @@ class LeagueServiceTest {
         assertThatThrownBy(() -> service.join(GUEST_MEMBER_ID, created.inviteCode()))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("생성 후 7일이 지난 대기실의 초대 코드로는 입장할 수 없다 (만료 처리 전이어도)")
+    void joinExpiredWaitingRoom() {
+        League overdue = entityManager.persistAndFlush(League.create(LeagueName.of("리그"),
+                InviteCode.of("AAAAAAA"), NOW.minusDays(7)));
+
+        assertThatThrownBy(() -> service.join(GUEST_MEMBER_ID, "AAAAAAA"))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+        assertThat(overdue.getStatus()).isEqualTo(LeagueStatus.WAITING);
     }
 
     @Test
@@ -164,6 +178,17 @@ class LeagueServiceTest {
         assertThatThrownBy(() -> service.join(League.MAX_PLAYERS + 1L, created.inviteCode()))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_FULL);
+    }
+
+    /** 리그 시작 조건(상장을 마친 참여자 3명)을 만족하는 플레이어 목록. 저장하지 않는다. */
+    private static List<Player> listedPlayers(long leagueId) {
+        return LongStream.rangeClosed(1, League.MIN_PARTICIPANTS_TO_START)
+                .mapToObj(memberId -> {
+                    Player player = Player.enter(leagueId, memberId, NOW);
+                    player.completeListing(NOW);
+                    return player;
+                })
+                .toList();
     }
 
     private CreatedLeague createLeague() {

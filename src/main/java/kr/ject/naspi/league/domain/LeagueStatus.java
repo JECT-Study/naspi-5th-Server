@@ -1,7 +1,7 @@
 package kr.ject.naspi.league.domain;
 
 /**
- * 리그 상태 (ERD: 생성 → 시작 → 종료).
+ * 리그 상태 (ERD: 생성 → 시작 → 종료, 생성 → 만료).
  */
 public enum LeagueStatus {
 
@@ -12,5 +12,11 @@ public enum LeagueStatus {
     STARTED,
 
     /** 종료되어 결과만 조회할 수 있다. */
-    ENDED
+    ENDED,
+
+    /** 생성 후 7일 안에 시작하지 않아 만료된 대기실. 접근할 수 없고 초대 코드도 폐기된다. */
+    EXPIRED,
+
+    /** 방장이 나갔는데 방장을 넘겨받을 참여자가 없어 삭제된 대기실. 접근할 수 없고 초대 코드도 폐기된다. */
+    DELETED
 }

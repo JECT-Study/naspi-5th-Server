@@ -192,6 +192,13 @@ spring:
   config:
     activate:
       on-profile: development
+  # 개발 서버에서 기동 시 엔티티 기준으로 테이블·컬럼을 추가한다.
+  # DB 마이그레이션 도구가 정해지기 전까지의 임시 설정이다. update 는 추가만 하며 컬럼 삭제·타입 변경·
+  # 기존 CHECK 제약(enum 값 목록 등) 변경은 하지 않으므로, 그런 변경은 배포 전에 SQL 로 직접 반영한다.
+  # 운영(production)은 스키마를 자동 변경하지 않는다 (기본값 none). 로컬·테스트는 기본값(create-drop).
+  jpa:
+    hibernate:
+      ddl-auto: update
 
 # dev 서버(dev.api.naspi.my)는 로컬 프론트(local.naspi.my:5173, hosts 로 127.0.0.1 지정)와 배포된 프론트를 모두 받는다.
 # 첫 번째(local.naspi.my)가 로그인 후 기본 이동 출처다. 환경 변수(k8s: naspi-cm-common)가 있으면 그 값을 쓴다.
@@ -199,3 +206,4 @@ naspi:
   cors:
     # localhost 는 dev.api.naspi.my 와 다른 사이트라 SameSite=Lax 세션 쿠키가 실리지 않는다 (로그인 필요 API 는 local.naspi.my 로)
     allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://local.naspi.my:5173,http://localhost:5173,https://www.naspi.my,https://naspi.my}
+

@@ -8,7 +8,6 @@ import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
-import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 대기실 입장과 상장 완료 처리.
  *
  * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 다른 사용자는 초대 코드로 대기실에 대기자로 입장한다.
- *
- * <p>TODO: 대기실 7일 만료(LEA-08)는 아직 검증하지 않는다.
+ * 생성 후 7일이 지난 대기실의 초대 코드로는 입장할 수 없다.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,15 +39,16 @@ public class LeagueService {
      * @param memberId 입장할 회원 ID
      * @param inviteCode 입력한 초대 코드 (대소문자 구분 없음)
      * @return 입장한 리그
-     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없거나 (이미 시작된 리그 포함),
+     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없거나 (이미 시작된 리그, 만료된 대기실 포함),
      *         이미 입장한 리그이거나, 이미 리그 5개에 참여 중이거나, 리그 인원이 10명인 경우
      */
     @Transactional
     public JoinedLeague join(long memberId, String inviteCode) {
 
         // 초대 코드로 리그를 찾고 유효한 초대 코드인지 검증한다.
+        LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findWithLockByInviteCode(InviteCode.of(inviteCode))
-                .filter(found -> found.getStatus() == LeagueStatus.WAITING)
+                .filter(found -> found.isOpenForInvitation(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INVITE_CODE_NOT_FOUND));
 
         // 이미 참여중인 리그인지 확인

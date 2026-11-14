@@ -1,5 +1,7 @@
 package kr.ject.naspi.league.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,7 @@ public class LeagueQueryService {
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
     private final MemberService memberService;
+    private final Clock clock;
 
     /**
      * 초대 코드로 리그 간단 정보를 조회한다. 입장하기 전에 어떤 리그인지 확인하는 용도로,
@@ -40,10 +43,13 @@ public class LeagueQueryService {
      *
      * @param inviteCode 입력한 초대 코드 (대소문자 구분 없음)
      * @return 리그 이름, 상태, 입장 인원, 참여자 수
-     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없는 경우 (형식 오류, 이미 시작된 리그 포함)
+     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없는 경우
+     *         (형식 오류, 이미 시작된 리그, 만료된 대기실 포함)
      */
     public LeagueSummary getSummary(String inviteCode) {
+        LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findByInviteCode(InviteCode.of(inviteCode))
+                .filter(found -> found.isOpenForInvitation(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INVITE_CODE_NOT_FOUND));
         return new LeagueSummary(league.getId(), league.getName().getValue(),
                 league.getStatus().name(),
@@ -60,7 +66,7 @@ public class LeagueQueryService {
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
      * @return 참여일시 순 플레이어 목록과 시작 가능 여부
-     * @throws NaspiBizException 리그가 없거나, 조회하는 회원이 리그에 입장하지 않은 경우
+     * @throws NaspiBizException 리그가 없거나 (만료된 대기실 포함), 조회하는 회원이 리그에 입장하지 않은 경우
      */
     public LeaguePlayers getPlayers(long memberId, long leagueId) {
         League league = getLeague(leagueId);
@@ -84,7 +90,9 @@ public class LeagueQueryService {
                         player.getId().equals(league.getHostPlayerId()), player.isListed(),
                         player.getJoinedAt(), player.getListedAt()))
                 .toList();
-        return new LeaguePlayers(league.getId(), startable(players), result);
+        // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
+        boolean startable = league.getStatus() == LeagueStatus.WAITING && League.canStart(players);
+        return new LeaguePlayers(league.getId(), startable, result);
     }
 
     /**
@@ -108,20 +116,11 @@ public class LeagueQueryService {
         return leagueRepository.findIdsByStatus(LeagueStatus.STARTED);
     }
 
-    /**
-     * 리그를 시작할 수 있는지 확인한다.
-     * 모든 플레이어가 상장을 마쳤으며, 상장을 마친 플레이어가 최소 인원 이상이어야 한다.
-     */
-    private static boolean startable(List<Player> players) {
-        // 상장을 마친 플레이어 수
-        long participants = players.stream().filter(Player::isListed).count();
-        // 모든 플레이어가 상장을 마쳤는지 여부
-        boolean noWaiting = players.stream().allMatch(Player::isListed);
-        return participants >= League.MIN_PARTICIPANTS_TO_START && noWaiting;
-    }
-
+    /** 리그를 찾는다. 만료·삭제된 대기실은 접근할 수 없으므로 없는 리그로 취급한다. */
     private League getLeague(long leagueId) {
+        LocalDateTime now = LocalDateTime.now(clock);
         return leagueRepository.findById(leagueId)
+                .filter(found -> !found.isUnavailable(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
     }
 }
