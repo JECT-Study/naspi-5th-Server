@@ -94,11 +94,11 @@ public class LeagueQueryService {
         return new LeaguePlayers(league.getId(), startable, result);
     }
 
-    /** 리그를 찾는다. 만료된 대기실은 접근할 수 없으므로 없는 리그로 취급한다. */
+    /** 리그를 찾는다. 만료·삭제된 대기실은 접근할 수 없으므로 없는 리그로 취급한다. */
     private League getLeague(long leagueId) {
         LocalDateTime now = LocalDateTime.now(clock);
         return leagueRepository.findById(leagueId)
-                .filter(found -> !found.isExpired(now))
+                .filter(found -> !found.isUnavailable(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
     }
 }

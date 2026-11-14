@@ -19,6 +19,13 @@ public interface PlayerRepository {
     Player save(Player player);
 
     /**
+     * 플레이어를 삭제한다. 대기실을 나간 플레이어는 다시 입장할 수 있도록 행을 지운다.
+     *
+     * @param player 플레이어
+     */
+    void delete(Player player);
+
+    /**
      * 플레이어 ID로 플레이어를 찾는다.
      *
      * @param id 플레이어 ID
