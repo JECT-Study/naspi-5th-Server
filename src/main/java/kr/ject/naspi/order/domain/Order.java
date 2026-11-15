@@ -66,9 +66,14 @@ public class Order {
     @Column(name = "remaining_quantity", nullable = false)
     private long remainingQuantity;
 
-    /** 이 주문에 묶인 예약 금액(원). 매수 주문의 예약 현금이며, 매도 주문은 0이다. */
-    @Column(name = "reserved_amount", nullable = false)
-    private long reservedAmount;
+    /**
+     * 매수 주문의 예약 기준 가격(원). 접수 때 현금을 예약한 가격이며, 매도 주문은 {@code null}이다.
+     *
+     * <p>asset이 예약 기준 가격 × 수량 단위로 예약·해제·정산하므로 주문마다 가격을 남겨 둔다.
+     * 지정가는 주문 가격, 시장가는 보호최고가이다.
+     */
+    @Column(name = "reserved_price")
+    private Long reservedPrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
@@ -91,7 +96,6 @@ public class Order {
         this.price = price;
         this.quantity = quantity;
         this.remainingQuantity = quantity;
-        this.reservedAmount = 0;
         this.status = OrderStatus.PENDING;
         this.tradingDay = tradingDay;
         this.orderedAt = orderedAt;
@@ -182,15 +186,28 @@ public class Order {
     }
 
     /**
-     * 예약 금액을 기록한다.
+     * 매수 주문의 예약 기준 가격을 기록한다. 현금을 예약한 가격과 같아야 한다.
      *
-     * @param amount 예약 금액 (0 이상)
+     * @param price 예약 기준 가격 (양수)
+     * @throws IllegalArgumentException 매도 주문이거나 가격이 양수가 아닌 경우
      */
-    public void reserve(long amount) {
-        if (amount < 0) {
-            throw new IllegalArgumentException("예약 금액은 음수일 수 없습니다: " + amount);
+    public void recordReservedPrice(long price) {
+        if (side != OrderSide.BUY) {
+            throw new IllegalArgumentException("예약 기준 가격은 매수 주문에만 기록합니다");
         }
-        this.reservedAmount = amount;
+        if (price <= 0) {
+            throw new IllegalArgumentException("예약 기준 가격은 양수여야 합니다: " + price);
+        }
+        this.reservedPrice = price;
+    }
+
+    /**
+     * 미체결 잔여 수량에 묶여 있는 예약 현금.
+     *
+     * @return {@code 예약 기준 가격 × 잔여 수량}. 매도 주문이거나 예약 기준 가격이 없으면 0
+     */
+    public long reservedCash() {
+        return reservedPrice == null ? 0 : Math.multiplyExact(reservedPrice, remainingQuantity);
     }
 
     /**

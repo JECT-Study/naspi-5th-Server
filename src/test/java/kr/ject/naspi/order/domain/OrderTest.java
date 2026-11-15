@@ -134,4 +134,30 @@ class OrderTest {
             assertThatThrownBy(() -> order.fill(1)).isInstanceOf(NaspiBizException.class);
         }
     }
+
+    @Test
+    @DisplayName("매수 주문의 예약 현금은 예약 기준 가격 × 미체결 잔여 수량이다")
+    void reservedCash() {
+        Order order = limit(OrderSide.BUY, 10_000, 30);
+        assertThat(order.reservedCash()).isZero();
+
+        order.recordReservedPrice(10_000);
+        assertThat(order.reservedCash()).isEqualTo(300_000);
+
+        order.fill(10);
+        assertThat(order.reservedCash()).isEqualTo(200_000);
+    }
+
+    @Test
+    @DisplayName("예약 기준 가격은 매수 주문에만 기록할 수 있고 양수여야 한다")
+    void reservedPriceRules() {
+        Order sell = limit(OrderSide.SELL, 10_000, 30);
+        Order buy = limit(OrderSide.BUY, 10_000, 30);
+
+        assertThatThrownBy(() -> sell.recordReservedPrice(10_000))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> buy.recordReservedPrice(0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(sell.reservedCash()).isZero();
+    }
 }
