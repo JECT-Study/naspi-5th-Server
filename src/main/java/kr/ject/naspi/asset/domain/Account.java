@@ -6,6 +6,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -66,5 +69,103 @@ public class Account {
      */
     public long orderableDeposit() {
         return deposit - reservedDeposit;
+    }
+
+    /**
+     * 매수 주문에 쓸 현금 {@code 예약 기준 가격 × 주문 수량}을 예약한다. 주문 가능 현금을 넘으면 거절한다
+     * (docs/policies/v1/domain/asset.md "매수 주문의 현금 예약"). 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @param price 예약 기준 가격. 양수
+     * @param quantity 주문 수량. 양수
+     * @return 예약한 금액
+     * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     * @throws NaspiBizException 주문 가능 현금이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_DEPOSIT})
+     */
+    public long reserveForBuy(long price, long quantity) {
+        if (price <= 0 || quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "가격과 수량은 양수여야 합니다: price=" + price + ", quantity=" + quantity);
+        }
+        // 곱하기 전에 나눗셈으로 비교해 가격 × 수량이 long 범위를 넘는 경우도 함께 거절한다.
+        if (quantity > orderableDeposit() / price) {
+            throw new NaspiBizException(ErrorCode.INSUFFICIENT_DEPOSIT);
+        }
+        long amount = price * quantity;
+        reservedDeposit += amount;
+        return amount;
+    }
+
+    /**
+     * 취소·만료된 매수 주문의 미체결 잔량에 묶인 현금 {@code 예약 기준 가격 × 잔량}을 해제한다
+     * (docs/policies/v1/domain/asset.md "취소·만료"). 예수금은 바뀌지 않는다.
+     * 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @param price 주문의 예약 기준 가격. 양수
+     * @param quantity 미체결 잔량. 양수
+     * @return 해제한 금액
+     * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     * @throws NaspiRuntimeException 해제할 금액이 예약금보다 많은 경우 (예약·해제 기록이 어긋난 데이터 오류)
+     */
+    public long releaseForBuy(long price, long quantity) {
+        if (price <= 0 || quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "가격과 수량은 양수여야 합니다: price=" + price + ", quantity=" + quantity);
+        }
+        if (quantity > reservedDeposit / price) {
+            throw new NaspiRuntimeException("해제할 금액이 예약금보다 많습니다: playerId=" + playerId
+                    + ", reservedDeposit=" + reservedDeposit + ", price=" + price
+                    + ", quantity=" + quantity);
+        }
+        long amount = price * quantity;
+        reservedDeposit -= amount;
+        return amount;
+    }
+
+    /**
+     * 매수 체결을 정산한다. 체결 수량에 묶여 있던 예약 현금 {@code 예약 기준 가격 × 체결 수량}을 풀고, 실제 체결 금액
+     * {@code 체결가 × 체결 수량}만큼 현금을 줄인다 (docs/policies/v1/domain/asset.md "주문 가능 자산 및 정산").
+     * 체결가가 예약 기준 가격보다 낮으면 그 차액만큼 주문 가능 현금이 늘어난다.
+     * 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @param reservedPrice 매수 주문의 예약 기준 가격
+     * @param price 체결가. 예약 기준 가격 이하
+     * @param quantity 체결 수량. 양수
+     * @return 실제 체결 금액
+     * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     * @throws NaspiRuntimeException 체결가가 예약 기준 가격보다 높거나, 풀 금액이 예약금보다 많은 경우 (데이터 오류)
+     */
+    public long settleBuy(long reservedPrice, long price, long quantity) {
+        if (reservedPrice <= 0 || price <= 0 || quantity <= 0) {
+            throw new IllegalArgumentException("가격과 수량은 양수여야 합니다: reservedPrice="
+                    + reservedPrice + ", price=" + price + ", quantity=" + quantity);
+        }
+        if (price > reservedPrice) {
+            throw new NaspiRuntimeException("매수 체결가가 예약 기준 가격보다 높습니다: playerId=" + playerId
+                    + ", reservedPrice=" + reservedPrice + ", price=" + price);
+        }
+        releaseForBuy(reservedPrice, quantity);
+        // 체결가 ≤ 예약 기준 가격이고 예약금 ≤ 예수금이므로 곱셈이 넘치지 않고 예수금도 음수가 되지 않는다.
+        long amount = price * quantity;
+        deposit -= amount;
+        return amount;
+    }
+
+    /**
+     * 매도 체결을 정산한다. 실제 체결 금액 {@code 체결가 × 체결 수량}만큼 현금을 늘린다.
+     * 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @param price 체결가. 양수
+     * @param quantity 체결 수량. 양수
+     * @return 실제 체결 금액
+     * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     */
+    public long settleSell(long price, long quantity) {
+        if (price <= 0 || quantity <= 0) {
+            throw new IllegalArgumentException(
+                    "가격과 수량은 양수여야 합니다: price=" + price + ", quantity=" + quantity);
+        }
+        long amount = Math.multiplyExact(price, quantity);
+        deposit = Math.addExact(deposit, amount);
+        return amount;
     }
 }

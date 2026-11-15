@@ -45,8 +45,8 @@ class AssetValuationTest {
     @Test
     @DisplayName("예약된 현금과 주식도 총자산에 포함하되 중복 합산하지 않는다")
     void reservedAssetsNotDoubleCounted() {
-        Account account = reserveDeposit(Account.open(LEAGUE_ID, PLAYER_ID, 50_000_000),
-                1_000_000);
+        Account account = Account.open(LEAGUE_ID, PLAYER_ID, 50_000_000);
+        account.reserveForBuy(10_000, 100);
         List<Holding> holdings = List.of(holding(OTHER_STOCK_ID, 1_000, 300));
 
         AssetValuation valuation = AssetValuation.evaluate(account, holdings,
@@ -60,8 +60,8 @@ class AssetValuationTest {
     @Test
     @DisplayName("주문 가능 현금은 현금에서 예약 현금을 뺀 금액이다")
     void orderableDeposit() {
-        Account account = reserveDeposit(Account.open(LEAGUE_ID, PLAYER_ID, 50_000_000),
-                1_250_000);
+        Account account = Account.open(LEAGUE_ID, PLAYER_ID, 50_000_000);
+        account.reserveForBuy(10_000, 125);
 
         AssetValuation valuation = AssetValuation.evaluate(account, List.of(), Map.of(),
                 TREASURY_STOCK_ID);
@@ -283,7 +283,7 @@ class AssetValuationTest {
 
     private static Holding holding(long stockId, long quantity, long reservedQuantity) {
         Holding holding = Holding.allocate(LEAGUE_ID, PLAYER_ID, stockId, quantity);
-        // 예약은 주문 접수(AST-03, AST-04) 구현 전이라 필드를 직접 설정한다.
+        // 매도 가능 수량 계산식의 경계(예약 규칙으로는 만들 수 없는 상태 포함)를 보려고 필드를 직접 설정한다.
         ReflectionTestUtils.setField(holding, "reservedQuantity", reservedQuantity);
         return holding;
     }
@@ -292,10 +292,5 @@ class AssetValuationTest {
         // 체결 시 매입 금액 갱신(AST-05) 구현 전이라 필드를 직접 설정한다.
         ReflectionTestUtils.setField(holding, "purchaseAmount", purchaseAmount);
         return holding;
-    }
-
-    private static Account reserveDeposit(Account account, long reservedDeposit) {
-        ReflectionTestUtils.setField(account, "reservedDeposit", reservedDeposit);
-        return account;
     }
 }

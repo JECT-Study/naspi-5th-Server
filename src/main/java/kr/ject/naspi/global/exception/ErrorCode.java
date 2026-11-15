@@ -124,7 +124,16 @@ public enum ErrorCode {
 
     // asset (4xx)
     /** 리그 참여자의 자산이 없는 경우 (리그 시작 전이라 초기 자산이 배분되지 않은 경우 포함). */
-    ASSET_NOT_FOUND("400", "자산 정보를 찾을 수 없습니다.");
+    ASSET_NOT_FOUND("400", "자산 정보를 찾을 수 없습니다."),
+
+    /** 매수 주문에 필요한 현금이 주문 가능 현금보다 많은 경우. */
+    INSUFFICIENT_DEPOSIT("401", "주문 가능한 현금이 부족합니다."),
+
+    /** 매도 주문 수량이 매도 가능 수량(보유 수량 - 예약 수량)보다 많은 경우. */
+    INSUFFICIENT_QUANTITY("402", "매도 가능한 수량이 부족합니다."),
+
+    /** 보유 수량으로는 매도할 수 있지만 자사주 최소 유지분 1,000주를 남기지 못하는 경우. */
+    TREASURY_STOCK_MIN_SHARES("403", "자사주는 1,000주 이상 남겨야 합니다.");
 
     private final String code;
     private final String message;
