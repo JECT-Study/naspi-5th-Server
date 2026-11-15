@@ -1,4 +1,4 @@
-package kr.ject.naspi.league.api.host;
+package kr.ject.naspi.league.api.lobby;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;

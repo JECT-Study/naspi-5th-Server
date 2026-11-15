@@ -1,4 +1,4 @@
-package kr.ject.naspi.league.api.host;
+package kr.ject.naspi.league.api.lobby;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

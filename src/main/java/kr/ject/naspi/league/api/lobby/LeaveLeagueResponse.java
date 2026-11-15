@@ -1,4 +1,4 @@
-package kr.ject.naspi.league.api.leave;
+package kr.ject.naspi.league.api.lobby;
 
 import kr.ject.naspi.league.application.LeftLeague;
 
