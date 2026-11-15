@@ -69,9 +69,9 @@ public class League {
     @Column(name = "started_at")
     private LocalDateTime startedAt;
 
-    /** 종료 일시. TODO: 리그 종료(LEA-12)에서 기록한다. */
-    @Column(name = "ended_at")
-    private LocalDateTime endedAt;
+    /** 종료 일시. 리그를 시작할 때 {@link TradingSchedule}로 정해지며 이후 바뀌지 않는다. 시작 전에는 비어 있다. */
+    @Column(name = "ends_at")
+    private LocalDateTime endsAt;
 
     private League(LeagueName name, InviteCode inviteCode, LocalDateTime createdAt) {
         this.name = Objects.requireNonNull(name, "name");
@@ -126,7 +126,10 @@ public class League {
     }
 
     /**
-     * 리그를 시작한다. 시작 일시를 기록하고 초대 코드를 폐기하므로, 이후에는 아무도 새로 입장할 수 없다.
+     * 리그를 시작한다. 시작 일시와 종료 일시를 기록하고 초대 코드를 폐기하므로, 이후에는 아무도 새로 입장할 수 없다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "리그 시작 및 운영"): 종료 일시는 시작의 KST 날짜 + 7일, 09:00 KST이며,
+     * 종료일 변경과 조기 종료는 할 수 없다.
      *
      * <p>방장인지는 확인하지 않는다. 호출하는 쪽에서 요청한 플레이어가 방장인지 먼저 확인한다.
      *
@@ -151,7 +154,21 @@ public class League {
         }
         this.status = LeagueStatus.STARTED;
         this.startedAt = now;
+        this.endsAt = new TradingSchedule(now).endsAt();
         closeInvitation();
+    }
+
+    /**
+     * 시작한 리그의 운영 일정. 종료 시각과 거래일 구간, 특정 시각의 거래일 번호를 계산한다.
+     *
+     * @return 운영 일정
+     * @throws IllegalStateException 아직 시작하지 않은 리그인 경우
+     */
+    public TradingSchedule tradingSchedule() {
+        if (startedAt == null) {
+            throw new IllegalStateException("시작하지 않은 리그입니다. id=" + id);
+        }
+        return new TradingSchedule(startedAt);
     }
 
     /**

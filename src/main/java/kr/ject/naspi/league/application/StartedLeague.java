@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
  *
  * @param leagueId 리그 ID
  * @param startedAt 시작 일시 (KST)
+ * @param endsAt 종료 일시 (KST). 시작의 KST 날짜 + 7일, 09:00이며 바뀌지 않는다.
  */
-public record StartedLeague(long leagueId, LocalDateTime startedAt) {
+public record StartedLeague(long leagueId, LocalDateTime startedAt, LocalDateTime endsAt) {
 }

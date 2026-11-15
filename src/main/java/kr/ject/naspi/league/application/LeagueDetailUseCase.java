@@ -26,7 +26,8 @@ public class LeagueDetailUseCase {
     private final StockQueryService stockQueryService;
 
     /**
-     * 리그 플레이어 목록과 각 참여자의 종목, 리그 시작 가능 여부를 조회한다. 해당 리그에 입장한 회원만 조회할 수 있다.
+     * 리그 플레이어 목록과 각 참여자의 종목, 리그 시작 가능 여부, 시작된 리그면 현재 거래일을 조회한다. 해당 리그에
+     * 입장한 회원만 조회할 수 있다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -39,7 +40,8 @@ public class LeagueDetailUseCase {
                 .stream()
                 .collect(Collectors.toMap(LeagueStock::listerPlayerId, Function.identity()));
 
-        return new LeagueDetail(players.leagueId(), players.startable(), players.players().stream()
+        return new LeagueDetail(players.leagueId(), players.startable(), players.tradingDay(),
+                players.players().stream()
                 .map(player -> new DetailPlayer(player.playerId(), player.name(), player.host(),
                         player.listed(), player.joinedAt(), player.listedAt(),
                         toPlayerStock(stocksByLister.get(player.playerId()))))

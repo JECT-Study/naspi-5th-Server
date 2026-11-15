@@ -16,6 +16,7 @@ import kr.ject.naspi.league.domain.LeagueRepository;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
+import kr.ject.naspi.league.domain.TradingSchedule;
 import kr.ject.naspi.member.application.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -58,14 +59,15 @@ public class LeagueQueryService {
     }
 
     /**
-     * 리그 플레이어 목록과 리그 시작 가능 여부를 조회한다. 해당 리그에 입장한 회원만 조회할 수 있다.
+     * 리그 플레이어 목록과 리그 시작 가능 여부, 시작된 리그면 현재 거래일을 조회한다. 해당 리그에 입장한 회원만
+     * 조회할 수 있다.
      *
      * <p>TODO: 대기실에 있는 동안 탈퇴한 회원은 이름 없이 그대로 보여준다. 대기실 상태 탈퇴 처리(LEA-15)가
      * 정해지면 퇴장 처리 등에 맞춰 바꾼다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
-     * @return 참여일시 순 플레이어 목록과 시작 가능 여부
+     * @return 참여일시 순 플레이어 목록, 시작 가능 여부, 현재 거래일 (대기실이면 {@code null})
      * @throws NaspiBizException 리그가 없거나 (만료된 대기실 포함), 조회하는 회원이 리그에 입장하지 않은 경우
      */
     public LeaguePlayers getPlayers(long memberId, long leagueId) {
@@ -92,7 +94,27 @@ public class LeagueQueryService {
                 .toList();
         // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
         boolean startable = league.getStatus() == LeagueStatus.WAITING && League.canStart(players);
-        return new LeaguePlayers(league.getId(), startable, result);
+        return new LeaguePlayers(league.getId(), startable, tradingDayOf(league), result);
+    }
+
+    /**
+     * 시작된 리그가 지금 몇 거래일차인지 계산한다. 대기실이면 거래일이 없으므로 {@code null}이다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "리그 시작 및 운영", market.md "시장"): 거래일은 매일 09:00 KST에
+     * 1일씩 늘어나고, 00:00~09:00에 시작한 리그는 당일 09:00까지도 1일차로 표시한다.
+     *
+     * <p>TODO: 종료 시각이 지나면 결과 페이지만 열려야 한다. 리그 종료(LEA-12)가 생기기 전까지 종료 시각 이후에는
+     * 마지막 거래일(7일차)로 응답한다.
+     */
+    private LeagueTradingDay tradingDayOf(League league) {
+        if (league.getStatus() == LeagueStatus.WAITING) {
+            return null;
+        }
+        TradingSchedule schedule = league.tradingSchedule();
+        int dayNumber = schedule.dayNumberAt(LocalDateTime.now(clock));
+        return new LeagueTradingDay(dayNumber, TradingSchedule.TRADING_DAYS,
+                schedule.periods().get(dayNumber - 1).endsAt(),
+                league.getStartedAt(), league.getEndsAt());
     }
 
     /**
