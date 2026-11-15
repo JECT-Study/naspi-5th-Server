@@ -104,7 +104,7 @@
   - [X] 특정 시각의 거래일 번호 계산 (09:00 이상 ~ 다음 날 09:00 미만)
   - [X] 경계 시각(08:59:59, 09:00:00) 테스트
 - 결정: 새벽(00:00~09:00) 시작 구간은 별도 거래일이 아니라 1일차에 포함한다. 따라서 거래일은 언제 시작하든 1~7일차다 (정책서 "8거래일" → "7거래일", ERD `trading_day.일차` 1~8 → 1~7). 종료 시각은 리그 시작 시 `league.ends_at`에 확정하고, 1~7일차 `trading_day` 행도 시작 시 한 번에 만든다.
-- 비고: 계산은 `TradingSchedule`(`League.tradingSchedule()`)이 맡는다. 현재 거래일차와 종료 시각은 리그 상세 조회(`GET /api/leagues/{leagueId}/detail`)의 `tradingDay`로 내려준다 (대기실이면 `null`) (리그 시작 응답에도 `endsAt` 포함). 종료 시각 이후 접근 차단은 LEA-12에서 처리하며, 그 전까지는 7일차로 응답한다.
+- 비고: 계산은 `TradingSchedule`(`League.tradingSchedule()`)이 맡는다. 현재 거래일차와 종료 시각은 리그 상세 조회(`GET /api/leagues/{leagueId}/detail`)의 `tradingDay`로 내려주며 대기실이면 `null`이다. 리그 시작 응답에도 `endsAt`을 포함한다. 종료 시각 이후 접근 차단은 LEA-12에서 처리하며, 그 전까지는 7일차로 응답한다.
 
 ### LEA-11 진행 중인 리그는 매일 09:00 KST에 다음 거래일로 전환된다
 - Jira:
