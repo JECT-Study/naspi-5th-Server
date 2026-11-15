@@ -20,6 +20,8 @@
   - [ ] 자산 예약 실패 시 거절
   - [ ] 접수 직후 매칭(ORD-03), 미체결 잔량은 대기 주문으로 유지
   - [ ] 09:00 정각 이후 접수 주문은 새 거래일 주문
+- 진행: 리그 거래 락·거래 가능 상태 확인(`LeagueTradingService.lockForTrading`, 시작 상태만 거래 가능)과 `TradeExecuted` 이벤트 클래스를 만들었다. 접수 서비스는 상위 모듈(league, market, asset)의 Service만 호출한다.
+- TODO: 거래일 계산(league 소관)과 거래일별 기준가(MKT-06)가 아직 없어 접수 서비스는 임시 값으로 받는다. league·market에 생기면 교체한다.
 
 ### ORD-03 접수된 주문은 가격·시간 우선 원칙에 따라 상대 주문과 체결된다
 - Jira: ND-36, ND-74

@@ -1,7 +1,7 @@
 package kr.ject.naspi.order.domain;
 
 /**
- * 주문 유형 (docs/policies/v1/domain/order.md "주문").
+ * 주문 유형.
  */
 public enum OrderType {
 

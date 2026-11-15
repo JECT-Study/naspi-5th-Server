@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 신규 주문을 호가창의 상대 주문과 매칭한다 (docs/policies/v1/domain/order.md "체결").
+ * 신규 주문을 호가창의 상대 주문과 매칭한다.
  *
  * <ul>
  *   <li>체결 조건: 매수 가격이 매도 가격 이상이면 체결한다.</li>
