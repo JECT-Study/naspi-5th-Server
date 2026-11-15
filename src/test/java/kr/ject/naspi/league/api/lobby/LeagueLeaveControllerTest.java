@@ -1,4 +1,4 @@
-package kr.ject.naspi.league.api.start;
+package kr.ject.naspi.league.api.lobby;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -9,14 +9,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.SecurityConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.league.application.LeagueStartUseCase;
-import kr.ject.naspi.league.application.StartedLeague;
+import kr.ject.naspi.league.application.LeagueLeaveUseCase;
+import kr.ject.naspi.league.application.LeftLeague;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,9 +30,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @ActiveProfiles("test")
-@WebMvcTest(LeagueStartController.class)
+@WebMvcTest(LeagueLeaveController.class)
 @Import(SecurityConfig.class)
-class LeagueStartControllerTest {
+class LeagueLeaveControllerTest {
 
     private static final long MEMBER_ID = 7L;
 
@@ -41,44 +40,42 @@ class LeagueStartControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private LeagueStartUseCase leagueStartUseCase;
+    private LeagueLeaveUseCase leagueLeaveUseCase;
 
     @MockitoBean
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
 
     @Test
-    @DisplayName("방장은 리그를 시작하고 시작 일시와 종료 일시를 받는다")
-    void start() throws Exception {
-        given(leagueStartUseCase.start(MEMBER_ID, 3L)).willReturn(new StartedLeague(3L,
-                LocalDateTime.of(2026, 11, 13, 21, 0), LocalDateTime.of(2026, 11, 20, 9, 0)));
+    @DisplayName("플레이어는 리그가 시작되기 전에 대기실을 나갈 수 있다")
+    void leave() throws Exception {
+        given(leagueLeaveUseCase.leave(MEMBER_ID, 3L)).willReturn(new LeftLeague(3L, false));
 
-        mockMvc.perform(post("/api/leagues/3/start").with(loginMember()))
+        mockMvc.perform(post("/api/leagues/3/leave").with(loginMember()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
                 .andExpect(jsonPath("$.data.leagueId").value(3))
-                .andExpect(jsonPath("$.data.startedAt").value("2026-11-13T21:00:00"))
-                .andExpect(jsonPath("$.data.endsAt").value("2026-11-20T09:00:00"));
+                .andExpect(jsonPath("$.data.waitingRoomDeleted").value(false));
     }
 
     @Test
-    @DisplayName("방장이 아니면 시작 실패 코드로 응답한다")
-    void startByNonHost() throws Exception {
-        given(leagueStartUseCase.start(MEMBER_ID, 3L))
-                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_HOST_ONLY));
+    @DisplayName("리그가 시작된 이후에는 나갈 수 없다")
+    void leaveAfterStart() throws Exception {
+        given(leagueLeaveUseCase.leave(MEMBER_ID, 3L))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_STARTED));
 
-        mockMvc.perform(post("/api/leagues/3/start").with(loginMember()))
+        mockMvc.perform(post("/api/leagues/3/leave").with(loginMember()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("207"));
+                .andExpect(jsonPath("$.code").value("208"));
     }
 
     @Test
-    @DisplayName("로그인하지 않으면 리그를 시작할 수 없다")
-    void startWithoutLogin() throws Exception {
-        mockMvc.perform(post("/api/leagues/3/start"))
+    @DisplayName("로그인하지 않으면 리그를 나갈 수 없다")
+    void leaveWithoutLogin() throws Exception {
+        mockMvc.perform(post("/api/leagues/3/leave"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("003"));
 
-        then(leagueStartUseCase).should(never()).start(anyLong(), anyLong());
+        then(leagueLeaveUseCase).should(never()).leave(anyLong(), anyLong());
     }
 
     private static RequestPostProcessor loginMember() {

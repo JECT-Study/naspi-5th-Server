@@ -1,4 +1,4 @@
-package kr.ject.naspi.league.api.info;
+package kr.ject.naspi.league.api.invite;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;

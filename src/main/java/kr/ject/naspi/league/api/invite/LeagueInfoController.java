@@ -1,4 +1,4 @@
-package kr.ject.naspi.league.api.info;
+package kr.ject.naspi.league.api.invite;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

@@ -1,4 +1,4 @@
-package kr.ject.naspi.league.api.join;
+package kr.ject.naspi.league.api.invite;
 
 /**
  * 대기실 입장 결과.
