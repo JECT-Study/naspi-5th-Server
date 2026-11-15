@@ -37,6 +37,8 @@
   - 락 순서는 리그 락 → asset 락(예약·정산)으로 고정한다
   - 리그 단위인 이유: 호가창은 종목별이지만 현금은 플레이어 단위라 종목별로 쪼개면 asset 락과 데드락 위험이 생긴다
   - league 행 락은 league 모듈이 메서드로 노출한다 (order가 league 하위 모듈이므로 Service 호출 가능)
+- 결정: `TradeExecuted`는 `order/application`에 두고 order가 발행한다. market은 이 이벤트를 `market/application`의 UseCase로 구독한다 (UseCase는 하위 모듈 참조 가능). README 이벤트 표(order 발행, market·websocket 구독)와 같다.
+- 리뷰 포인트: market UseCase가 order의 이벤트 클래스를 import하므로 order → market(서비스 호출)과 market → order(이벤트) 패키지 순환이 생긴다. 대안은 order가 체결 후 market 서비스를 직접 호출하는 방식(순환 없음, 문서의 market 구독 설명 수정 필요)이다. 팀 리뷰에서 확정한다.
 
 ### ORD-04 같은 참여자의 매수·매도 주문끼리는 체결되지 않는다
 - Jira: ND-37
