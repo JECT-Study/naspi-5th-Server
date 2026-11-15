@@ -19,7 +19,7 @@ import java.util.Objects;
  *
  * <p>손익 (docs/policies/v1/domain/asset.md "자산 조회"):
  * <ul>
- *   <li>{@code 평균 매입가 = 매입 금액 ÷ 보유 수량}, 소수점 둘째 자리까지 반올림 (표시용)</li>
+ *   <li>{@code 평균 매입가 = 매입 금액 ÷ 보유 수량}, 원 미만 절사 (표시용)</li>
  *   <li>{@code 평가 손익 = 평가 금액 - 매입 금액}</li>
  *   <li>{@code 수익률(%) = 평가 손익 ÷ 매입 금액 × 100}, 소수점 첫째 자리까지 반올림.
  *       음수는 절댓값 기준으로 반올림한다 (-12.35% → -12.4%)</li>
@@ -53,9 +53,6 @@ public record AssetValuation(
 
     /** 수익률 소수점 자릿수. */
     static final int RETURN_RATE_SCALE = 1;
-
-    /** 평균 매입가 소수점 자릿수. */
-    static final int AVERAGE_PRICE_SCALE = 2;
 
     /**
      * 목록을 복사해 변경할 수 없게 만든다.
@@ -121,18 +118,20 @@ public record AssetValuation(
     }
 
     /**
-     * 평균 매입가를 계산한다. 소수점 셋째 자리에서 반올림해 둘째 자리까지 남긴다.
+     * 평균 매입가를 계산한다. 원 미만은 절사한다.
+     *
+     * <p>매입 금액과 보유 수량은 음수가 아니므로 정수 나눗셈이 곧 절사다. 매도 후 매입 금액을 원 미만 절사해도
+     * {@code ⌊⌊a⌋ ÷ n⌋ = ⌊a ÷ n⌋}이라 원 단위 평균 매입가는 매도 전과 같다.
      *
      * @param purchaseAmount 매입 금액
      * @param quantity 보유 수량
-     * @return 1주당 평균 매입가. 보유 수량이 0이면 0.00
+     * @return 1주당 평균 매입가 (원). 보유 수량이 0이면 0
      */
-    static BigDecimal averagePrice(long purchaseAmount, long quantity) {
+    static long averagePrice(long purchaseAmount, long quantity) {
         if (quantity == 0) {
-            return BigDecimal.ZERO.setScale(AVERAGE_PRICE_SCALE);
+            return 0;
         }
-        return BigDecimal.valueOf(purchaseAmount)
-                .divide(BigDecimal.valueOf(quantity), AVERAGE_PRICE_SCALE, RoundingMode.HALF_UP);
+        return purchaseAmount / quantity;
     }
 
     private static void validateOwner(Account account, Holding holding) {
@@ -162,7 +161,7 @@ public record AssetValuation(
      * @param evaluationPrice 평가 가격 (1주당 원)
      * @param valuation 평가액 ({@code 보유 수량 × 평가 가격})
      * @param purchaseAmount 매입 금액 (이동평균법)
-     * @param averagePrice 평균 매입가 ({@code 매입 금액 ÷ 보유 수량}). 소수점 둘째 자리까지
+     * @param averagePrice 평균 매입가 ({@code 매입 금액 ÷ 보유 수량}, 원 미만 절사)
      * @param profit 평가 손익 ({@code 평가액 - 매입 금액})
      * @param returnRate 수익률(%). 소수점 첫째 자리까지
      */
@@ -175,7 +174,7 @@ public record AssetValuation(
             long evaluationPrice,
             long valuation,
             long purchaseAmount,
-            BigDecimal averagePrice,
+            long averagePrice,
             long profit,
             BigDecimal returnRate) {
 

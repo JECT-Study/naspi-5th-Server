@@ -173,7 +173,7 @@ class AssetValuationTest {
 
         // 200 × 10,000 - 2,200,000 = -200,000 → -200,000 ÷ 2,200,000 × 100 = -9.09...
         HoldingValuation result = valuation.holdings().getFirst();
-        assertThat(result.averagePrice()).isEqualTo(new BigDecimal("11000.00"));
+        assertThat(result.averagePrice()).isEqualTo(11_000);
         assertThat(result.profit()).isEqualTo(-200_000);
         assertThat(result.returnRate()).isEqualTo(new BigDecimal("-9.1"));
     }
@@ -183,23 +183,37 @@ class AssetValuationTest {
     void initialAveragePrice() {
         AssetValuation valuation = evaluate(holding(OTHER_STOCK_ID, 1_250, 0));
 
-        assertThat(valuation.holdings().getFirst().averagePrice())
-                .isEqualTo(new BigDecimal("10000.00"));
+        assertThat(valuation.holdings().getFirst().averagePrice()).isEqualTo(10_000);
     }
 
     @ParameterizedTest(name = "매입 금액 {0}원 ÷ 보유 수량 {1}주 → 평균 매입가 {2}원")
     @CsvSource({
-        "2200000, 200, 11000.00",
-        "1000000, 3, 333333.33",
-        "2000000, 3, 666666.67",
-        "100001, 8, 12500.13",
-        "100004, 8, 12500.50",
-        "0, 0, 0.00",
+        "2200000, 200, 11000",
+        "1000000, 3, 333333",
+        "2000000, 3, 666666",
+        "100007, 8, 12500",
+        "0, 0, 0",
     })
-    @DisplayName("평균 매입가는 매입 금액 ÷ 보유 수량이고, 소수점 셋째 자리에서 반올림해 둘째 자리까지 표시한다")
-    void averagePriceRounding(long purchaseAmount, long quantity, String expected) {
-        assertThat(AssetValuation.averagePrice(purchaseAmount, quantity))
-                .isEqualTo(new BigDecimal(expected));
+    @DisplayName("평균 매입가는 매입 금액 ÷ 보유 수량이고, 원 미만은 절사한다")
+    void averagePriceFloor(long purchaseAmount, long quantity, long expected) {
+        assertThat(AssetValuation.averagePrice(purchaseAmount, quantity)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "매입 금액 {0}원, {1}주 중 {2}주 매도 → 평균 매입가 유지")
+    @CsvSource({
+        "1000000, 3, 1",
+        "2200000, 200, 50",
+        "100007, 8, 3",
+        "20001, 20, 19",
+        "12345679, 997, 500",
+    })
+    @DisplayName("매도는 평균 매입가를 바꾸지 않는다 (매도 후 매입 금액 = 기존 매입 금액 × 매도 후 수량 ÷ 매도 전 수량, 원 미만 절사)")
+    void sellKeepsAveragePrice(long purchaseAmount, long quantity, long soldQuantity) {
+        long remaining = quantity - soldQuantity;
+        long purchaseAmountAfterSell = purchaseAmount * remaining / quantity;
+
+        assertThat(AssetValuation.averagePrice(purchaseAmountAfterSell, remaining))
+                .isEqualTo(AssetValuation.averagePrice(purchaseAmount, quantity));
     }
 
     @ParameterizedTest(name = "현금 {0}원, 평가 금액 {1}원 → 총자산 평가 손익 {2}원")
