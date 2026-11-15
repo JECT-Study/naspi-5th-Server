@@ -201,14 +201,9 @@ public class League {
      *         ({@code LEAGUE_ALREADY_STARTED})
      */
     public boolean leave(Player leaver, Collection<Player> players, LocalDateTime now) {
-        if (isUnavailable(now)) {
-            throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
-        }
         // 리그 시작 이후에는 나갈 수 없다.
-        if (status != LeagueStatus.WAITING) {
-            throw new NaspiBizException(ErrorCode.LEAGUE_ALREADY_STARTED);
-        }
-        if (!leaver.getId().equals(hostPlayerId)) {
+        requireWaitingRoom(now);
+        if (!isHost(leaver)) {
             return false;
         }
 
@@ -222,10 +217,85 @@ public class League {
             return false;
         }
         // 만약 위임할 다른 플레이어가 없는 경우 리그 삭제
+        markDeleted();
+        return true;
+    }
+
+    /**
+     * 플레이어가 이 리그의 방장인지 확인한다.
+     *
+     * @param player 확인할 플레이어
+     * @return 방장이면 true
+     */
+    public boolean isHost(Player player) {
+        return player.getId().equals(hostPlayerId);
+    }
+
+    /**
+     * 방장이 리그 이름을 바꾼다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 리그 이름 수정은 대기실의 방장만 할 수 있다.
+     * 방장인지는 호출하는 쪽에서 먼저 확인한다.
+     *
+     * @param newName 새 리그 이름
+     * @param now 현재 일시
+     * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그인 경우
+     *         ({@code LEAGUE_ALREADY_STARTED})
+     */
+    public void rename(LeagueName newName, LocalDateTime now) {
+        requireWaitingRoom(now);
+        this.name = Objects.requireNonNull(newName, "newName");
+    }
+
+    /**
+     * 방장이 대기실을 삭제한다. 삭제된 대기실은 아무도 접근할 수 없고, 초대 코드는 폐기되어 다른 리그에 다시 발급될 수 있다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 리그 삭제는 대기실의 방장만 할 수 있다.
+     * 방장인지는 호출하는 쪽에서 먼저 확인한다.
+     *
+     * @param now 현재 일시
+     * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그인 경우
+     *         ({@code LEAGUE_ALREADY_STARTED})
+     */
+    public void delete(LocalDateTime now) {
+        requireWaitingRoom(now);
+        markDeleted();
+    }
+
+    /**
+     * 방장이 대기실에서 다른 플레이어(참여자 또는 대기자)를 추방할 수 있는지 확인한다.
+     * 플레이어 행과 종목을 지우는 일은 호출하는 쪽이 맡는다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 참여자 추방은 대기실의 방장만 할 수 있다.
+     * 상장 전인 대기자도 추방할 수 있고, 방장 자신은 추방할 수 없다 (방장은 대기실 나가기를 쓴다).
+     * 방장인지는 호출하는 쪽에서 먼저 확인한다.
+     *
+     * @param target 추방할 플레이어
+     * @param now 현재 일시
+     * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그이거나
+     *         ({@code LEAGUE_ALREADY_STARTED}), 방장 자신을 추방하려는 경우({@code LEAGUE_HOST_NOT_KICKABLE})
+     */
+    public void kick(Player target, LocalDateTime now) {
+        requireWaitingRoom(now);
+        if (isHost(target)) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_HOST_NOT_KICKABLE);
+        }
+    }
+
+    /** 방장·참여자 권한이 나뉘는 대기실 상태인지 확인한다. 시작 이후에는 모두 같은 권한이다. */
+    private void requireWaitingRoom(LocalDateTime now) {
+        if (isUnavailable(now)) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
+        }
+        if (status != LeagueStatus.WAITING) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_ALREADY_STARTED);
+        }
+    }
+
+    private void markDeleted() {
         this.status = LeagueStatus.DELETED;
         this.hostPlayerId = null;
         closeInvitation();
-        return true;
     }
 
     /**
