@@ -1,4 +1,4 @@
-package kr.ject.naspi.league.api.info;
+package kr.ject.naspi.league.api.invite;
 
 /**
  * 리그 간단 정보.

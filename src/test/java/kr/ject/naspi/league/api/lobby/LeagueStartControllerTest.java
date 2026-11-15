@@ -1,7 +1,6 @@
-package kr.ject.naspi.league.api.join;
+package kr.ject.naspi.league.api.lobby;
 
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -10,19 +9,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.SecurityConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.league.application.JoinedLeague;
-import kr.ject.naspi.league.application.LeagueService;
+import kr.ject.naspi.league.application.LeagueStartUseCase;
+import kr.ject.naspi.league.application.StartedLeague;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -32,9 +31,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @ActiveProfiles("test")
-@WebMvcTest(LeagueJoinController.class)
+@WebMvcTest(LeagueStartController.class)
 @Import(SecurityConfig.class)
-class LeagueJoinControllerTest {
+class LeagueStartControllerTest {
 
     private static final long MEMBER_ID = 7L;
 
@@ -42,62 +41,43 @@ class LeagueJoinControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private LeagueService leagueService;
+    private LeagueStartUseCase leagueStartUseCase;
 
     @MockitoBean
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
 
     @Test
-    @DisplayName("로그인한 회원은 초대 코드로 대기실에 입장할 수 있다")
-    void join() throws Exception {
-        given(leagueService.join(MEMBER_ID, "A1B2C3D")).willReturn(new JoinedLeague(3L, 9L));
+    @DisplayName("방장은 리그를 시작하고 시작 일시를 받는다")
+    void start() throws Exception {
+        given(leagueStartUseCase.start(MEMBER_ID, 3L)).willReturn(
+                new StartedLeague(3L, LocalDateTime.of(2026, 11, 13, 21, 0)));
 
-        mockMvc.perform(post("/api/leagues/join")
-                        .with(loginMember())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"inviteCode\": \"A1B2C3D\"}"))
+        mockMvc.perform(post("/api/leagues/3/start").with(loginMember()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
-                .andExpect(jsonPath("$.data.leagueId").value(3));
+                .andExpect(jsonPath("$.data.leagueId").value(3))
+                .andExpect(jsonPath("$.data.startedAt").value("2026-11-13T21:00:00"));
     }
 
     @Test
-    @DisplayName("유효하지 않은 초대 코드면 입장 실패 코드로 응답한다")
-    void joinWithInvalidCode() throws Exception {
-        given(leagueService.join(MEMBER_ID, "ZZZZZZZ"))
-                .willThrow(new NaspiBizException(ErrorCode.INVITE_CODE_NOT_FOUND));
+    @DisplayName("방장이 아니면 시작 실패 코드로 응답한다")
+    void startByNonHost() throws Exception {
+        given(leagueStartUseCase.start(MEMBER_ID, 3L))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_HOST_ONLY));
 
-        mockMvc.perform(post("/api/leagues/join")
-                        .with(loginMember())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"inviteCode\": \"ZZZZZZZ\"}"))
+        mockMvc.perform(post("/api/leagues/3/start").with(loginMember()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("201"));
+                .andExpect(jsonPath("$.code").value("207"));
     }
 
     @Test
-    @DisplayName("초대 코드를 입력하지 않으면 입장할 수 없다")
-    void joinWithoutCode() throws Exception {
-        mockMvc.perform(post("/api/leagues/join")
-                        .with(loginMember())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"inviteCode\": \" \"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("002"));
-
-        then(leagueService).should(never()).join(anyLong(), anyString());
-    }
-
-    @Test
-    @DisplayName("로그인하지 않으면 대기실에 입장할 수 없다")
-    void joinWithoutLogin() throws Exception {
-        mockMvc.perform(post("/api/leagues/join")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"inviteCode\": \"A1B2C3D\"}"))
+    @DisplayName("로그인하지 않으면 리그를 시작할 수 없다")
+    void startWithoutLogin() throws Exception {
+        mockMvc.perform(post("/api/leagues/3/start"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("003"));
 
-        then(leagueService).should(never()).join(anyLong(), anyString());
+        then(leagueStartUseCase).should(never()).start(anyLong(), anyLong());
     }
 
     private static RequestPostProcessor loginMember() {
