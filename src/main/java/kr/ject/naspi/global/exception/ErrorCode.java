@@ -146,7 +146,10 @@ public enum ErrorCode {
     INVALID_ORDER_QUANTITY("501", "주문 수량은 1주 이상이어야 합니다."),
 
     /** 이미 종료된 주문처럼 허용되지 않는 상태로 바꾸려는 경우. */
-    INVALID_ORDER_STATUS_TRANSITION("502", "처리할 수 없는 주문 상태입니다.");
+    INVALID_ORDER_STATUS_TRANSITION("502", "처리할 수 없는 주문 상태입니다."),
+
+    /** 주문 가격이 당일 상·하한가 범위를 벗어난 경우. */
+    ORDER_PRICE_OUT_OF_LIMIT("503", "주문 가격이 당일 상·하한가 범위를 벗어났습니다.");
 
     private final String code;
     private final String message;

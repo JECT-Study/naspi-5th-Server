@@ -1,5 +1,7 @@
 package kr.ject.naspi.order.domain;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -38,6 +40,16 @@ public enum OrderStatus {
      */
     public boolean isOpen() {
         return this == PENDING || this == PARTIALLY_FILLED;
+    }
+
+    /**
+     * 체결 대기 중인 상태 목록. {@link #isOpen()}이 {@code true}인 상태 전부이며, 호가창 조회처럼 열린 주문을
+     * 고르는 곳에서 쓴다.
+     *
+     * @return 체결 대기 중인 상태 목록
+     */
+    public static List<OrderStatus> openStatuses() {
+        return Arrays.stream(values()).filter(OrderStatus::isOpen).toList();
     }
 
     /**
