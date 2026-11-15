@@ -21,8 +21,8 @@
   - [X] 접수 직후 매칭(ORD-03), 미체결 잔량은 대기 주문으로 유지
   - [ ] 09:00 정각 이후 접수 주문은 새 거래일 주문
 - 진행: `LimitOrderService.placeLimitOrder`(리그 락 → 상·하한가 → 예약 → 호가창 조회 → 저장 → 매칭 → 체결마다 정산·`TradeExecuted` 발행)를 구현했다. 매칭 직후 정산과 이벤트 발행, 자전거래 취소 시 예약 해제까지 이 서비스가 처리한다. 리그 락·거래 가능 상태 확인(`LeagueTradingService.lockForTrading`, 시작 상태만 거래 가능)과 `TradeExecuted` 이벤트 클래스를 만들었다. 접수 서비스는 상위 모듈(league, market, asset)의 Service만 호출한다.
-- TODO: 거래일 계산(league 소관)과 거래일별 기준가(MKT-06)가 아직 없어 접수 서비스는 `tradingDay`·`basePrice`를 인자로 받는다. league·market에 생기면 서비스가 직접 조회하도록 교체한다. 이 값 없이는 Controller가 만들 수 없어 API는 아직 없다.
-- TODO (Controller 작성 시): `basePrice`·`tradingDay`는 클라이언트가 정하지 못하게 서버가 계산한다. `playerId`는 요청자가 아니라 로그인 회원 본인의 플레이어(해당 리그의 상장을 마친 참여자)인지 확인해서 넘긴다. 서비스는 `playerId`를 믿고 쓰므로 본인 확인은 api 계층 책임이다.
+- 진행 (API): `POST /api/leagues/{leagueId}/orders/limit`(`LimitOrderController`)를 만들었다. `OrderPlacementService`가 로그인 회원의 플레이어를 `LeagueQueryService.findPlayerId`로 직접 찾아(리그에 입장하지 않은 회원은 `FORBIDDEN`) `LimitOrderService`에 넘기므로, 요청 본문의 플레이어·회원 ID는 쓰지 않는다.
+- TODO (임시 값, 운영 배포 전 제거): 거래일 계산(league 소관)과 거래일별 기준가(MKT-06)가 아직 없어 `OrderPlacementService`가 모든 주문을 **1일차, 기준가 시초가 10,000원**으로 처리한다. 그래서 2일차 이후에는 정책과 다르게 동작한다(거래일 표시, 상·하한가). league·market에 생기면 `OrderPlacementService`가 직접 조회하도록 교체하고, 위 "09:00 이후 새 거래일" 조건도 이때 함께 닫는다. `LimitOrderService`의 `tradingDay`·`basePrice` 인자도 이때 없앨 수 있는지 다시 본다.
 
 ### ORD-03 접수된 주문은 가격·시간 우선 원칙에 따라 상대 주문과 체결된다
 - Jira: ND-36, ND-74
