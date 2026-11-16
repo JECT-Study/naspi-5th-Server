@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueStatus;
+import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
@@ -60,11 +62,54 @@ class LeagueStartUseCaseTest {
         StartedLeague started = useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId());
 
         LocalDateTime now = LocalDateTime.now(clock);
-        assertThat(started).isEqualTo(new StartedLeague(created.leagueId(), now));
+        LocalDateTime endsAt = now.toLocalDate().plusDays(7).atTime(9, 0);
+        assertThat(started).isEqualTo(new StartedLeague(created.leagueId(), now, endsAt));
         League league = entityManager.find(League.class, created.leagueId());
         assertThat(league.getStatus()).isEqualTo(LeagueStatus.STARTED);
         assertThat(league.getStartedAt()).isEqualTo(now);
+        assertThat(league.getEndsAt()).isEqualTo(endsAt);
         assertThat(league.getInviteCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("리그가 시작되면 시작 일시부터 종료 시각까지 빈틈없이 이어지는 1~7일차 거래일이 저장된다")
+    void createsTradingDays() {
+        CreatedLeague created = leagueWithParticipants(3);
+
+        useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId());
+
+        entityManager.flush();
+        entityManager.clear();
+        League league = entityManager.find(League.class, created.leagueId());
+        List<TradingDay> tradingDays = entityManager.getEntityManager()
+                .createQuery("select t from TradingDay t where t.leagueId = :leagueId"
+                        + " order by t.dayNumber", TradingDay.class)
+                .setParameter("leagueId", created.leagueId())
+                .getResultList();
+        assertThat(tradingDays).extracting(TradingDay::getDayNumber)
+                .containsExactly(1, 2, 3, 4, 5, 6, 7);
+        assertThat(tradingDays.getFirst().getStartsAt()).isEqualTo(league.getStartedAt());
+        assertThat(tradingDays.getLast().getEndsAt()).isEqualTo(league.getEndsAt());
+        for (int i = 1; i < tradingDays.size(); i++) {
+            assertThat(tradingDays.get(i).getStartsAt())
+                    .isEqualTo(tradingDays.get(i - 1).getEndsAt());
+        }
+    }
+
+    @Test
+    @DisplayName("리그를 시작하지 못하면 거래일도 저장되지 않는다")
+    void noTradingDaysWhenNotStartable() {
+        CreatedLeague created = leagueWithParticipants(2);
+
+        assertThatThrownBy(() -> useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId()))
+                .isInstanceOf(NaspiBizException.class);
+
+        Long count = entityManager.getEntityManager()
+                .createQuery("select count(t) from TradingDay t where t.leagueId = :leagueId",
+                        Long.class)
+                .setParameter("leagueId", created.leagueId())
+                .getSingleResult();
+        assertThat(count).isZero();
     }
 
     @Test

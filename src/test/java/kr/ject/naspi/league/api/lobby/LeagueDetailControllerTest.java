@@ -19,6 +19,7 @@ import kr.ject.naspi.league.application.LeagueDetail;
 import kr.ject.naspi.league.application.LeagueDetail.DetailPlayer;
 import kr.ject.naspi.league.application.LeagueDetail.PlayerStock;
 import kr.ject.naspi.league.application.LeagueDetailUseCase;
+import kr.ject.naspi.league.application.LeagueTradingDay;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,7 +54,7 @@ class LeagueDetailControllerTest {
     @DisplayName("리그 플레이어는 플레이어 목록과 각 참여자의 종목, 리그 시작 가능 여부를 조회할 수 있다")
     void getDetail() throws Exception {
         given(leagueDetailUseCase.getDetail(MEMBER_ID, 3L)).willReturn(new LeagueDetail(3L, false,
-                List.of(new DetailPlayer(9L, "방장", true, true, NOW, NOW,
+                null, List.of(new DetailPlayer(9L, "방장", true, true, NOW, NOW,
                                 new PlayerStock(11L, "나스피", "소개")),
                         new DetailPlayer(10L, "손님", false, false, NOW, null, null))));
 
@@ -61,12 +62,32 @@ class LeagueDetailControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
                 .andExpect(jsonPath("$.data.startable").value(false))
+                .andExpect(jsonPath("$.data.tradingDay").isEmpty())
                 .andExpect(jsonPath("$.data.players[0].host").value(true))
                 .andExpect(jsonPath("$.data.players[0].listed").value(true))
                 .andExpect(jsonPath("$.data.players[0].stock.name").value("나스피"))
                 .andExpect(jsonPath("$.data.players[1].name").value("손님"))
                 .andExpect(jsonPath("$.data.players[1].listed").value(false))
                 .andExpect(jsonPath("$.data.players[1].stock").isEmpty());
+    }
+
+    @Test
+    @DisplayName("시작된 리그는 현재 거래일차와 리그 종료 일시를 함께 조회할 수 있다")
+    void getDetailOfStartedLeague() throws Exception {
+        LeagueTradingDay tradingDay = new LeagueTradingDay(2, 7,
+                LocalDateTime.of(2026, 11, 18, 9, 0), LocalDateTime.of(2026, 11, 16, 15, 0),
+                LocalDateTime.of(2026, 11, 23, 9, 0));
+        given(leagueDetailUseCase.getDetail(MEMBER_ID, 3L)).willReturn(new LeagueDetail(3L, false,
+                tradingDay, List.of(new DetailPlayer(9L, "방장", true, true, NOW, NOW,
+                        new PlayerStock(11L, "나스피", "소개")))));
+
+        mockMvc.perform(get("/api/leagues/3/detail").with(loginMember()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.tradingDay.dayNumber").value(2))
+                .andExpect(jsonPath("$.data.tradingDay.totalDays").value(7))
+                .andExpect(jsonPath("$.data.tradingDay.dayEndsAt").value("2026-11-18T09:00:00"))
+                .andExpect(jsonPath("$.data.tradingDay.startedAt").value("2026-11-16T15:00:00"))
+                .andExpect(jsonPath("$.data.tradingDay.endsAt").value("2026-11-23T09:00:00"));
     }
 
     @Test

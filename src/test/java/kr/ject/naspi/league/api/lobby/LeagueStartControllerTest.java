@@ -47,16 +47,17 @@ class LeagueStartControllerTest {
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
 
     @Test
-    @DisplayName("방장은 리그를 시작하고 시작 일시를 받는다")
+    @DisplayName("방장은 리그를 시작하고 시작 일시와 종료 일시를 받는다")
     void start() throws Exception {
-        given(leagueStartUseCase.start(MEMBER_ID, 3L)).willReturn(
-                new StartedLeague(3L, LocalDateTime.of(2026, 11, 13, 21, 0)));
+        given(leagueStartUseCase.start(MEMBER_ID, 3L)).willReturn(new StartedLeague(3L,
+                LocalDateTime.of(2026, 11, 13, 21, 0), LocalDateTime.of(2026, 11, 20, 9, 0)));
 
         mockMvc.perform(post("/api/leagues/3/start").with(loginMember()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
                 .andExpect(jsonPath("$.data.leagueId").value(3))
-                .andExpect(jsonPath("$.data.startedAt").value("2026-11-13T21:00:00"));
+                .andExpect(jsonPath("$.data.startedAt").value("2026-11-13T21:00:00"))
+                .andExpect(jsonPath("$.data.endsAt").value("2026-11-20T09:00:00"));
     }
 
     @Test

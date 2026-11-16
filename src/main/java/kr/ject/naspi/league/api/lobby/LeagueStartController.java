@@ -46,7 +46,9 @@ public class LeagueStartController {
                     - 로그인 세션 쿠키가 필요하다. \
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
 
-                    **성공 시** HTTP 200, `code` `"000"`, `data.leagueId`·`data.startedAt`(KST).
+                    **성공 시** HTTP 200, `code` `"000"`, `data.leagueId`·`data.startedAt`(KST)·\
+                    `data.endsAt`(KST). \
+                    종료 일시는 시작의 KST 날짜 + 7일, 09:00이며 바뀌지 않는다.
 
                     **실패 응답** (`code`는 3자리 문자열)
 

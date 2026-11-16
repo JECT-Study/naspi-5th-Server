@@ -12,6 +12,8 @@ import kr.ject.naspi.league.domain.LeagueRepository;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
+import kr.ject.naspi.league.domain.TradingDay;
+import kr.ject.naspi.league.domain.TradingDayRepository;
 import kr.ject.naspi.market.application.StockQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -23,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>정책 (docs/policies/v1/domain/league.md "리그 시작 및 운영"): 방장 포함 3명 이상의 참여자가 상장을 마치고
  * 대기자가 없으면 방장이 리그를 시작할 수 있다. 시작 권한은 방장에게만 있고, 시작 이후에는 새로 입장할 수 없다.
- * 모든 참여자의 자산 배분이 끝난 같은 시장 상태에서 거래를 시작한다.
+ * 모든 참여자의 자산 배분이 끝난 같은 시장 상태에서 거래를 시작한다. 시작 시각으로 종료 시각과 1~7일차 거래일을
+ * 확정해 저장한다.
  *
  * <p>시작 이벤트에 상장 종목 목록을 실어야 하는데 종목은 하위 모듈인 market이 관리하므로,
  * UseCase로 만들어 market의 종목 조회 서비스를 쓴다.
@@ -34,6 +37,7 @@ public class LeagueStartUseCase {
 
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
+    private final TradingDayRepository tradingDayRepository;
     private final StockQueryService stockQueryService;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
@@ -76,11 +80,12 @@ public class LeagueStartUseCase {
         }
 
         league.start(players, now);
+        tradingDayRepository.saveAll(TradingDay.of(leagueId, league.tradingSchedule()));
         // TODO: 이벤트 대신 UseCase에서 초기 자산 배분을 직접 호출한다. UseCase는 하위 모듈(asset)을 참조할 수
         //       있으므로 InitialAssetAllocationService.allocate()를 같은 트랜잭션에서 부르면 된다.
         //       바꾸면 LeagueStarted 이벤트와 asset의 LeagueStartedListener를 정리한다 (asset 작업과 맞춰 진행).
         eventPublisher.publishEvent(new LeagueStarted(leagueId, listedStocks(leagueId)));
-        return new StartedLeague(leagueId, league.getStartedAt());
+        return new StartedLeague(leagueId, league.getStartedAt(), league.getEndsAt());
     }
 
     private List<ListedStock> listedStocks(long leagueId) {

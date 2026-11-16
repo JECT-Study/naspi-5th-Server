@@ -24,7 +24,7 @@ public class LeagueDetailController {
     private final LeagueDetailUseCase leagueDetailUseCase;
 
     /**
-     * 리그 플레이어 목록과 각 참여자의 종목, 리그 시작 가능 여부를 조회한다.
+     * 리그 플레이어 목록과 각 참여자의 종목, 리그 시작 가능 여부, 현재 거래일을 조회한다.
      *
      * @param loginMember 로그인한 회원
      * @param leagueId 리그 ID
@@ -35,7 +35,8 @@ public class LeagueDetailController {
             summary = "리그 상세 조회",
             description = """
                     리그에 입장한 사용자(방장·참여자·대기자) 목록과 각 참여자의 종목, \
-                    리그 시작 가능 여부를 조회한다. 해당 리그에 입장한 회원만 조회할 수 있다.
+                    리그 시작 가능 여부, 시작된 리그면 현재 거래일과 종료 일시를 조회한다. \
+                    해당 리그에 입장한 회원만 조회할 수 있다.
 
                     **요청**
                     - 로그인 세션 쿠키가 필요하다. \
@@ -43,6 +44,12 @@ public class LeagueDetailController {
 
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 다음 값.
                     - `startable`: 리그 시작 가능 여부 (참여자 3명 이상, 대기자 0명)
+                    - `tradingDay`: 현재 거래일과 리그 운영 기간 (KST). 대기실이면 `null`
+                      - `dayNumber`: 현재 거래일차 (1~7). 매일 09:00에 1씩 늘고, \
+                    00:00~09:00에 시작한 리그는 당일 09:00까지도 1일차
+                      - `totalDays`: 전체 거래일 수 (7)
+                      - `dayEndsAt`: 현재 거래일이 끝나는 일시 (다음 09:00, 7일차는 `endsAt`과 같음)
+                      - `startedAt`·`endsAt`: 리그 시작·종료 일시
                     - `players`: 참여일시 순 목록
                       - `host`: 방장 여부, `listed`: 상장 완료 여부 (true 참여자, false 대기자)
                       - `joinedAt`·`listedAt`: 참여일시·상장일시 (KST), 대기자는 `listedAt`이 `null`

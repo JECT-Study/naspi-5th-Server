@@ -3,6 +3,7 @@ package kr.ject.naspi.league.application;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import kr.ject.naspi.global.config.ClockConfig;
@@ -29,6 +30,15 @@ final class MutableClock extends Clock {
      */
     void advance(Duration duration) {
         instant = instant.plus(duration);
+    }
+
+    /**
+     * 시각을 KST 일시로 맞춘다. 09:00 경계처럼 정해진 시각이 필요한 테스트에서 쓴다.
+     *
+     * @param kst 맞출 일시 (KST)
+     */
+    void setTo(LocalDateTime kst) {
+        instant = kst.atZone(ClockConfig.KST).toInstant();
     }
 
     @Override

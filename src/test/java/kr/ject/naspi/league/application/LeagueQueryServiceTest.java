@@ -209,6 +209,59 @@ class LeagueQueryServiceTest {
         assertThat(queryService.findPlayerId(outsider, league.leagueId())).isEmpty();
     }
 
+    @Test
+    @DisplayName("진행 중인 리그는 매일 09:00 KST에 거래일이 1일씩 늘어난다")
+    void tradingDayAdvancesAtNine() {
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        leagueStartUseCase.start(host, league.leagueId());
+
+        LeagueTradingDay first = queryService.getPlayers(host, league.leagueId()).tradingDay();
+        assertThat(first).isEqualTo(new LeagueTradingDay(1, 7,
+                LocalDateTime.of(2026, 11, 17, 9, 0),
+                LocalDateTime.of(2026, 11, 16, 15, 0), LocalDateTime.of(2026, 11, 23, 9, 0)));
+
+        clock.setTo(LocalDateTime.of(2026, 11, 17, 8, 59, 59));
+        assertThat(queryService.getPlayers(host, league.leagueId()).tradingDay().dayNumber())
+                .isEqualTo(1);
+
+        clock.setTo(LocalDateTime.of(2026, 11, 17, 9, 0));
+        LeagueTradingDay second = queryService.getPlayers(host, league.leagueId()).tradingDay();
+        assertThat(second.dayNumber()).isEqualTo(2);
+        assertThat(second.dayEndsAt()).isEqualTo(LocalDateTime.of(2026, 11, 18, 9, 0));
+
+        clock.setTo(LocalDateTime.of(2026, 11, 22, 9, 0));
+        LeagueTradingDay last = queryService.getPlayers(host, league.leagueId()).tradingDay();
+        assertThat(last.dayNumber()).isEqualTo(7);
+        assertThat(last.dayEndsAt()).isEqualTo(last.endsAt());
+    }
+
+    @Test
+    @DisplayName("00:00~09:00 KST에 시작한 리그는 당일 09:00까지도 1일차로 표시한다")
+    void tradingDayDawnStart() {
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 3, 0));
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        leagueStartUseCase.start(host, league.leagueId());
+
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 9, 0));
+        LeagueTradingDay tradingDay = queryService.getPlayers(host, league.leagueId()).tradingDay();
+
+        assertThat(tradingDay.dayNumber()).isEqualTo(1);
+        assertThat(tradingDay.dayEndsAt()).isEqualTo(LocalDateTime.of(2026, 11, 17, 9, 0));
+        assertThat(tradingDay.endsAt()).isEqualTo(LocalDateTime.of(2026, 11, 23, 9, 0));
+    }
+
+    @Test
+    @DisplayName("아직 시작하지 않은 리그(대기실)는 거래일이 없다")
+    void noTradingDayBeforeStart() {
+        CreatedLeague league = leagueWithParticipants(3);
+
+        assertThat(queryService.getPlayers(memberOf(league), league.leagueId()).tradingDay())
+                .isNull();
+    }
+
     private CreatedLeague leagueWithParticipants(int count) {
         CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         for (int i = 1; i < count; i++) {
