@@ -70,10 +70,10 @@
   - `LoginRedirect`, `OriginSavingAuthorizationRequestResolver`를 제거하고, 성공·실패 핸들러가 설정된 URL로 바로 이동한다
   - `naspi.auth.redirect.*-path`를 전체 URL(`*-url`)로 되돌리고 `NASPI_LOGIN_*` 환경 변수로 주입한다
   - 환경별 값은 naspi-manifest overlay에 둔다: prod `common/overlay/prod/naspi-cm-common.yaml` (이미 있음), dev `common/overlay/dev/naspi-cm-common.yaml`
-  - CORS 허용 출처(`NASPI_CORS_ALLOWED_ORIGINS`)도 환경별로 정리한다 (dev에서 `local.naspi.my`, `localhost` 유지 여부 포함)
-- 선행: 프론트 개발계 배포 환경 구성
+  - CORS 허용 출처(`NASPI_CORS_ALLOWED_ORIGINS`)는 환경별로 정리했다: dev `https://dev.naspi.my`만, prod `https://www.naspi.my,https://naspi.my` (`local.naspi.my`, `localhost` 제거)
+- 선행: 프론트 개발계 배포 환경 구성 (완료: `https://dev.naspi.my`)
 - 완료 조건 (확인 방법)
   - [ ] 로그인 성공·이름 입력·실패 시 Referer와 무관하게 설정된 URL로 이동한다 — `./gradlew test --tests "kr.ject.naspi.common.security.SecurityConfigTest" --tests "kr.ject.naspi.member.api.auth.KakaoLoginSuccessHandlerTest"`
   - [ ] 출처 기반 리다이렉트 코드가 남아 있지 않다 — `grep -rn "LoginRedirect\|OriginSavingAuthorizationRequestResolver" src/` 결과 없음
   - [ ] dev, prod ConfigMap에 각 환경의 `NASPI_LOGIN_*`, `NASPI_CORS_ALLOWED_ORIGINS` 값이 있다 — naspi-manifest에서 `kubectl kustomize common/overlay/dev`, `kubectl kustomize common/overlay/prod`
-- 결정 필요: 개발계 프론트 배포 주소(dev 리다이렉트 URL), prod 리다이렉트 출처(`naspi.my` / `www.naspi.my`) 통일
+- 결정 필요: prod 리다이렉트 출처(`naspi.my` / `www.naspi.my`) 통일 (dev 리다이렉트 URL은 `https://dev.naspi.my`로 결정)
