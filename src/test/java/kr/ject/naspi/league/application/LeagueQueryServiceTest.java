@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import java.time.LocalDateTime;
+import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
@@ -29,10 +30,14 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({LeagueQueryService.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
         StockQueryService.class, LocalStockSnapshotCache.class,
-        MemberService.class, LeagueStartUseCase.class, MutableClock.Config.class})
+        MemberService.class, LeagueStartUseCase.class, InitialAssetAllocationService.class,
+        MutableClock.Config.class})
 class LeagueQueryServiceTest {
 
     private long kakaoId = 1000L;
+
+    @Autowired
+    private StockListingService stockListingService;
 
     @Autowired
     private LeagueQueryService queryService;
@@ -266,6 +271,9 @@ class LeagueQueryServiceTest {
         CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         for (int i = 1; i < count; i++) {
             JoinedLeague joined = leagueService.join(member("참여자"), league.inviteCode());
+            // 리그 시작 시 초기 자산을 배분하려면 참여자마다 실제 종목이 상장되어 있어야 한다.
+            stockListingService.list(league.leagueId(), joined.playerId(),
+                    "종목" + joined.playerId(), "소개");
             leagueService.completeListing(joined.playerId());
         }
         return league;

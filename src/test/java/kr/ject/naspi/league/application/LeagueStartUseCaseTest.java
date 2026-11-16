@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
@@ -20,19 +21,20 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@RecordApplicationEvents
 @Import({LeagueStartUseCase.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
         StockQueryService.class, LocalStockSnapshotCache.class,
+        InitialAssetAllocationService.class,
         MutableClock.Config.class})
 class LeagueStartUseCaseTest {
 
     private static final long HOST_MEMBER_ID = 1L;
+
+    @Autowired
+    private StockListingService stockListingService;
 
     @Autowired
     private LeagueStartUseCase useCaseUnderTest;
@@ -48,9 +50,6 @@ class LeagueStartUseCaseTest {
 
     @Autowired
     private MutableClock clock;
-
-    @Autowired
-    private ApplicationEvents events;
 
     private long nextMemberId = 100L;
 
@@ -113,17 +112,13 @@ class LeagueStartUseCaseTest {
     }
 
     @Test
-    @DisplayName("리그가 시작되면 리그의 상장 종목을 담아 리그 시작 이벤트를 발행한다 (초기 자산 배분)")
-    void publishLeagueStarted() {
+    @DisplayName("리그가 시작되면 같은 트랜잭션에서 모든 참여자에게 초기 자산이 배분된다")
+    void allocatesInitialAssets() {
         CreatedLeague created = leagueWithParticipants(3);
 
         useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId());
 
-        // 테스트에서는 방장만 실제 종목을 상장하고, 다른 참여자는 상장 완료 처리만 한다.
-        assertThat(events.stream(LeagueStarted.class)).singleElement().satisfies(event -> {
-            assertThat(event.leagueId()).isEqualTo(created.leagueId());
-            assertThat(event.listedStocks()).hasSize(1);
-        });
+        assertThat(countAccounts(created.leagueId())).isEqualTo(3);
     }
 
     @Test
@@ -177,9 +172,11 @@ class LeagueStartUseCaseTest {
     void alreadyStarted() {
         CreatedLeague created = leagueWithParticipants(3);
         useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId());
-        events.clear();
 
-        assertStartFails(HOST_MEMBER_ID, created, ErrorCode.LEAGUE_ALREADY_STARTED);
+        assertThatThrownBy(() -> useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_STARTED);
+        assertThat(countAccounts(created.leagueId())).isEqualTo(3);  // 다시 배분되지 않는다
     }
 
     @Test
@@ -203,7 +200,16 @@ class LeagueStartUseCaseTest {
         assertThatThrownBy(() -> useCaseUnderTest.start(memberId, created.leagueId()))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(errorCode);
-        assertThat(events.stream(LeagueStarted.class)).isEmpty();
+        assertThat(countAccounts(created.leagueId())).isZero();
+    }
+
+    /** 리그에 배분된 계좌 수. asset의 엔티티를 참조하지 않도록 JPQL로 센다. */
+    private long countAccounts(long leagueId) {
+        return entityManager.getEntityManager()
+                .createQuery("select count(a) from Account a where a.leagueId = :leagueId",
+                        Long.class)
+                .setParameter("leagueId", leagueId)
+                .getSingleResult();
     }
 
     /** 방장을 포함해 상장을 마친 참여자가 count명인 리그를 만든다. */
@@ -219,6 +225,9 @@ class LeagueStartUseCaseTest {
     private long participant(CreatedLeague created) {
         long memberId = nextMemberId++;
         JoinedLeague joined = leagueService.join(memberId, created.inviteCode());
+        // 리그 시작 시 초기 자산을 배분하려면 참여자마다 실제 종목이 상장되어 있어야 한다.
+        stockListingService.list(created.leagueId(), joined.playerId(),
+                "종목" + joined.playerId(), "소개");
         leagueService.completeListing(joined.playerId());
         return memberId;
     }
