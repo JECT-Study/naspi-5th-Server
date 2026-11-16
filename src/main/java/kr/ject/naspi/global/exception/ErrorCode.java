@@ -157,6 +157,9 @@ public enum ErrorCode {
     /** 주문 가격이 당일 상·하한가 범위를 벗어난 경우. */
     ORDER_PRICE_OUT_OF_LIMIT("503", "주문 가격이 당일 상·하한가 범위를 벗어났습니다."),
 
+    /** 주문이 없거나, 요청한 리그의 주문이 아니거나, 본인 주문이 아닌 경우. 남의 주문 존재 여부는 알리지 않는다. */
+    ORDER_NOT_FOUND("504", "주문을 찾을 수 없습니다."),
+
     // contents (6xx)
     /** JPEG·PNG가 아니거나 확장자·Content-Type·파일 내용이 서로 맞지 않는 이미지를 올린 경우. */
     INVALID_IMAGE_FORMAT("600", "JPEG, PNG 이미지만 업로드할 수 있습니다."),

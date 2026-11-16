@@ -25,9 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 지정가 주문 접수 (ORD-02).
+ * 지정가 주문 접수 (ORD-02), 미체결 주문 취소 (ORD-07).
  *
- * <p>한 트랜잭션에서 다음 순서로 처리한다. 순서는 리그 락 → asset 락으로 고정되어 있다
+ * <p>접수는 한 트랜잭션에서 다음 순서로 처리한다. 순서는 리그 락 → asset 락으로 고정되어 있다
  * (docs/issues/v1/order.md ORD-03).
  * <ol>
  *   <li>리그 거래 락 (거래 가능 상태가 아니면 거절)</li>
@@ -37,6 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
  * </ol>
  * 미체결 잔여 수량은 대기 주문으로 남는다. 시간 우선순위가 주문 {@code id} 순서이므로 주문 저장은 반드시
  * 리그 락을 잡은 뒤에 한다.
+ *
+ * <p>취소도 같은 리그 락을 먼저 잡으므로 같은 리그의 접수·체결과 차례로 처리된다. 취소와 체결이 동시에
+ * 요청되면 락을 먼저 잡은 쪽의 결과가 확정되고, 나중 쪽은 확정된 주문 상태를 보고 처리한다 (ORD-06).
  */
 @Service
 @RequiredArgsConstructor
@@ -90,9 +93,34 @@ public class LimitOrderService {
             settle(execution, now);
         }
         if (order.getStatus() == OrderStatus.CANCELED) {
+            // 자전거래로 취소된 신규 주문의 미체결 잔여 수량에 묶인 예약을 푼다.
             releaseAsset(order);
         }
         return PlacedOrder.from(order);
+    }
+
+    /**
+     * 본인의 미체결 주문을 취소하고 미체결 잔여 수량에 묶인 예약 자산을 해제한다. 이미 체결된 부분은 유지된다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 취소하는 플레이어 ID
+     * @param orderId 주문 ID
+     * @return 취소 결과
+     * @throws NaspiBizException 거래할 수 없는 리그이거나, 주문이 없거나 본인 주문이 아니거나
+     *     ({@link ErrorCode#ORDER_NOT_FOUND}), 이미 체결 완료·취소·만료된 주문인 경우
+     *     ({@link ErrorCode#INVALID_ORDER_STATUS_TRANSITION})
+     */
+    @Transactional
+    public CanceledOrder cancelOrder(long leagueId, long playerId, long orderId) {
+        leagueTradingService.lockForTrading(leagueId);
+        // 주문은 리그 락을 잡은 뒤에 읽으므로 직전에 커밋된 체결·취소가 반영된 상태를 본다. 그 사이 체결 완료되었거나
+        // 이미 취소된 주문이면 상태 전환이 거절되어 예약이 두 번 해제되지 않는다.
+        Order order = orderRepository.findWithLockById(orderId)
+                .filter(o -> o.getLeagueId() == leagueId && o.getPlayerId() == playerId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.ORDER_NOT_FOUND));
+        order.cancel();
+        releaseAsset(order);
+        return CanceledOrder.from(order);
     }
 
     private void validateStockInLeague(PlaceLimitOrder command) {
@@ -111,8 +139,8 @@ public class LimitOrderService {
         }
     }
 
+    /** 취소된 주문의 미체결 잔여 수량에 묶인 예약을 푼다. */
     private void releaseAsset(Order order) {
-        // 자전거래로 취소된 신규 주문의 미체결 잔여 수량에 묶인 예약을 푼다.
         if (order.getRemainingQuantity() == 0) {
             return;
         }

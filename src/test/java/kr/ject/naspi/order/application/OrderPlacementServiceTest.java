@@ -67,4 +67,27 @@ class OrderPlacementServiceTest {
         then(limitOrderService).should(never())
                 .placeLimitOrder(any(), anyInt(), anyLong());
     }
+
+    @Test
+    @DisplayName("취소하는 플레이어는 로그인 회원이 리그에서 가진 플레이어로 정한다")
+    void cancelUsesPlayerOfLoginMember() {
+        CanceledOrder canceled = new CanceledOrder(11L, 10L, 3L, 7L);
+        given(leagueQueryService.findPlayerId(MEMBER_ID, LEAGUE_ID))
+                .willReturn(Optional.of(PLAYER_ID));
+        given(limitOrderService.cancelOrder(LEAGUE_ID, PLAYER_ID, 11L)).willReturn(canceled);
+
+        assertThat(service.cancelOrder(MEMBER_ID, LEAGUE_ID, 11L)).isEqualTo(canceled);
+    }
+
+    @Test
+    @DisplayName("리그에 입장하지 않은 회원은 취소하지 못하고 취소 처리도 시작하지 않는다")
+    void cancelRejectsMemberNotInLeague() {
+        given(leagueQueryService.findPlayerId(MEMBER_ID, LEAGUE_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancelOrder(MEMBER_ID, LEAGUE_ID, 11L))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+
+        then(limitOrderService).should(never()).cancelOrder(anyLong(), anyLong(), anyLong());
+    }
 }

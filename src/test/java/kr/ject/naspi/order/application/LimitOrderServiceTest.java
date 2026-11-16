@@ -220,6 +220,114 @@ class LimitOrderServiceTest {
         assertThat(events.stream(TradeExecuted.class)).isEmpty();
     }
 
+    @Test
+    @DisplayName("매수 주문을 취소하면 미체결 잔여 수량에 묶인 현금 예약이 해제된다")
+    void cancelBuyReleasesCash() {
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 10);
+
+        CanceledOrder canceled = cancel(BUYER, buy.orderId());
+
+        assertThat(canceled.canceledQuantity()).isEqualTo(10);
+        assertThat(canceled.filledQuantity()).isZero();
+        assertThat(entityManager.find(Order.class, buy.orderId()).getStatus())
+                .isEqualTo(OrderStatus.CANCELED);
+        assertThat(account(BUYER).getReservedDeposit()).isZero();
+        assertThat(account(BUYER).getDeposit()).isEqualTo(1_000_000);
+    }
+
+    @Test
+    @DisplayName("부분 체결된 주문을 취소하면 이미 체결된 부분은 유지되고 미체결 잔여 수량의 예약만 해제된다")
+    void cancelPartiallyFilledKeepsFilledPart() {
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 10);
+        place(BUYER, OrderSide.BUY, 11_000, 3);
+
+        CanceledOrder canceled = cancel(SELLER, sell.orderId());
+
+        assertThat(canceled.filledQuantity()).isEqualTo(3);
+        assertThat(canceled.canceledQuantity()).isEqualTo(7);
+        assertThat(holding(SELLER).getQuantity()).isEqualTo(97);
+        assertThat(holding(SELLER).getReservedQuantity()).isZero();
+        assertThat(account(SELLER).getDeposit()).isEqualTo(1_000_000 + 33_000);
+        assertThat(holding(BUYER).getQuantity()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("취소된 주문은 호가창에서 빠져 이후 주문과 체결되지 않는다")
+    void canceledOrderNoLongerMatches() {
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 10);
+        cancel(SELLER, sell.orderId());
+
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 11_000, 10);
+
+        assertThat(buy.status()).isEqualTo(OrderStatus.PENDING);
+        assertThat(events.stream(TradeExecuted.class)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("본인 주문이 아니면 취소할 수 없고 주문은 그대로 남는다")
+    void rejectCancelOfOthersOrder() {
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 10);
+
+        assertThatThrownBy(() -> cancel(SELLER, buy.orderId()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.ORDER_NOT_FOUND);
+        assertThat(entityManager.find(Order.class, buy.orderId()).getStatus())
+                .isEqualTo(OrderStatus.PENDING);
+        assertThat(account(BUYER).getReservedDeposit()).isEqualTo(90_000);
+    }
+
+    @Test
+    @DisplayName("요청한 리그의 주문이 아니거나 없는 주문은 취소할 수 없다")
+    void rejectCancelOfUnknownOrder() {
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 10);
+        League other = startedLeague("CCCCCCC");
+
+        assertThatThrownBy(() -> service.cancelOrder(other.getId(), BUYER, buy.orderId()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.ORDER_NOT_FOUND);
+        assertThatThrownBy(() -> cancel(BUYER, 9_999L))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.ORDER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("체결 완료되었거나 이미 취소된 주문은 취소할 수 없고 예약이 두 번 해제되지 않는다")
+    void rejectCancelOfClosedOrder() {
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 5);
+        PlacedOrder filled = place(BUYER, OrderSide.BUY, 11_000, 5);
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 10);
+        cancel(BUYER, buy.orderId());
+
+        assertThatThrownBy(() -> cancel(BUYER, filled.orderId()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThatThrownBy(() -> cancel(SELLER, sell.orderId()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThatThrownBy(() -> cancel(BUYER, buy.orderId()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(account(BUYER).getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("거래 가능 상태가 아닌 리그에서는 취소를 거절한다")
+    void rejectCancelInNotTradableLeague() {
+        League waiting = entityManager.persistAndFlush(League.create(
+                LeagueName.of("대기실"), InviteCode.of("BBBBBBB"), NOW.minusDays(1)));
+
+        assertThatThrownBy(() -> service.cancelOrder(waiting.getId(), BUYER, 1L))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_TRADABLE);
+    }
+
+    private CanceledOrder cancel(long playerId, long orderId) {
+        CanceledOrder canceled = service.cancelOrder(leagueId, playerId, orderId);
+        entityManager.flush();
+        entityManager.clear();
+        return canceled;
+    }
+
     private PlacedOrder place(long playerId, OrderSide side, long price, long quantity) {
         PlacedOrder placed = service.placeLimitOrder(new PlaceLimitOrder(
                 leagueId, playerId, stockId, side, price, quantity), TRADING_DAY, BASE_PRICE);
@@ -243,8 +351,12 @@ class LimitOrderServiceTest {
     }
 
     private League startedLeague() {
+        return startedLeague("AAAAAAA");
+    }
+
+    private League startedLeague(String inviteCode) {
         League league = entityManager.persistAndFlush(League.create(
-                LeagueName.of("리그"), InviteCode.of("AAAAAAA"), NOW.minusDays(1)));
+                LeagueName.of("리그"), InviteCode.of(inviteCode), NOW.minusDays(1)));
         List<Player> players = LongStream.rangeClosed(1, League.MIN_PARTICIPANTS_TO_START)
                 .mapToObj(memberId -> {
                     Player player = Player.enter(league.getId(), memberId, NOW.minusDays(1));

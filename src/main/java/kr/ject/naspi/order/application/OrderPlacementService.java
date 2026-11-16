@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 로그인 회원의 지정가 주문 접수 요청을 받아 {@link LimitOrderService}에 넘긴다 (ORD-02).
+ * 로그인 회원의 지정가 주문 접수·취소 요청을 받아 {@link LimitOrderService}에 넘긴다 (ORD-02, ORD-07).
  *
  * <p>클라이언트가 보낸 플레이어 ID를 믿지 않고, 로그인 회원이 리그에서 가진 플레이어를 직접 찾아 쓴다.
  * 이 서비스는 트랜잭션을 열지 않는다. 리그 락과 주문 처리는 {@link LimitOrderService}의 트랜잭션 안에서
@@ -44,10 +44,28 @@ public class OrderPlacementService {
      */
     public PlacedOrder placeLimitOrder(long memberId, long leagueId, long stockId, OrderSide side,
             long price, long quantity) {
-        long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
         return limitOrderService.placeLimitOrder(
-                new PlaceLimitOrder(leagueId, playerId, stockId, side, price, quantity),
+                new PlaceLimitOrder(leagueId, playerIdOf(memberId, leagueId), stockId, side,
+                        price, quantity),
                 TEMPORARY_TRADING_DAY, TEMPORARY_BASE_PRICE);
+    }
+
+    /**
+     * 로그인 회원이 본인의 미체결 주문을 취소한다.
+     *
+     * @param memberId 로그인한 회원 ID
+     * @param leagueId 리그 ID
+     * @param orderId 주문 ID
+     * @return 취소 결과
+     * @throws NaspiBizException 리그에 입장하지 않은 회원이거나({@link ErrorCode#FORBIDDEN}),
+     *     {@link LimitOrderService#cancelOrder}가 거절하는 경우
+     */
+    public CanceledOrder cancelOrder(long memberId, long leagueId, long orderId) {
+        return limitOrderService.cancelOrder(leagueId, playerIdOf(memberId, leagueId), orderId);
+    }
+
+    private long playerIdOf(long memberId, long leagueId) {
+        return leagueQueryService.findPlayerId(memberId, leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
     }
 }
