@@ -101,6 +101,9 @@ public enum ErrorCode {
     /** 리그에 해당 플레이어가 없는 경우 (이미 나갔거나 추방된 경우 포함). */
     PLAYER_NOT_FOUND("210", "플레이어를 찾을 수 없습니다."),
 
+    /** 거래를 시작하지 않았거나 이미 종료된 리그에서 주문하려는 경우. */
+    LEAGUE_NOT_TRADABLE("211", "거래할 수 있는 리그가 아닙니다."),
+
 
     // market (3xx)
     /** 종목 이름이 12자 이하의 글자·숫자·공백 규칙에 맞지 않는 경우. */
@@ -133,7 +136,20 @@ public enum ErrorCode {
     INSUFFICIENT_QUANTITY("402", "매도 가능한 수량이 부족합니다."),
 
     /** 보유 수량으로는 매도할 수 있지만 자사주 최소 유지분 1,000주를 남기지 못하는 경우. */
-    TREASURY_STOCK_MIN_SHARES("403", "자사주는 1,000주 이상 남겨야 합니다.");
+    TREASURY_STOCK_MIN_SHARES("403", "자사주는 1,000주 이상 남겨야 합니다."),
+
+    // order (5xx)
+    /** 주문 가격이 100원 이상의 100원 단위가 아닌 경우. */
+    INVALID_ORDER_PRICE("500", "주문 가격은 100원 이상의 100원 단위여야 합니다."),
+
+    /** 주문 수량이 1주 이상의 정수가 아닌 경우. */
+    INVALID_ORDER_QUANTITY("501", "주문 수량은 1주 이상이어야 합니다."),
+
+    /** 이미 종료된 주문처럼 허용되지 않는 상태로 바꾸려는 경우. */
+    INVALID_ORDER_STATUS_TRANSITION("502", "처리할 수 없는 주문 상태입니다."),
+
+    /** 주문 가격이 당일 상·하한가 범위를 벗어난 경우. */
+    ORDER_PRICE_OUT_OF_LIMIT("503", "주문 가격이 당일 상·하한가 범위를 벗어났습니다.");
 
     private final String code;
     private final String message;
