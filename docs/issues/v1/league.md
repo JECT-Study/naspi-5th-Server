@@ -72,7 +72,7 @@
 - 비고: 추방된 참여자의 종목 삭제는 LEA-06과 같이 market에 종목 삭제 서비스가 생기면 `LeagueHostUseCase`의 TODO에서 호출한다.
 
 ### LEA-08 생성 후 7일 안에 시작되지 않은 대기실은 초대 코드와 함께 만료된다
-- Jira: ND-51
+- Jira: ND-51, ND-52
 - 정책: [league.md#리그-생성-및-초대](../../policies/v1/domain/league.md#리그-생성-및-초대)
 - 선행: LEA-01, GLB-03
 - 완료 조건
