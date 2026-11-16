@@ -2,6 +2,8 @@ package kr.ject.naspi.market.application;
 
 import java.util.Comparator;
 import java.util.List;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockRepository;
 import kr.ject.naspi.market.domain.StockSnapshot;
@@ -41,6 +43,23 @@ public class StockQueryService {
                         .map(StockSnapshot::from)
                         .map(StockQueryService::toLeagueStock)
                         .toList());
+    }
+
+    /**
+     * 플레이어가 리그 종목의 상장자인지 확인한다. 자사주 판단처럼 거래 로직에서 쓰므로 캐시가 아니라 DB에서 읽는다.
+     *
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param playerId 플레이어 ID
+     * @return 상장자 여부
+     * @throws NaspiBizException 리그에 해당 종목이 없는 경우 ({@link ErrorCode#STOCK_NOT_FOUND})
+     */
+    @Transactional(readOnly = true)
+    public boolean isListedBy(long leagueId, long stockId, long playerId) {
+        return stockRepository.findById(stockId)
+                .filter(stock -> stock.getLeagueId() == leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.STOCK_NOT_FOUND))
+                .isListedBy(playerId);
     }
 
     private static LeagueStock toLeagueStock(StockSnapshot stock) {

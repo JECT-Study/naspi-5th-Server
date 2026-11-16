@@ -50,4 +50,13 @@ public interface AccountRepository {
      * @return 계좌 목록. 초기 자산이 배분되지 않은 플레이어는 빠진다
      */
     List<Account> findAllByLeagueIdAndPlayerIdIn(Long leagueId, Collection<Long> playerIds);
+
+    /**
+     * 리그 참여자의 계좌를 쓰기 락을 걸어 조회한다. 예약·정산처럼 잔액을 확인하고 바꾸는 작업에 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 플레이어 ID
+     * @return 계좌. 초기 자산이 배분되지 않았으면 비어 있다
+     */
+    Optional<Account> findWithLockByLeagueIdAndPlayerId(Long leagueId, Long playerId);
 }

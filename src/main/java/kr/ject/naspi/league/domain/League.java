@@ -192,6 +192,16 @@ public class League {
     }
 
     /**
+     * 거래할 수 있는 리그인지 확인한다. 시작되어 진행 중인 리그만 거래할 수 있다.
+     * 시작할 때 초기 자산 배분이 같은 트랜잭션에서 끝나므로 시작 상태면 배분도 완료된 것이다.
+     *
+     * @return 시작 상태면 true
+     */
+    public boolean isTradable() {
+        return status == LeagueStatus.STARTED;
+    }
+
+    /**
      * 접근할 수 없는 리그인지 확인한다. 만료된 대기실과 삭제된 대기실은 없는 리그로 취급한다.
      *
      * @param now 현재 일시

@@ -10,6 +10,10 @@ spring:
     url: ${DB_URL:jdbc:postgresql://naspi-db-svc:5432/naspi}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  jpa:
+    # OSIV 를 끈다. 영속성 컨텍스트와 DB 커넥션은 트랜잭션(application 계층) 안에서만 유지하고,
+    # 응답에 필요한 데이터는 트랜잭션 안에서 DTO 로 변환해 내보낸다 (트랜잭션 밖 지연 로딩 시 LazyInitializationException).
+    open-in-view: false
   # 로그인 세션 저장소. 접속 정보는 환경 변수로 주입한다 (k8s: manifest 의 naspi-cm-common).
   data:
     redis:
@@ -200,10 +204,10 @@ spring:
     hibernate:
       ddl-auto: update
 
-# dev 서버(dev.api.naspi.my)는 로컬 프론트(local.naspi.my:5173, hosts 로 127.0.0.1 지정)와 배포된 프론트를 모두 받는다.
-# 첫 번째(local.naspi.my)가 로그인 후 기본 이동 출처다. 환경 변수(k8s: naspi-cm-common)가 있으면 그 값을 쓴다.
+# dev 서버(dev.api.naspi.my)는 배포된 dev 프론트(dev.naspi.my)만 받는다.
+# 운영 프론트(www.naspi.my, naspi.my)는 production(기본값)에서만 허용한다.
+# 환경 변수(k8s: naspi-cm-common)가 있으면 그 값을 쓴다.
 naspi:
   cors:
-    # localhost 는 dev.api.naspi.my 와 다른 사이트라 SameSite=Lax 세션 쿠키가 실리지 않는다 (로그인 필요 API 는 local.naspi.my 로)
-    allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://local.naspi.my:5173,http://localhost:5173,https://www.naspi.my,https://naspi.my}
+    allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://dev.naspi.my}
 

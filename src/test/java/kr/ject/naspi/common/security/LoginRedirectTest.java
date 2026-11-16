@@ -12,10 +12,10 @@ import org.springframework.mock.web.MockHttpServletResponse;
 class LoginRedirectTest {
 
     private static final String DEFAULT_FRONT = "https://www.naspi.my";
-    private static final String LOCAL_FRONT = "https://local.naspi.my:5173";
+    private static final String DEV_FRONT = "https://dev.naspi.my";
 
     private final LoginRedirect loginRedirect = new LoginRedirect(
-            new CorsProperties(List.of(DEFAULT_FRONT, LOCAL_FRONT)));
+            new CorsProperties(List.of(DEFAULT_FRONT, DEV_FRONT)));
 
     private final MockHttpServletRequest request = new MockHttpServletRequest();
     private final MockHttpServletResponse response = new MockHttpServletResponse();
@@ -23,12 +23,12 @@ class LoginRedirectTest {
     @Test
     @DisplayName("로그인을 시작한 프론트 출처가 허용 출처면 로그인 후 그 출처로 이동한다")
     void allowedOrigin() throws Exception {
-        request.addHeader(HttpHeaders.REFERER, LOCAL_FRONT + "/login?from=home");
+        request.addHeader(HttpHeaders.REFERER, DEV_FRONT + "/login?from=home");
 
         loginRedirect.saveOrigin(request);
         loginRedirect.redirect(request, response, "/signup");
 
-        assertThat(response.getRedirectedUrl()).isEqualTo(LOCAL_FRONT + "/signup");
+        assertThat(response.getRedirectedUrl()).isEqualTo(DEV_FRONT + "/signup");
         assertThat(request.getSession().getAttribute(LoginRedirect.ATTRIBUTE)).isNull();
     }
 
@@ -55,7 +55,7 @@ class LoginRedirectTest {
     @Test
     @DisplayName("허용 출처와 포트가 다르면 다른 출처로 보고 기본 프론트 출처로 이동한다")
     void differentPort() throws Exception {
-        request.addHeader(HttpHeaders.REFERER, "https://local.naspi.my:3000/");
+        request.addHeader(HttpHeaders.REFERER, "https://dev.naspi.my:3000/");
 
         loginRedirect.saveOrigin(request);
         loginRedirect.redirect(request, response, "/");
