@@ -31,7 +31,6 @@
   - [ ] 탈퇴하면 진행 중 리그의 예약 현금·예약 주식이 0, 예수금이 0, 보유 수량은 그대로다 — `./gradlew test --tests "kr.ject.naspi.order.*Withdraw*"`
   - [ ] 탈퇴 후 남은 세션으로 매수·매도하면 `WITHDRAWN_PLAYER`로 거절된다 — 같은 테스트
   - [ ] asset 쪽 기존 테스트가 그대로 통과한다 — `./gradlew test --tests "kr.ject.naspi.asset.application.AssetWithdrawalServiceTest" --tests "kr.ject.naspi.asset.application.AssetReservationServiceTest"`
-  - [ ] AST-07 완료 조건 1 체크박스를 `[x]`로 바꾼다 — `scripts/find-story.sh ND-59`
 
 ### INT-02 시장가 매수 체결·취소 후 남은 예약금을 asset 해제 API로 푼다
 - Jira:
