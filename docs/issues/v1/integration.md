@@ -69,3 +69,30 @@
 - 완료 조건 (확인 방법)
   - [ ] order가 다른 모듈의 domain·infra를 import하지 않는다 — `grep -rnE "import kr\.ject\.naspi\.(member|league|market|asset)\.(domain|infra)\." src/main/java/kr/ject/naspi/order` 결과 없음
   - [ ] 상·하한가 밖 지정가 주문 거절이 그대로 동작한다 — `./gradlew test --tests "kr.ject.naspi.order.application.LimitOrderServiceTest" --tests "kr.ject.naspi.market.*"`
+
+### INT-05 리그 종료 결과 산정이 종료 평가 가격으로 asset 총자산 집계를 호출한다
+- Jira:
+- 목적: AST-08(ND-62)의 `AssetQueryService#aggregateTotalAssets`를 LEA-13 결과 산정에 연결한다 (league ↔ market ↔ asset 연동)
+- 내용: league UseCase가 MKT-07 종료 평가 가격(종목 ID → 가격)을 market에서 받아 `aggregateTotalAssets(leagueId, prices)`에 넘기고, 결과로 순위·스냅샷을 만든다. asset은 하위 모듈이라 Service가 아닌 UseCase에서 호출한다
+- 선행: AST-08, MKT-07, LEA-13
+- 완료 조건 (확인 방법)
+  - [ ] league에서 결과 산정이 asset 총자산 집계를 호출한다 — `grep -rn "aggregateTotalAssets" src/main/java/kr/ject/naspi/league` 결과 있음
+  - [ ] 결과 총자산이 종료 평가 가격 기준이다 — `./gradlew test --tests "kr.ject.naspi.league.*Result*"`
+
+### INT-06 거래일 종료 시 종가로 asset 총자산 집계를 호출한다
+- Jira:
+- 목적: AST-08의 집계 API를 LEA-18 거래일별 자산 집계에 연결한다
+- 내용: `TradingDayChanged`(LEA-11) 처리 중 league UseCase가 market 종가(MKT-06)를 받아 `aggregateTotalAssets`에 넘긴다
+- 선행: AST-08, MKT-06, LEA-11, LEA-18
+- 완료 조건 (확인 방법)
+  - [ ] `grep -rn "aggregateTotalAssets" src/main/java/kr/ject/naspi/league` 결과 있음
+  - [ ] 거래일 집계가 종가 기준이다 — `./gradlew test --tests "kr.ject.naspi.league.*TradingDay*"`
+
+### INT-07 league가 asset의 domain을 직접 참조하지 않는다
+- Jira:
+- 목적: 경계 규칙 위반 정리. `LeagueStartUseCase`가 `kr.ject.naspi.asset.domain.StockListing`을 import한다 (`LeagueStartUseCase.java:8`)
+- 내용: `StockListing`에 해당하는 입력 타입을 asset `application`에 두고 `InitialAssetAllocationService#allocate`가 그것을 받게 한다
+- 선행: 없음
+- 완료 조건 (확인 방법)
+  - [ ] `grep -rn "import kr.ject.naspi.asset.domain" src/main/java --exclude-dir=asset` 결과 없음
+  - [ ] `./gradlew test --tests "kr.ject.naspi.league.application.LeagueStartUseCaseTest" --tests "kr.ject.naspi.asset.application.InitialAssetAllocationServiceTest"`

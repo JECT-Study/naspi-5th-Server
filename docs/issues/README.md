@@ -70,7 +70,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 | [자산] | [v1/asset.md](v1/asset.md) | 8 |
 | [주문] | [v1/order.md](v1/order.md) | 12 |
 | [콘텐츠] | [v1/contents.md](v1/contents.md) | 10 |
-| [연동] 모듈 간 연동 (Jira 유형: Task) | [v1/integration.md](v1/integration.md) | 4 |
+| [연동] 모듈 간 연동 (Jira 유형: Task) | [v1/integration.md](v1/integration.md) | 7 |
 
 ## 권장 구현 순서
 
