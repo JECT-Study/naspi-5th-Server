@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
+import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
@@ -25,10 +26,14 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({LeagueLeaveUseCase.class, LeagueStartUseCase.class, LeagueService.class,
         LeagueCreationUseCase.class, InviteCodeIssuer.class, LeagueJoinLimit.class,
         StockListingService.class, StockQueryService.class, LocalStockSnapshotCache.class,
+        InitialAssetAllocationService.class,
         MutableClock.Config.class})
 class LeagueLeaveUseCaseTest {
 
     private static final long HOST_MEMBER_ID = 1L;
+
+    @Autowired
+    private StockListingService stockListingService;
 
     @Autowired
     private LeagueLeaveUseCase useCaseUnderTest;
@@ -193,6 +198,9 @@ class LeagueLeaveUseCaseTest {
     /** 리그에 입장해 상장을 마친 참여자를 추가한다. */
     private JoinedLeague join(CreatedLeague created) {
         JoinedLeague joined = leagueService.join(nextMemberId++, created.inviteCode());
+        // 리그 시작 시 초기 자산을 배분하려면 참여자마다 실제 종목이 상장되어 있어야 한다.
+        stockListingService.list(created.leagueId(), joined.playerId(),
+                "종목" + joined.playerId(), "소개");
         leagueService.completeListing(joined.playerId());
         return joined;
     }
