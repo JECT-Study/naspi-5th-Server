@@ -53,9 +53,6 @@ class LeagueHostUseCaseTest {
     private LeagueCreationUseCase leagueCreationUseCase;
 
     @Autowired
-    private StockListingService stockListingService;
-
-    @Autowired
     private StockRepository stockRepository;
 
     @Autowired
