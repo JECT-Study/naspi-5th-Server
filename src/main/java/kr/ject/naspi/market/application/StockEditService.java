@@ -44,6 +44,10 @@ public class StockEditService {
     public StockDetail editInLobby(long leagueId, long memberId, long stockId, String name,
             String description) {
         // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
+        //       회원 ID와 플레이어 ID는 다르므로 본인 종목인데도 STOCK_NOT_OWNED가 나거나, 우연히 ID가 같은
+        //       다른 사람의 종목을 수정할 수 있다. 종목 조회(LeagueStockLookupService)의 mine은 실제 플레이어 ID로
+        //       판단하므로 mine이 true인 종목의 수정이 거절될 수 있다. LeagueQueryService#findPlayerId로
+        //       플레이어 ID를 구해 비교하도록 바꾼다.
         long playerId = memberId;
         StockName stockName = StockName.of(name);
         StockDescription stockDescription = StockDescription.of(description);
@@ -74,6 +78,10 @@ public class StockEditService {
     public StockDetail changeDescription(long leagueId, long memberId, long stockId,
             String description) {
         // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
+        //       회원 ID와 플레이어 ID는 다르므로 본인 종목인데도 STOCK_NOT_OWNED가 나거나, 우연히 ID가 같은
+        //       다른 사람의 종목을 수정할 수 있다. 종목 조회(LeagueStockLookupService)의 mine은 실제 플레이어 ID로
+        //       판단하므로 mine이 true인 종목의 수정이 거절될 수 있다. LeagueQueryService#findPlayerId로
+        //       플레이어 ID를 구해 비교하도록 바꾼다.
         long playerId = memberId;
         StockDescription stockDescription = StockDescription.of(description);
         Stock stock = findOwnedStock(leagueId, playerId, stockId);

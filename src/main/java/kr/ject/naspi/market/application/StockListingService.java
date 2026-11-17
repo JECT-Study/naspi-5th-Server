@@ -45,6 +45,8 @@ public class StockListingService {
         //       league 서비스에서 리그 행을 잠그고 League#isOpenForInvitation(now)로 확인해
         //       아니면 LEAGUE_NOT_FOUND를 던진다. 만료 스케줄러도 같은 행을 잠그므로 만료 직전 상장과 겹치지 않는다.
         // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
+        //       종목 조회의 mine·수정 API와 기준이 어긋나지 않도록 LeagueQueryService#findPlayerId로 얻은
+        //       플레이어 ID를 쓰도록 바꾼다 (StockEditService의 TODO 참고).
         long listerPlayerId = memberId;
         StockName stockName = StockName.of(name);
         StockDescription stockDescription = StockDescription.of(description);
