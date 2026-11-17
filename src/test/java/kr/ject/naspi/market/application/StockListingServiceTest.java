@@ -100,4 +100,42 @@ class StockListingServiceTest {
         assertThat(events.stream(StockListed.class)).isEmpty();
         assertThat(stockRepository.existsByListerPlayerId(10L)).isFalse();
     }
+
+    @Test
+    @DisplayName("퇴장한 플레이어의 종목만 삭제하고, 다른 리그의 같은 플레이어·같은 리그의 다른 플레이어 종목은 유지한다")
+    void delist() {
+        service.list(LEAGUE_ID, 10L, "나스피", "소개");
+        service.list(LEAGUE_ID, 11L, "다른종목", "소개");
+        service.list(2L, 12L, "다른리그", "소개");
+
+        service.delist(LEAGUE_ID, 10L);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(stockRepository.existsByListerPlayerId(10L)).isFalse();
+        assertThat(stockRepository.existsByLeagueIdAndName(LEAGUE_ID, StockName.of("나스피")))
+                .isFalse();
+        assertThat(stockRepository.findAllByLeagueId(LEAGUE_ID)).hasSize(1);
+        assertThat(stockRepository.findAllByLeagueId(2L)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("상장 전 대기자가 퇴장해 삭제할 종목이 없어도 정상 처리된다")
+    void delistWithoutStock() {
+        service.delist(LEAGUE_ID, 99L);
+
+        assertThat(stockRepository.findAllByLeagueId(LEAGUE_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("종목을 삭제한 뒤 같은 이름을 같은 리그에서 다시 상장할 수 있다")
+    void relistSameNameAfterDelist() {
+        service.list(LEAGUE_ID, 10L, "나스피", "소개");
+        service.delist(LEAGUE_ID, 10L);
+        entityManager.flush();
+
+        service.list(LEAGUE_ID, 11L, "나스피", "소개");
+
+        assertThat(stockRepository.findAllByLeagueId(LEAGUE_ID)).hasSize(1);
+    }
 }

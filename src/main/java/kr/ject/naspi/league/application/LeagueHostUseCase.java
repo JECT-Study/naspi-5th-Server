@@ -12,6 +12,7 @@ import kr.ject.naspi.league.domain.LeagueRepository;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
+import kr.ject.naspi.market.application.StockListingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 방장은 리그 이름 수정, 리그 삭제, 참여자 삭제를 할 수 있고, 리그가 시작된 이후에는 모두 같은 권한을 가진다.
  *
  * <p>추방된 플레이어의 종목은 하위 모듈인 market이 관리하므로 UseCase로 만든다.
- * 종목 삭제는 market에 서비스가 생길 때까지 TODO로 남겨 둔다 ({@link LeagueLeaveUseCase}와 같음).
+ * 종목 삭제는 {@link LeagueLeaveUseCase}와 같은 market 서비스를 쓴다.
  */
 @Service
 @RequiredArgsConstructor
@@ -31,6 +32,7 @@ public class LeagueHostUseCase {
 
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
+    private final StockListingService stockListingService;
     private final Clock clock;
 
     /**
@@ -91,8 +93,7 @@ public class LeagueHostUseCase {
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.PLAYER_NOT_FOUND));
 
         context.league().kick(target, now);
-        // TODO: 추방된 플레이어의 종목 삭제. market에 상장자 플레이어 ID로 종목을 지우는 서비스가 생기면 여기서 호출한다
-        //       (LeagueLeaveUseCase와 같은 서비스를 쓴다).
+        stockListingService.delist(leagueId, target.getId());
         playerRepository.delete(target);
     }
 

@@ -12,6 +12,8 @@ import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockQueryService;
+import kr.ject.naspi.market.domain.StockName;
+import kr.ject.naspi.market.domain.StockRepository;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +48,12 @@ class LeagueLeaveUseCaseTest {
 
     @Autowired
     private LeagueCreationUseCase leagueCreationUseCase;
+
+    @Autowired
+    private StockListingService stockListingService;
+
+    @Autowired
+    private StockRepository stockRepository;
 
     @Autowired
     private TestEntityManager entityManager;
@@ -85,7 +93,28 @@ class LeagueLeaveUseCaseTest {
                 .isEqualTo(LeagueStatus.WAITING);
     }
 
-    // TODO: market에 종목 삭제 서비스가 생기면 "대기실을 나가면 상장된 종목은 삭제된다" 테스트를 추가한다.
+    @Test
+    @DisplayName("대기실을 나가면 상장한 종목만 삭제되고 이름은 다시 쓸 수 있다")
+    void leaveDeletesOnlyOwnStock() {
+        CreatedLeague created = createLeague();
+        CreatedLeague other = createLeague();
+        long memberId = nextMemberId++;
+        JoinedLeague joined = leagueService.join(memberId, created.inviteCode());
+        stockListingService.list(created.leagueId(), joined.playerId(), "나간종목", "소개");
+        leagueService.completeListing(joined.playerId());
+        stockListingService.list(other.leagueId(), joined.playerId() + 1000, "나간종목", "소개");
+
+        useCaseUnderTest.leave(memberId, created.leagueId());
+        flushAndClear();
+
+        assertThat(stockRepository.existsByListerPlayerId(joined.playerId())).isFalse();
+        assertThat(stockRepository.existsByLeagueIdAndName(
+                created.leagueId(), StockName.of("나간종목"))).isFalse();
+        assertThat(stockRepository.findAllByLeagueId(created.leagueId())).hasSize(1);
+        assertThat(stockRepository.existsByLeagueIdAndName(
+                other.leagueId(), StockName.of("나간종목"))).isTrue();
+    }
+
 
     @Test
     @DisplayName("대기실을 나간 사용자는 초대 코드로 다시 입장할 수 있다")
