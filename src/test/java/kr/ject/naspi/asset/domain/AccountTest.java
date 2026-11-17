@@ -185,4 +185,31 @@ class AccountTest {
         assertThat(amount).isEqualTo(475_000);
         assertThat(account.getDeposit()).isEqualTo(1_475_000);
     }
+
+    @Test
+    @DisplayName("매수 주문이 일부 체결된 뒤 취소·만료되면 미체결 잔량 × 예약 기준 가격만 해제되어 예약 현금이 0이 된다")
+    void releaseRemainingAfterPartialFill() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_000, 10);
+        account.settleBuy(10_000, 9_500, 4);
+
+        long released = account.releaseForBuy(10_000, 6);
+
+        assertThat(released).isEqualTo(60_000);
+        assertThat(account.getReservedDeposit()).isZero();
+        assertThat(account.getDeposit()).isEqualTo(1_000_000 - 38_000);
+    }
+
+    @Test
+    @DisplayName("시장가 매수는 보호최고가로 예약하므로 낮은 가격 체결 후 잔량을 해제하면 예약금이 전액 해제된다")
+    void releaseRemainingAfterMarketBuyFill() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_500, 10);
+        account.settleBuy(10_500, 10_000, 7);
+
+        account.releaseForBuy(10_500, 3);
+
+        assertThat(account.getReservedDeposit()).isZero();
+        assertThat(account.getDeposit()).isEqualTo(1_000_000 - 70_000);
+    }
 }

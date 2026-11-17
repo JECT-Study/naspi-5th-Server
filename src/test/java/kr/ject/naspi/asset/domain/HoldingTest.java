@@ -193,6 +193,32 @@ class HoldingTest {
     }
 
     @Test
+    @DisplayName("매도 주문이 일부 체결된 뒤 취소·만료되면 미체결 잔량만 해제되고 체결된 수량은 보유에서 빠진 채 유지된다")
+    void releaseRemainingAfterPartialSell() {
+        Holding holding = holding(1_000);
+        holding.reserveForSell(400, false);
+        holding.settleSell(150);
+
+        holding.releaseForSell(250);
+
+        assertThat(holding.getQuantity()).isEqualTo(850);
+        assertThat(holding.getReservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("자사주 매도 주문이 일부 체결된 뒤 잔량이 해제되어도 최소 유지분 1,000주는 그대로 남는다")
+    void releaseTreasuryRemainingKeepsMinShares() {
+        Holding holding = holding(2_500);
+        holding.reserveForSell(1_500, true);
+        holding.settleSell(500);
+
+        holding.releaseForSell(1_000);
+
+        assertThat(holding.getQuantity()).isEqualTo(2_000);
+        assertThat(holding.orderableQuantity(true)).isEqualTo(1_000);
+    }
+
+    @Test
     @DisplayName("매도 체결 수량이 예약 수량을 넘으면 데이터 오류로 보고 정산하지 않는다")
     void rejectSellSettlementOverReserved() {
         Holding holding = holding(2_500);
