@@ -2,6 +2,7 @@ package kr.ject.naspi.league.infra;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
@@ -24,4 +25,12 @@ interface PlayerJpaRepository extends Repository<Player, Long>, PlayerRepository
     long countLeaguesByMemberIdAndStatusIn(@Param("memberId") Long memberId,
             @Param("statuses") Collection<LeagueStatus> statuses,
             @Param("waitingCreatedAfter") LocalDateTime waitingCreatedAfter);
+
+    @Override
+    @Query("""
+            select p from Player p, League l
+            where l.id = p.leagueId and p.memberId = :memberId and l.status = :leagueStatus
+            """)
+    List<Player> findAllByMemberIdAndLeagueStatus(@Param("memberId") Long memberId,
+            @Param("leagueStatus") LeagueStatus leagueStatus);
 }

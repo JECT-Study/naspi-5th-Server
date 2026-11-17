@@ -26,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 주문별 예약 기준 가격은 체결 시 차액 해제(AST-05)와 취소·만료 시 해제(AST-06)에 필요하므로 order가 주문에
  * 남겨 둔다. asset은 참여자별 예약 합계만 관리한다.
  *
+ * <p>탈퇴한 회원의 참여자는 매수·매도 예약을 모두 거절한다 (member.md "회원 탈퇴": 보유 주식은 이후 거래 불가).
+ * 매도 예약도 계좌를 먼저 락으로 잡아 탈퇴 처리와 직렬화하며, 락 순서는 정산과 같은 "계좌 → 보유 주식"이다.
+ *
  * <p>취소와 체결이 동시에 요청되면 먼저 확정된 처리 결과를 적용한다 (asset.md "취소·만료"). 어느 쪽이 먼저인지와
  * 남은 잔량은 order가 주문 단위로 정해서 넘긴다. 해제 메서드는 넘겨받은 잔량만큼만 해제한다.
  */
@@ -47,7 +50,8 @@ public class AssetReservationService {
      * @return 예약한 금액
      * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
      * @throws NaspiBizException 참여자의 자산이 없는 경우 ({@link ErrorCode#ASSET_NOT_FOUND}),
-     *     주문 가능 현금이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_DEPOSIT})
+     *     주문 가능 현금이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_DEPOSIT}),
+     *     탈퇴한 참여자인 경우 ({@link ErrorCode#WITHDRAWN_PLAYER})
      */
     @Transactional
     public long reserveCashForBuy(long leagueId, long playerId, long price, long quantity) {
@@ -65,7 +69,9 @@ public class AssetReservationService {
      * @param stockId 매도할 종목 ID
      * @param quantity 주문 수량. 양수
      * @throws IllegalArgumentException 수량이 0 이하인 경우
-     * @throws NaspiBizException 리그에 종목이 없는 경우 ({@link ErrorCode#STOCK_NOT_FOUND}),
+     * @throws NaspiBizException 참여자의 자산이 없는 경우 ({@link ErrorCode#ASSET_NOT_FOUND}),
+     *     탈퇴한 참여자인 경우 ({@link ErrorCode#WITHDRAWN_PLAYER}),
+     *     리그에 종목이 없는 경우 ({@link ErrorCode#STOCK_NOT_FOUND}),
      *     매도 가능 수량이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_QUANTITY}),
      *     자사주 최소 유지분을 남기지 못하는 경우 ({@link ErrorCode#TREASURY_STOCK_MIN_SHARES})
      */
@@ -73,6 +79,10 @@ public class AssetReservationService {
     public void reserveStockForSell(long leagueId, long playerId, long stockId, long quantity) {
         // 상장자는 바뀌지 않으므로 락을 잡기 전에 조회해 락 구간을 줄인다.
         boolean treasuryStock = stockQueryService.isListedBy(leagueId, stockId, playerId);
+        // 탈퇴 여부는 계좌에 있다. 정산과 같은 순서(계좌 → 보유 주식)로 락을 잡는다.
+        accountRepository.findWithLockByLeagueIdAndPlayerId(leagueId, playerId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.ASSET_NOT_FOUND))
+                .ensureTradable();
         holdingRepository.findWithLockByLeagueIdAndPlayerIdAndStockId(leagueId, playerId, stockId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INSUFFICIENT_QUANTITY))
                 .reserveForSell(quantity, treasuryStock);
