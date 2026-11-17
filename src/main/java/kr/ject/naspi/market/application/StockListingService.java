@@ -63,4 +63,19 @@ public class StockListingService {
         eventPublisher.publishEvent(new StockListed(stock.getId(), leagueId, listerPlayerId));
         return stock.getId();
     }
+
+    /**
+     * 대기실에서 퇴장하는 플레이어가 상장한 종목을 삭제한다. 상장 전 대기자라 종목이 없으면 아무것도 하지 않는다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 대기실에서 퇴장하면 그 리그에서 상장한 종목이 삭제된다.
+     * 호출하는 퇴장 처리와 같은 트랜잭션에서 실행되므로 퇴장이 롤백되면 삭제도 롤백된다.
+     * 다른 리그의 종목, 같은 리그의 다른 플레이어 종목은 지우지 않는다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 퇴장하는 플레이어 ID
+     */
+    @Transactional
+    public void delist(long leagueId, long playerId) {
+        stockRepository.deleteByLeagueIdAndListerPlayerId(leagueId, playerId);
+    }
 }

@@ -10,6 +10,8 @@ import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockQueryService;
+import kr.ject.naspi.market.domain.StockName;
+import kr.ject.naspi.market.domain.StockRepository;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +46,12 @@ class LeagueHostUseCaseTest {
 
     @Autowired
     private LeagueCreationUseCase leagueCreationUseCase;
+
+    @Autowired
+    private StockListingService stockListingService;
+
+    @Autowired
+    private StockRepository stockRepository;
 
     @Autowired
     private TestEntityManager entityManager;
@@ -194,7 +202,23 @@ class LeagueHostUseCaseTest {
         assertThat(entityManager.find(Player.class, waiting.playerId())).isNull();
     }
 
-    // TODO: market에 종목 삭제 서비스가 생기면 "추방된 참여자의 종목도 삭제된다" 테스트를 추가한다.
+    @Test
+    @DisplayName("방장이 추방한 참여자의 종목은 삭제되고 다른 참여자의 종목은 유지된다")
+    void kickDeletesOnlyKickedPlayersStock() {
+        CreatedLeague created = createLeague();
+        JoinedLeague kicked = leagueService.join(nextMemberId++, created.inviteCode());
+        stockListingService.list(created.leagueId(), kicked.playerId(), "추방종목", "소개");
+        leagueService.completeListing(kicked.playerId());
+
+        useCaseUnderTest.kick(HOST_MEMBER_ID, created.leagueId(), kicked.playerId());
+        flushAndClear();
+
+        assertThat(stockRepository.existsByListerPlayerId(kicked.playerId())).isFalse();
+        assertThat(stockRepository.existsByLeagueIdAndName(
+                created.leagueId(), StockName.of("추방종목"))).isFalse();
+        assertThat(stockRepository.findAllByLeagueId(created.leagueId())).hasSize(1);
+    }
+
 
     @Test
     @DisplayName("방장은 자기 자신을 추방할 수 없다")
