@@ -33,6 +33,9 @@ executor가 멈추고 보고하면(계획 오류, 반복 실패, 라이브러리
 - 모두 ✅이고 경계 위반이 없으면 4단계로 간다.
 - `수정 필요`가 있으면 그 목록을 executor에게 넘겨 고치게 하고(SendMessage로 이어서) tester를 다시 부른다. **최대 2회** 반복한다. 그래도 남으면 남은 항목을 보고하고 멈춘다.
 - ❓(판단 불가) 항목은 수정 대상이 아니라 사용자에게 묻는다.
+- 스토리 모듈에서 구현이 끝났다면 다른 모듈의 미연결(호출처 없음 등)은 문제로 다루지 않는다. tester가 그런 항목을 ❌·🟡로 냈더라도 executor로 되돌리지 않고, 보고에서 "다른 모듈 연결 (참고)"로 한 줄만 적는다.
+
+명령 권한: `cd`, `git`(push·reset·stash 제외), `./gradlew checkstyle*`, `./gradlew test`, `scripts/find-story.sh`는 사용자에게 묻지 않고 실행한다 (`.claude/settings.local.json`에 허용됨).
 
 ## 4. 보고
 
