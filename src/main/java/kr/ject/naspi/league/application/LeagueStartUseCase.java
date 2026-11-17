@@ -4,9 +4,10 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import kr.ject.naspi.asset.application.InitialAssetAllocationService;
+import kr.ject.naspi.asset.domain.StockListing;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.league.application.LeagueStarted.ListedStock;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
 import kr.ject.naspi.league.domain.LeagueStatus;
@@ -16,7 +17,6 @@ import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
 import kr.ject.naspi.market.application.StockQueryService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 모든 참여자의 자산 배분이 끝난 같은 시장 상태에서 거래를 시작한다. 시작 시각으로 종료 시각과 1~7일차 거래일을
  * 확정해 저장한다.
  *
- * <p>시작 이벤트에 상장 종목 목록을 실어야 하는데 종목은 하위 모듈인 market이 관리하므로,
- * UseCase로 만들어 market의 종목 조회 서비스를 쓴다.
+ * <p>초기 자산 배분은 하위 모듈인 asset이, 배분 기준이 되는 상장 종목은 하위 모듈인 market이 관리하므로
+ * UseCase로 만들어 두 모듈의 서비스를 직접 호출한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -39,14 +39,14 @@ public class LeagueStartUseCase {
     private final PlayerRepository playerRepository;
     private final TradingDayRepository tradingDayRepository;
     private final StockQueryService stockQueryService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final InitialAssetAllocationService initialAssetAllocationService;
     private final Clock clock;
 
     /**
      * 방장이 리그를 시작한다.
      *
      * <p>리그 행을 잠그고 처리하므로 시작하는 동안 다른 사용자가 입장하거나 대기실이 만료되지 않는다.
-     * {@link LeagueStarted}를 같은 트랜잭션에서 발행하고, 초기 자산 배분이 실패하면 리그 시작도 함께 취소되어
+     * 초기 자산 배분을 같은 트랜잭션에서 처리하므로, 배분이 실패하면 리그 시작도 함께 취소되어
      * 자산 배분이 끝나지 않은 리그에서 거래가 열리지 않는다.
      *
      * @param memberId 시작하는 회원 ID
@@ -81,16 +81,21 @@ public class LeagueStartUseCase {
 
         league.start(players, now);
         tradingDayRepository.saveAll(TradingDay.of(leagueId, league.tradingSchedule()));
-        // TODO: 이벤트 대신 UseCase에서 초기 자산 배분을 직접 호출한다. UseCase는 하위 모듈(asset)을 참조할 수
-        //       있으므로 InitialAssetAllocationService.allocate()를 같은 트랜잭션에서 부르면 된다.
-        //       바꾸면 LeagueStarted 이벤트와 asset의 LeagueStartedListener를 정리한다 (asset 작업과 맞춰 진행).
-        eventPublisher.publishEvent(new LeagueStarted(leagueId, listedStocks(leagueId)));
+        // 모든 참여자가 같은 시장 상태에서 거래를 시작하도록 초기 자산을 배분한다.
+        initialAssetAllocationService.allocate(leagueId, stockListings(leagueId));
         return new StartedLeague(leagueId, league.getStartedAt(), league.getEndsAt());
     }
 
-    private List<ListedStock> listedStocks(long leagueId) {
+    /**
+     * 초기 자산 배분 기준이 되는 리그의 상장 종목과 상장자.
+     *
+     * <p>TODO: asset의 도메인 타입({@link StockListing})을 직접 참조하는 임시 구현이다 (모듈 경계 규칙 위반).
+     *       asset이 리그 ID만 받는 배분 메서드를 제공하면 이 메서드를 지우고 그것을 호출한다.
+     *       그때 쓰이지 않게 된 {@link LeagueStarted}와 asset의 LeagueStartedListener도 함께 정리한다.
+     */
+    private List<StockListing> stockListings(long leagueId) {
         return stockQueryService.findAllByLeagueId(leagueId).stream()
-                .map(stock -> new ListedStock(stock.stockId(), stock.listerPlayerId()))
+                .map(stock -> new StockListing(stock.stockId(), stock.listerPlayerId()))
                 .toList();
     }
 }

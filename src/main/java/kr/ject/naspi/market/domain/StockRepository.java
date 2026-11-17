@@ -57,4 +57,12 @@ public interface StockRepository {
      * @return 종목, 없으면 빈 값
      */
     Optional<Stock> findById(Long id);
+
+    /**
+     * 리그에서 상장자가 상장한 종목을 삭제한다. 해당하는 종목이 없으면 아무것도 하지 않는다.
+     *
+     * @param leagueId 리그 ID
+     * @param listerPlayerId 상장자 플레이어 ID
+     */
+    void deleteByLeagueIdAndListerPlayerId(Long leagueId, Long listerPlayerId);
 }

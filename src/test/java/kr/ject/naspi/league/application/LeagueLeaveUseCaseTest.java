@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
+import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
@@ -11,6 +12,8 @@ import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockQueryService;
+import kr.ject.naspi.market.domain.StockName;
+import kr.ject.naspi.market.domain.StockRepository;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,10 +28,14 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({LeagueLeaveUseCase.class, LeagueStartUseCase.class, LeagueService.class,
         LeagueCreationUseCase.class, InviteCodeIssuer.class, LeagueJoinLimit.class,
         StockListingService.class, StockQueryService.class, LocalStockSnapshotCache.class,
+        InitialAssetAllocationService.class,
         MutableClock.Config.class})
 class LeagueLeaveUseCaseTest {
 
     private static final long HOST_MEMBER_ID = 1L;
+
+    @Autowired
+    private StockListingService stockListingService;
 
     @Autowired
     private LeagueLeaveUseCase useCaseUnderTest;
@@ -41,6 +48,12 @@ class LeagueLeaveUseCaseTest {
 
     @Autowired
     private LeagueCreationUseCase leagueCreationUseCase;
+
+    @Autowired
+    private StockListingService stockListingService;
+
+    @Autowired
+    private StockRepository stockRepository;
 
     @Autowired
     private TestEntityManager entityManager;
@@ -80,7 +93,28 @@ class LeagueLeaveUseCaseTest {
                 .isEqualTo(LeagueStatus.WAITING);
     }
 
-    // TODO: market에 종목 삭제 서비스가 생기면 "대기실을 나가면 상장된 종목은 삭제된다" 테스트를 추가한다.
+    @Test
+    @DisplayName("대기실을 나가면 상장한 종목만 삭제되고 이름은 다시 쓸 수 있다")
+    void leaveDeletesOnlyOwnStock() {
+        CreatedLeague created = createLeague();
+        CreatedLeague other = createLeague();
+        long memberId = nextMemberId++;
+        JoinedLeague joined = leagueService.join(memberId, created.inviteCode());
+        stockListingService.list(created.leagueId(), joined.playerId(), "나간종목", "소개");
+        leagueService.completeListing(joined.playerId());
+        stockListingService.list(other.leagueId(), joined.playerId() + 1000, "나간종목", "소개");
+
+        useCaseUnderTest.leave(memberId, created.leagueId());
+        flushAndClear();
+
+        assertThat(stockRepository.existsByListerPlayerId(joined.playerId())).isFalse();
+        assertThat(stockRepository.existsByLeagueIdAndName(
+                created.leagueId(), StockName.of("나간종목"))).isFalse();
+        assertThat(stockRepository.findAllByLeagueId(created.leagueId())).hasSize(1);
+        assertThat(stockRepository.existsByLeagueIdAndName(
+                other.leagueId(), StockName.of("나간종목"))).isTrue();
+    }
+
 
     @Test
     @DisplayName("대기실을 나간 사용자는 초대 코드로 다시 입장할 수 있다")
@@ -193,6 +227,9 @@ class LeagueLeaveUseCaseTest {
     /** 리그에 입장해 상장을 마친 참여자를 추가한다. */
     private JoinedLeague join(CreatedLeague created) {
         JoinedLeague joined = leagueService.join(nextMemberId++, created.inviteCode());
+        // 리그 시작 시 초기 자산을 배분하려면 참여자마다 실제 종목이 상장되어 있어야 한다.
+        stockListingService.list(created.leagueId(), joined.playerId(),
+                "종목" + joined.playerId(), "소개");
         leagueService.completeListing(joined.playerId());
         return joined;
     }

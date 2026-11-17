@@ -10,6 +10,7 @@ import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
+import kr.ject.naspi.market.application.StockListingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
  * 넘겨받을 참여자가 없으면 대기실이 삭제된다. 리그가 시작된 이후에는 나갈 수 없다.
  *
  * <p>종목은 하위 모듈인 market이 관리하므로 UseCase로 만들어 market 서비스로 종목을 지운다.
- * 종목 삭제는 market에 서비스가 생길 때까지 TODO로 남겨 둔다.
  */
 @Service
 @RequiredArgsConstructor
@@ -30,6 +30,7 @@ public class LeagueLeaveUseCase {
 
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
+    private final StockListingService stockListingService;
     private final Clock clock;
 
     /**
@@ -58,8 +59,7 @@ public class LeagueLeaveUseCase {
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
 
         boolean waitingRoomDeleted = league.leave(leaver, players, now);
-        // TODO: 나간 플레이어의 종목 삭제. market에 상장자 플레이어 ID로 종목을 지우는 서비스가 생기면 여기서 호출한다
-        //       (예: stockListingService.delist(leaver.getId())). 그 전까지는 나가도 종목이 남는다.
+        stockListingService.delist(leagueId, leaver.getId());
         playerRepository.delete(leaver);
         return new LeftLeague(leagueId, waitingRoomDeleted);
     }

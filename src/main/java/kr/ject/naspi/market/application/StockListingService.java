@@ -45,6 +45,8 @@ public class StockListingService {
         //       league 서비스에서 리그 행을 잠그고 League#isOpenForInvitation(now)로 확인해
         //       아니면 LEAGUE_NOT_FOUND를 던진다. 만료 스케줄러도 같은 행을 잠그므로 만료 직전 상장과 겹치지 않는다.
         // TODO: league 연동 전까지 회원 ID를 플레이어 ID로 임시 사용한다.
+        //       종목 조회의 mine·수정 API와 기준이 어긋나지 않도록 LeagueQueryService#findPlayerId로 얻은
+        //       플레이어 ID를 쓰도록 바꾼다 (StockEditService의 TODO 참고).
         long listerPlayerId = memberId;
         StockName stockName = StockName.of(name);
         StockDescription stockDescription = StockDescription.of(description);
@@ -62,5 +64,20 @@ public class StockListingService {
         //       연동 전에는 상장해도 대기자로 남는다.
         eventPublisher.publishEvent(new StockListed(stock.getId(), leagueId, listerPlayerId));
         return stock.getId();
+    }
+
+    /**
+     * 대기실에서 퇴장하는 플레이어가 상장한 종목을 삭제한다. 상장 전 대기자라 종목이 없으면 아무것도 하지 않는다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 대기실에서 퇴장하면 그 리그에서 상장한 종목이 삭제된다.
+     * 호출하는 퇴장 처리와 같은 트랜잭션에서 실행되므로 퇴장이 롤백되면 삭제도 롤백된다.
+     * 다른 리그의 종목, 같은 리그의 다른 플레이어 종목은 지우지 않는다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 퇴장하는 플레이어 ID
+     */
+    @Transactional
+    public void delist(long leagueId, long playerId) {
+        stockRepository.deleteByLeagueIdAndListerPlayerId(leagueId, playerId);
     }
 }
