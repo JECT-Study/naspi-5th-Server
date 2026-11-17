@@ -149,7 +149,17 @@ public enum ErrorCode {
     INVALID_ORDER_STATUS_TRANSITION("502", "처리할 수 없는 주문 상태입니다."),
 
     /** 주문 가격이 당일 상·하한가 범위를 벗어난 경우. */
-    ORDER_PRICE_OUT_OF_LIMIT("503", "주문 가격이 당일 상·하한가 범위를 벗어났습니다.");
+    ORDER_PRICE_OUT_OF_LIMIT("503", "주문 가격이 당일 상·하한가 범위를 벗어났습니다."),
+
+    // contents (6xx)
+    /** JPEG·PNG가 아니거나 확장자·Content-Type·파일 내용이 서로 맞지 않는 이미지를 올린 경우. */
+    INVALID_IMAGE_FORMAT("600", "JPEG, PNG 이미지만 업로드할 수 있습니다."),
+
+    /** 이미지가 비어 있거나 5MB를 넘는 경우. */
+    INVALID_IMAGE_SIZE("601", "이미지는 5MB 이하만 업로드할 수 있습니다."),
+
+    /** 공시 1건에 이미지를 4개보다 많이 첨부한 경우. */
+    IMAGE_COUNT_EXCEEDED("602", "이미지는 최대 4개까지 첨부할 수 있습니다.");
 
     private final String code;
     private final String message;
