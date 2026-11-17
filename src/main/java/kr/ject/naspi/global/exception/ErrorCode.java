@@ -159,7 +159,19 @@ public enum ErrorCode {
     INVALID_IMAGE_SIZE("601", "이미지는 5MB 이하만 업로드할 수 있습니다."),
 
     /** 공시 1건에 이미지를 4개보다 많이 첨부한 경우. */
-    IMAGE_COUNT_EXCEEDED("602", "이미지는 최대 4개까지 첨부할 수 있습니다.");
+    IMAGE_COUNT_EXCEEDED("602", "이미지는 최대 4개까지 첨부할 수 있습니다."),
+
+    /** 공시 제목이 비었거나 30자를 넘는 경우. */
+    INVALID_DISCLOSURE_TITLE("603", "공시 제목은 1~30자로 입력해야 합니다."),
+
+    /** 공시 본문이 비었거나 300자를 넘는 경우. */
+    INVALID_DISCLOSURE_BODY("604", "공시 본문은 1~300자로 입력해야 합니다."),
+
+    /** 본인이 상장하지 않은 종목에 공시를 작성하려는 경우. */
+    DISCLOSURE_STOCK_NOT_OWNED("605", "본인이 상장한 종목에만 공시를 작성할 수 있습니다."),
+
+    /** 진행 중이 아닌 리그(대기실, 종료)에 공시를 작성하려는 경우. */
+    DISCLOSURE_LEAGUE_NOT_STARTED("606", "진행 중인 리그에서만 공시를 작성할 수 있습니다.");
 
     private final String code;
     private final String message;

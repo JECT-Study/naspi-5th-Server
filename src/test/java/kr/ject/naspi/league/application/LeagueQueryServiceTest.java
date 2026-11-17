@@ -215,6 +215,24 @@ class LeagueQueryServiceTest {
     }
 
     @Test
+    @DisplayName("진행 중인 리그만 현재 거래일을 알려주고, 대기실은 거래일이 없다")
+    void findCurrentTradingDay() {
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));
+        CreatedLeague league = leagueWithParticipants(3);
+
+        assertThat(queryService.findCurrentTradingDay(league.leagueId())).isEmpty();
+
+        leagueStartUseCase.start(memberOf(league), league.leagueId());
+        clock.setTo(LocalDateTime.of(2026, 11, 17, 9, 0));
+
+        assertThat(queryService.findCurrentTradingDay(league.leagueId()))
+                .get().extracting(LeagueTradingDay::dayNumber).isEqualTo(2);
+        assertThatThrownBy(() -> queryService.findCurrentTradingDay(Long.MAX_VALUE))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
+    }
+
+    @Test
     @DisplayName("진행 중인 리그는 매일 09:00 KST에 거래일이 1일씩 늘어난다")
     void tradingDayAdvancesAtNine() {
         clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));

@@ -5,14 +5,16 @@
 ## 공시
 
 ### CNT-01 상장자는 자기 종목에 이미지와 함께 공시를 작성할 수 있다
-- Jira:
+- Jira: ND-14
 - 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시)
 - 선행: MKT-01, GLB-05
 - 내용: 상장자가 자기 종목에 공시 작성, `DisclosurePublished` 이벤트 발행
 - 완료 조건
-  - [ ] 제목 1~30자, 본문 1~300자, 이미지 JPEG/PNG 최대 4개
-  - [ ] 작성 횟수 무제한, 수정 불가
-- 결정 필요: 작성 가능 기간 (대기실 상태에서도 가능한지, 진행 중 리그만인지)
+  - [x] 제목 1~30자, 본문 1~300자, 이미지 JPEG/PNG 최대 4개 (이미지는 선택)
+  - [x] 작성 횟수 무제한, 수정 불가
+  - [x] 작성 완료 후 `DisclosurePublished` 발행 (AI 뉴스 생성 요청, 구독은 CNT-05)
+- 결정: 진행 중인 리그에서만 작성 가능 (대기실·종료 리그는 거절). 작성한 거래일을 `disclosure.trading_day`에 기록
+- 결정: 등록은 `POST /api/leagues/{leagueId}/stocks/{stockId}/disclosures` (multipart). 응답은 이미지 ID만 주고 서명 URL은 공시 조회(CNT-02)에서 발급
 
 ### CNT-02 참여자는 종목별 공시 목록과 상세 내용을 볼 수 있다
 - Jira:

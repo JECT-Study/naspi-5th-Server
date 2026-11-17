@@ -34,9 +34,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *
  * <p>정책 (docs/policies/v1/domain/contents.md "공시"): JPEG·PNG, 공시 1건에 최대 4개, 1장 최대 5MB.
  *
- * <p>TODO: 아직 호출하는 공시 기능이 없다. 공시 작성(CNT-01)에서 {@link #store}·{@link #attach}·
- * {@link #discard}를, 공시 조회(CNT-02)에서 {@link #issueUrls}를, 공시 삭제(CNT-03)에서 {@link #deleteAll}을
- * 호출하도록 연동한다.
+ * <p>TODO: 공시 조회(CNT-02)에서 {@link #issueUrls}를, 공시 삭제(CNT-03)에서 {@link #deleteAll}을 호출하도록 연동한다.
  */
 @Slf4j
 @Service
