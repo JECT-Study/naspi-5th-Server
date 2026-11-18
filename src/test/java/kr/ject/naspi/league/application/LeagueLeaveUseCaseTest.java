@@ -50,9 +50,6 @@ class LeagueLeaveUseCaseTest {
     private LeagueCreationUseCase leagueCreationUseCase;
 
     @Autowired
-    private StockListingService stockListingService;
-
-    @Autowired
     private StockRepository stockRepository;
 
     @Autowired
@@ -212,6 +209,54 @@ class LeagueLeaveUseCaseTest {
         assertThatThrownBy(() -> useCaseUnderTest.leave(HOST_MEMBER_ID, 999_999L))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("대기실에서 탈퇴하면 상장하지 않은 대기자는 바로 퇴장되고, 상장한 참여자는 종목이 삭제된 뒤 퇴장된다")
+    void withdrawLeavesWaitingRooms() {
+        CreatedLeague unlistedRoom = createLeague();
+        CreatedLeague listedRoom = createLeague();
+        long memberId = nextMemberId++;
+        final JoinedLeague unlisted = leagueService.join(memberId, unlistedRoom.inviteCode());
+        JoinedLeague listed = leagueService.join(memberId, listedRoom.inviteCode());
+        stockListingService.list(listedRoom.leagueId(), listed.playerId(), "탈퇴종목", "소개");
+        leagueService.completeListing(listed.playerId());
+
+        useCaseUnderTest.leaveAllWaitingRooms(memberId);
+        flushAndClear();
+
+        assertThat(entityManager.find(Player.class, unlisted.playerId())).isNull();
+        assertThat(entityManager.find(Player.class, listed.playerId())).isNull();
+        assertThat(stockRepository.existsByListerPlayerId(listed.playerId())).isFalse();
+    }
+
+    @Test
+    @DisplayName("대기실의 방장이 탈퇴하면 방장 위임과 동일하게 처리된다")
+    void hostWithdrawDelegates() {
+        CreatedLeague created = createLeague();
+        JoinedLeague participant = join(created);
+
+        useCaseUnderTest.leaveAllWaitingRooms(HOST_MEMBER_ID);
+        flushAndClear();
+
+        League league = entityManager.find(League.class, created.leagueId());
+        assertThat(league.getHostPlayerId()).isEqualTo(participant.playerId());
+        assertThat(entityManager.find(Player.class, created.hostPlayerId())).isNull();
+    }
+
+    @Test
+    @DisplayName("탈퇴해도 이미 시작된 리그의 플레이어는 퇴장되지 않는다")
+    void withdrawKeepsStartedLeague() {
+        CreatedLeague created = createLeague();
+        final long memberId = nextMemberId;
+        final JoinedLeague participant = join(created);
+        join(created);
+        leagueStartUseCase.start(HOST_MEMBER_ID, created.leagueId());
+
+        useCaseUnderTest.leaveAllWaitingRooms(memberId);
+        flushAndClear();
+
+        assertThat(entityManager.find(Player.class, participant.playerId())).isNotNull();
     }
 
     private void assertLeaveFails(long memberId, CreatedLeague created, ErrorCode errorCode) {
