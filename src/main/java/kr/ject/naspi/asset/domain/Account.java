@@ -40,11 +40,16 @@ public class Account {
     @Column(name = "reserved_deposit", nullable = false)
     private long reservedDeposit;
 
+    /** 회원 탈퇴로 현금이 폐기된 계좌 여부. 탈퇴한 참여자는 더 이상 거래할 수 없다. */
+    @Column(name = "withdrawn", nullable = false, columnDefinition = "boolean default false")
+    private boolean withdrawn;
+
     private Account(long leagueId, long playerId, long deposit) {
         this.leagueId = leagueId;
         this.playerId = playerId;
         this.deposit = deposit;
         this.reservedDeposit = 0;
+        this.withdrawn = false;
     }
 
     /**
@@ -79,13 +84,15 @@ public class Account {
      * @param quantity 주문 수량. 양수
      * @return 예약한 금액
      * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
-     * @throws NaspiBizException 주문 가능 현금이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_DEPOSIT})
+     * @throws NaspiBizException 주문 가능 현금이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_DEPOSIT}),
+     *     탈퇴한 참여자인 경우 ({@link ErrorCode#WITHDRAWN_PLAYER})
      */
     public long reserveForBuy(long price, long quantity) {
         if (price <= 0 || quantity <= 0) {
             throw new IllegalArgumentException(
                     "가격과 수량은 양수여야 합니다: price=" + price + ", quantity=" + quantity);
         }
+        ensureTradable();
         // 곱하기 전에 나눗셈으로 비교해 가격 × 수량이 long 범위를 넘는 경우도 함께 거절한다.
         if (quantity > orderableDeposit() / price) {
             throw new NaspiBizException(ErrorCode.INSUFFICIENT_DEPOSIT);
@@ -132,13 +139,15 @@ public class Account {
      * @param quantity 체결 수량. 양수
      * @return 실제 체결 금액
      * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
-     * @throws NaspiRuntimeException 체결가가 예약 기준 가격보다 높거나, 풀 금액이 예약금보다 많은 경우 (데이터 오류)
+     * @throws NaspiRuntimeException 체결가가 예약 기준 가격보다 높거나, 풀 금액이 예약금보다 많거나,
+     *     탈퇴한 참여자의 계좌인 경우 (데이터 오류)
      */
     public long settleBuy(long reservedPrice, long price, long quantity) {
         if (reservedPrice <= 0 || price <= 0 || quantity <= 0) {
             throw new IllegalArgumentException("가격과 수량은 양수여야 합니다: reservedPrice="
                     + reservedPrice + ", price=" + price + ", quantity=" + quantity);
         }
+        ensureNotWithdrawnForSettlement();
         if (price > reservedPrice) {
             throw new NaspiRuntimeException("매수 체결가가 예약 기준 가격보다 높습니다: playerId=" + playerId
                     + ", reservedPrice=" + reservedPrice + ", price=" + price);
@@ -158,14 +167,56 @@ public class Account {
      * @param quantity 체결 수량. 양수
      * @return 실제 체결 금액
      * @throws IllegalArgumentException 가격이나 수량이 0 이하인 경우
+     * @throws NaspiRuntimeException 탈퇴한 참여자의 계좌인 경우 (데이터 오류)
      */
     public long settleSell(long price, long quantity) {
         if (price <= 0 || quantity <= 0) {
             throw new IllegalArgumentException(
                     "가격과 수량은 양수여야 합니다: price=" + price + ", quantity=" + quantity);
         }
+        ensureNotWithdrawnForSettlement();
         long amount = Math.multiplyExact(price, quantity);
         deposit = Math.addExact(deposit, amount);
         return amount;
+    }
+
+    /**
+     * 회원 탈퇴로 현금을 폐기한다 (docs/policies/v1/domain/member.md "회원 탈퇴"). 예수금을 0으로 만들고
+     * 탈퇴 처리해 이후 거래를 막는다. 미체결 주문 취소로 예약금이 모두 풀린 뒤에 호출해야 한다.
+     * 이미 탈퇴 처리된 계좌는 아무것도 바꾸지 않는다. 호출하는 쪽은 계좌를 락으로 조회해야 한다.
+     *
+     * @return 폐기한 현금. 이미 탈퇴 처리된 계좌면 0
+     * @throws NaspiRuntimeException 예약금이 남아 있는 경우 (미체결 주문 취소가 먼저 끝나야 한다)
+     */
+    public long discardForWithdrawal() {
+        if (withdrawn) {
+            return 0;
+        }
+        if (reservedDeposit != 0) {
+            throw new NaspiRuntimeException("미체결 주문에 묶인 현금이 남아 있어 폐기할 수 없습니다: playerId="
+                    + playerId + ", reservedDeposit=" + reservedDeposit);
+        }
+        long discarded = deposit;
+        deposit = 0;
+        withdrawn = true;
+        return discarded;
+    }
+
+    /**
+     * 거래할 수 있는 계좌인지 확인한다.
+     *
+     * @throws NaspiBizException 탈퇴한 참여자인 경우 ({@link ErrorCode#WITHDRAWN_PLAYER})
+     */
+    public void ensureTradable() {
+        if (withdrawn) {
+            throw new NaspiBizException(ErrorCode.WITHDRAWN_PLAYER);
+        }
+    }
+
+    /** 탈퇴 후에는 미체결 주문이 없어야 하므로 탈퇴 계좌의 정산은 데이터 오류다. */
+    private void ensureNotWithdrawnForSettlement() {
+        if (withdrawn) {
+            throw new NaspiRuntimeException("탈퇴한 참여자의 계좌는 정산할 수 없습니다: playerId=" + playerId);
+        }
     }
 }

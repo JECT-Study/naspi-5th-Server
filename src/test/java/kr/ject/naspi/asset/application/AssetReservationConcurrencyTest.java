@@ -96,6 +96,7 @@ class AssetReservationConcurrencyTest {
                 StockDescription.of("소개"));
         long stockId = persist(stock);
         final long holdingId = persist(Holding.allocate(LEAGUE_ID, PLAYER_ID, stockId, 2_500));
+        persist(Account.open(LEAGUE_ID, PLAYER_ID, 1_000_000));
 
         long accepted = runConcurrently(
                 () -> service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 200));

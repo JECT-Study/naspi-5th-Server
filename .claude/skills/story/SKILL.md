@@ -25,9 +25,9 @@ scripts/find-story.sh $ARGUMENTS
   - 정책 링크 (`정책:` 줄) → 링크된 `docs/policies/<버전>/domain/*.md` 섹션을 읽는다 (버전은 스토리 파일 경로의 `docs/issues/<버전>/`).
   - 결정 필요 항목
   - 선행 스토리
-- **유형 판별**: `FILE` 경로가 `docs/issues/tasks/`이면 **Task**, `docs/issues/<버전>/`이면 **Story**다. Task는 아래 "Task 검증"으로 간다.
+- **유형 판별**: `FILE` 경로가 `docs/issues/tasks/` 또는 `docs/issues/<버전>/integration.md`(모듈 간 연동, INT)이면 **Task**, 그 밖의 `docs/issues/<버전>/`이면 **Story**다. Task는 아래 "Task 검증"으로 간다.
 
-### Task 검증 (`docs/issues/tasks/`)
+### Task 검증 (`docs/issues/tasks/`, `docs/issues/<버전>/integration.md`)
 
 Task는 정책과 무관한 기술 작업이다. 2~5단계 대신 다음을 한다.
 

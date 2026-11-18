@@ -65,6 +65,7 @@ class AssetReservationServiceTest {
     void reserveStockForSell() {
         long stockId = listStock(LEAGUE_ID, OTHER_PLAYER_ID);
         final long holdingId = holding(stockId, 1_250);
+        openAccount();
 
         service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 1_250);
 
@@ -72,10 +73,52 @@ class AssetReservationServiceTest {
     }
 
     @Test
+    @DisplayName("탈퇴한 참여자는 매수 주문을 넣을 수 없다")
+    void rejectBuyOfWithdrawnPlayer() {
+        final long accountId = withdrawnAccount();
+
+        assertThatThrownBy(() -> service.reserveCashForBuy(LEAGUE_ID, PLAYER_ID, 100, 1))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.WITHDRAWN_PLAYER);
+        assertThat(reload(Account.class, accountId).getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("탈퇴한 참여자는 보유 주식을 매도할 수 없다")
+    void rejectSellOfWithdrawnPlayer() {
+        withdrawnAccount();
+        long otherStockId = listStock(LEAGUE_ID, OTHER_PLAYER_ID);
+        final long otherHoldingId = holding(otherStockId, 625);
+        long ownStockId = listStock(LEAGUE_ID, PLAYER_ID);
+        final long ownHoldingId = holding(ownStockId, 2_500);
+
+        assertThatThrownBy(() -> service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, otherStockId, 1))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.WITHDRAWN_PLAYER);
+        assertThatThrownBy(() -> service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, ownStockId, 1))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.WITHDRAWN_PLAYER);
+        assertThat(reload(Holding.class, otherHoldingId).getReservedQuantity()).isZero();
+        assertThat(reload(Holding.class, ownHoldingId).getReservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("초기 자산이 배분되지 않은 참여자는 매도 주문을 넣을 수 없다")
+    void rejectSellWithoutAccount() {
+        long stockId = listStock(LEAGUE_ID, OTHER_PLAYER_ID);
+        holding(stockId, 1_250);
+
+        assertThatThrownBy(() -> service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 1))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.ASSET_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("본인이 상장한 종목(자사주)은 최소 유지분 1,000주를 남기지 못하는 매도 주문을 거절한다")
     void rejectTreasuryStockSellBelowMinShares() {
         long stockId = listStock(LEAGUE_ID, PLAYER_ID);
         final long holdingId = holding(stockId, 2_500);
+        openAccount();
         service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 1_500);
 
         assertThatThrownBy(() -> service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 1))
@@ -88,6 +131,7 @@ class AssetReservationServiceTest {
     @DisplayName("보유하지 않은 종목은 매도 주문을 넣을 수 없다")
     void rejectSellWithoutHolding() {
         long stockId = listStock(LEAGUE_ID, OTHER_PLAYER_ID);
+        openAccount();
 
         assertThatThrownBy(() -> service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 1))
                 .isInstanceOf(NaspiBizException.class)
@@ -122,6 +166,7 @@ class AssetReservationServiceTest {
     void releaseStockForSell() {
         long stockId = listStock(LEAGUE_ID, OTHER_PLAYER_ID);
         final long holdingId = holding(stockId, 1_250);
+        openAccount();
         service.reserveStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 400);
 
         service.releaseStockForSell(LEAGUE_ID, PLAYER_ID, stockId, 400);
@@ -136,6 +181,16 @@ class AssetReservationServiceTest {
                 .isInstanceOf(NaspiRuntimeException.class);
         assertThatThrownBy(() -> service.releaseStockForSell(LEAGUE_ID, PLAYER_ID, 100L, 1))
                 .isInstanceOf(NaspiRuntimeException.class);
+    }
+
+    private void openAccount() {
+        entityManager.persist(Account.open(LEAGUE_ID, PLAYER_ID, 1_000_000));
+    }
+
+    private long withdrawnAccount() {
+        Account account = Account.open(LEAGUE_ID, PLAYER_ID, 1_000_000);
+        account.discardForWithdrawal();
+        return entityManager.persistAndGetId(account, Long.class);
     }
 
     private long listStock(long leagueId, long listerPlayerId) {

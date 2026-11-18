@@ -130,6 +130,20 @@ public class LeagueQueryService {
     }
 
     /**
+     * 회원이 참여 중인 진행 중(시작 후 종료 전) 리그의 플레이어를 모두 조회한다. 회원 탈퇴 처리에서 asset 등이
+     * 탈퇴자의 리그별 플레이어를 찾을 때 쓴다. 탈퇴 트랜잭션 안에서 회원이 삭제되기 전에 호출해야 한다.
+     *
+     * @param memberId 회원 ID
+     * @return 리그 ID와 플레이어 ID 목록. 진행 중인 리그에 참여하지 않았으면 빈 목록
+     */
+    public List<MemberPlayer> findStartedPlayersOfMember(long memberId) {
+        return playerRepository.findAllByMemberIdAndLeagueStatus(memberId, LeagueStatus.STARTED)
+                .stream()
+                .map(player -> new MemberPlayer(player.getLeagueId(), player.getId()))
+                .toList();
+    }
+
+    /**
      * 진행 중(시작 후 종료 전)인 리그의 ID를 모두 조회한다. market의 현재가 캐시 갱신에 쓴다.
      *
      * @return 진행 중인 리그 ID 목록
