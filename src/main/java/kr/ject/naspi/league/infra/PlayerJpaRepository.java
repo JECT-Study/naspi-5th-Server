@@ -28,6 +28,14 @@ interface PlayerJpaRepository extends Repository<Player, Long>, PlayerRepository
 
     @Override
     @Query("""
+            select p.leagueId from Player p, League l
+            where l.id = p.leagueId and p.memberId = :memberId and l.status = :status
+            """)
+    List<Long> findLeagueIdsByMemberIdAndLeagueStatus(@Param("memberId") Long memberId,
+            @Param("status") LeagueStatus status);
+
+    @Override
+    @Query("""
             select p from Player p, League l
             where l.id = p.leagueId and p.memberId = :memberId and l.status = :leagueStatus
             """)
