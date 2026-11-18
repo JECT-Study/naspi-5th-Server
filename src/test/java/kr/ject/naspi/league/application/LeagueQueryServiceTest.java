@@ -233,6 +233,30 @@ class LeagueQueryServiceTest {
     }
 
     @Test
+    @DisplayName("회원이 참여 중인 진행 중 리그의 플레이어를 모두 찾고, 대기실과 다른 회원은 제외한다")
+    void findStartedPlayersOfMember() {
+        CreatedLeague first = leagueWithParticipants(3);
+        CreatedLeague second = leagueWithParticipants(3);
+        long host = memberOf(first);
+        final long guest = memberOf(second);
+        // host를 두 번째 리그의 참여자로 입장시킨다.
+        JoinedLeague joined = leagueService.join(host, second.inviteCode());
+        stockListingService.list(second.leagueId(), joined.playerId(), "호스트종목", "소개");
+        leagueService.completeListing(joined.playerId());
+        leagueStartUseCase.start(host, first.leagueId());
+        leagueStartUseCase.start(guest, second.leagueId());
+        CreatedLeague waiting = useCase.create(host, "대기", "대기종목", "소개");
+
+        assertThat(queryService.findStartedPlayersOfMember(host))
+                .containsExactlyInAnyOrder(
+                        new MemberPlayer(first.leagueId(), first.hostPlayerId()),
+                        new MemberPlayer(second.leagueId(), joined.playerId()));
+        assertThat(queryService.findStartedPlayersOfMember(host))
+                .noneMatch(player -> player.leagueId() == waiting.leagueId());
+        assertThat(queryService.findStartedPlayersOfMember(member("외부인"))).isEmpty();
+    }
+
+    @Test
     @DisplayName("진행 중인 리그는 매일 09:00 KST에 거래일이 1일씩 늘어난다")
     void tradingDayAdvancesAtNine() {
         clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));

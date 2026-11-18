@@ -35,7 +35,7 @@ member ← league ← market ← asset ← order
 | 체결 (`TradeExecuted`) | order | market: 현재가·거래량 갱신 / websocket: 매수자·매도자 자산 즉시 발행 (커밋 이후, [설계](../design/asset-realtime.md)) |
 | 거래일 전환 (`TradingDayChanged`, 매일 09:00 KST) | league | market: 종가 확정·기준가 적용 / order: 미체결 만료 |
 | 공시 게시 (`DisclosurePublished`) | contents | contents: AI 뉴스 비동기 생성 |
-| 회원 탈퇴 (`MemberWithdrawn`) | member | order: 주문 취소 / asset: 현금 폐기 / market: 종목 연결 해제 / league: 결과 처리 |
+| 회원 탈퇴 (`MemberWithdrawn`) | member | order: 주문 취소 후 asset 현금 폐기 호출 (`AssetWithdrawalService`, 순서 보장) / market: 종목 연결 해제 / league: 결과 처리 |
 | 리그 종료 | league | order: 미체결 전체 취소 / league: 결과 산정 |
 
 ## 작성 규칙
