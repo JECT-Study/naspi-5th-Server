@@ -12,6 +12,7 @@ import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
@@ -30,7 +31,8 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({LeagueQueryService.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
         StockQueryService.class, LocalStockSnapshotCache.class, MemberService.class,
-        LeagueStartUseCase.class, InitialAssetAllocationService.class, MutableClock.Config.class})
+        LeagueStartUseCase.class,
+        StockOpeningService.class, InitialAssetAllocationService.class, MutableClock.Config.class})
 class LeagueQueryServiceTest {
 
     private long kakaoId = 1000L;

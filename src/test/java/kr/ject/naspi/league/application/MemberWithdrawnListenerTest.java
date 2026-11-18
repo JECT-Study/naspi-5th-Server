@@ -8,6 +8,7 @@ import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
@@ -24,7 +25,8 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({MemberWithdrawnListener.class, MemberService.class, LeagueLeaveUseCase.class,
-        LeagueStartUseCase.class, LeagueService.class, LeagueCreationUseCase.class,
+        LeagueStartUseCase.class,
+        StockOpeningService.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, LeagueQueryService.class,
         StockListingService.class,
         StockQueryService.class, LocalStockSnapshotCache.class,

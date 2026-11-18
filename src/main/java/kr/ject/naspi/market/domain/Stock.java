@@ -25,6 +25,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Stock {
 
+    /** 시초가 (1주당 원). 모든 종목의 최초 가격이자 최초 거래일의 기준가다. */
+    public static final long OPENING_PRICE = 10_000L;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -42,9 +45,9 @@ public class Stock {
     private StockDescription description;
 
     /**
-     * 현재가 (1주당 원). 상장 시점에는 비어 있다.
+     * 현재가 (1주당 원). 상장 시점에는 비어 있고, 리그가 시작되면 시초가가 된다 ({@link #open()}).
      *
-     * <p>TODO: 리그 시작 시 시초가 적용은 MKT-04, 체결 시 갱신은 MKT-05에서 구현한다.
+     * <p>TODO: 체결 시 최신 체결가로 갱신은 MKT-05에서 구현한다.
      * 발행량·발행가는 정책상 고정값이라 저장하지 않고 상수로 계산한다 (InitialAllocation).
      */
     @Column(name = "current_price")
@@ -90,6 +93,21 @@ public class Stock {
      */
     public void changeDescription(StockDescription description) {
         this.description = description;
+    }
+
+    /**
+     * 리그 시작 시 거래를 연다. 현재가를 시초가로 정한다.
+     *
+     * <p>정책 (docs/policies/v1/domain/market.md "시장"): 모든 종목의 최초 가격은 시초가 1주당 10,000원이고,
+     * 첫 체결 전 현재가와 최초 거래일의 기준가는 시초가다.
+     *
+     * @throws IllegalStateException 이미 거래가 열린 종목인 경우
+     */
+    public void open() {
+        if (currentPrice != null) {
+            throw new IllegalStateException("이미 거래가 열린 종목입니다: stockId=" + id);
+        }
+        this.currentPrice = OPENING_PRICE;
     }
 
     /**

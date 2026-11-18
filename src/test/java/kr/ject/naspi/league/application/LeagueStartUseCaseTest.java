@@ -11,7 +11,9 @@ import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.TradingDay;
+import kr.ject.naspi.market.application.LeagueStock;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
@@ -25,7 +27,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({LeagueStartUseCase.class, LeagueService.class, LeagueCreationUseCase.class,
+@Import({LeagueStartUseCase.class,
+        StockOpeningService.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
         StockQueryService.class, LocalStockSnapshotCache.class,
         InitialAssetAllocationService.class, MutableClock.Config.class, LeagueQueryService.class,
@@ -42,6 +45,9 @@ class LeagueStartUseCaseTest {
 
     @Autowired
     private LeagueService leagueService;
+
+    @Autowired
+    private StockQueryService stockQueryService;
 
     @Autowired
     private LeagueCreationUseCase useCase;
@@ -139,6 +145,34 @@ class LeagueStartUseCaseTest {
         useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId());
 
         assertThat(countAccounts(created.leagueId())).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("리그가 시작되면 모든 종목의 현재가가 시초가 10,000원이 된다")
+    void opensAllStocksAtOpeningPrice() {
+        CreatedLeague created = leagueWithParticipants(3);
+        assertThat(stockQueryService.findAllByLeagueId(created.leagueId()))
+                .extracting(LeagueStock::currentPrice).containsOnlyNulls();
+
+        useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId());
+
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(stockQueryService.findAllByLeagueId(created.leagueId()))
+                .hasSize(3)
+                .extracting(LeagueStock::currentPrice).containsOnly(10_000L);
+    }
+
+    @Test
+    @DisplayName("리그 시작 조건을 만족하지 않아 시작이 거절되면 종목 현재가도 정해지지 않는다")
+    void doesNotOpenStocksWhenStartRejected() {
+        CreatedLeague created = leagueWithParticipants(2);
+
+        assertThatThrownBy(() -> useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId()))
+                .isInstanceOf(NaspiBizException.class);
+
+        assertThat(stockQueryService.findAllByLeagueId(created.leagueId()))
+                .extracting(LeagueStock::currentPrice).containsOnlyNulls();
     }
 
     @Test

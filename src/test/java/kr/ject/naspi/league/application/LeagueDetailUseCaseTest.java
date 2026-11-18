@@ -10,6 +10,7 @@ import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueDetail.DetailPlayer;
 import kr.ject.naspi.league.application.LeagueDetail.PlayerStock;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
@@ -28,7 +29,8 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({LeagueDetailUseCase.class, LeagueQueryService.class, LeagueCreationUseCase.class,
         LeagueService.class, LeagueJoinLimit.class, InviteCodeIssuer.class,
         StockListingService.class, StockQueryService.class, LocalStockSnapshotCache.class,
-        MemberService.class, LeagueStartUseCase.class, InitialAssetAllocationService.class,
+        MemberService.class, LeagueStartUseCase.class,
+        StockOpeningService.class, InitialAssetAllocationService.class,
         MutableClock.Config.class})
 class LeagueDetailUseCaseTest {
 
