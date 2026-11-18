@@ -110,6 +110,13 @@ naspi:
       # 호가 (OrderBookTopic)
       orderbook:
         interval: 1s
+  # AI 공시브리핑 생성 (OpenRouterProperties). 타임아웃·재시도 간격은 기본값을 쓴다
+  ai:
+    openrouter:
+      # TODO: k8s manifest 의 naspi-secret-common 에 OPENROUTER_API_KEY 추가. 없으면 호출이 401 로 실패한다
+      api-key: ${OPENROUTER_API_KEY:}
+      # 이미지 입력과 structured outputs(json_schema) 를 모두 지원하는 모델이어야 한다
+      model: ${OPENROUTER_MODEL:google/gemini-2.5-flash}
 
 logging:
   structured:

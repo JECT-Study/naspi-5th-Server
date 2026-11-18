@@ -32,6 +32,11 @@ naspi:
   # 주기 작업(대기실 만료 등)이 테스트 데이터·관측 기록에 끼어들지 않도록 끈다
   scheduling:
     enabled: false
+  # 테스트에서 실제 OpenRouter 를 호출하지 않는다
+  ai:
+    openrouter:
+      api-key: openrouter-test-key
+      retry-delay: 0s
 
 management:
   server:
