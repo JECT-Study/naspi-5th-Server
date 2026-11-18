@@ -71,6 +71,7 @@
 - Jira: ND-33
 - 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/domain/asset.md#주문-가능-자산-및-정산)
 - 선행: AST-03, AST-04
+- 진행: asset 해제 API(`AssetReservationService.releaseCashForBuy`/`releaseStockForSell`)는 order가 정한 미체결 잔량만큼 해제한다. 현재 운영 호출처는 자전거래 취소(`LimitOrderService`)뿐이고, 사용자 취소·만료·리그 종료·탈퇴 흐름의 호출은 ORD-07/09/10/11(order 담당)에서 붙인다.
 - 완료 조건
   - [x] 취소·만료 시 미체결 잔량에 해당하는 예약 현금·주식 해제
 
@@ -78,9 +79,10 @@
 - Jira: ND-59
 - 정책: [member.md#회원-탈퇴](../../policies/v1/domain/member.md#회원-탈퇴)
 - 선행: MBR-06, ORD-11
+- 진행: asset 쪽 구현 완료 (`AssetWithdrawalService.discardCash`/`discardCashOfMember`, `Account.withdrawn`, 탈퇴 계좌의 매수·매도 예약 거절). asset은 `MemberWithdrawn`을 직접 듣지 않는다. 완료 조건은 asset 모듈 기준으로 체크했고, order가 "주문 취소 → 예약 해제 → 현금 폐기"로 호출하는 연결은 [INT-01](integration.md#int-01-회원-탈퇴-시-order가-미체결-주문을-취소한-뒤-asset-현금-폐기를-호출한다)에서 한다
 - 완료 조건
-  - [ ] 미체결 주문 취소(ORD-11) 이후 현금 폐기
-  - [ ] 보유 주식은 수량 유지, 이후 거래 불가 (발행주식 총수에 포함)
+  - [x] 미체결 주문 취소(ORD-11) 이후 현금 폐기
+  - [x] 보유 주식은 수량 유지, 이후 거래 불가 (발행주식 총수에 포함)
 
 ### AST-08 시스템은 참여자별 총자산을 집계할 수 있다
 - Jira: ND-62
@@ -88,7 +90,8 @@
 - 선행: AST-01
 - 내용: 리그가 호출 (진행 중 순위, 리그 결과). 평가 가격은 호출하는 쪽이 종목별로 넘긴다
 - 완료 조건
-  - [ ] 총자산 = 현금 + Σ(보유 수량 × 평가 가격), 자사주 포함
-  - [ ] 평가 가격은 호출자가 지정 (진행 중: 현재가, 종료 시: 종료 평가 가격)
-  - [ ] 원 미만 절사
-  - [ ] 참여자별 현금, 종목별 보유 수량·평가액, 총자산을 함께 반환
+  - [x] 총자산 = 현금 + Σ(보유 수량 × 평가 가격), 자사주 포함
+  - [x] 평가 가격은 호출자가 지정 (진행 중: 현재가, 종료 시: 종료 평가 가격)
+  - [x] 원 미만 절사
+  - [x] 참여자별 현금, 종목별 보유 수량·평가액, 총자산을 함께 반환
+- 진행: asset 쪽 구현 완료 (`AssetQueryService.aggregateTotalAssets(leagueId, Map<종목 ID, 평가 가격(원)>)`, 반환 `PlayerTotalAsset`). 탈퇴자도 집계하고 `withdrawn`으로 표시하며 제외는 league가 한다. 평가 가격 누락은 `NaspiRuntimeException`. league가 market 평가 가격을 받아 이 API를 호출하는 연결은 [INT-05](integration.md), [INT-06](integration.md)에서 한다

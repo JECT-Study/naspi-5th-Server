@@ -33,4 +33,12 @@ interface PlayerJpaRepository extends Repository<Player, Long>, PlayerRepository
             """)
     List<Long> findLeagueIdsByMemberIdAndLeagueStatus(@Param("memberId") Long memberId,
             @Param("status") LeagueStatus status);
+
+    @Override
+    @Query("""
+            select p from Player p, League l
+            where l.id = p.leagueId and p.memberId = :memberId and l.status = :leagueStatus
+            """)
+    List<Player> findAllByMemberIdAndLeagueStatus(@Param("memberId") Long memberId,
+            @Param("leagueStatus") LeagueStatus leagueStatus);
 }
