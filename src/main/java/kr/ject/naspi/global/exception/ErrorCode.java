@@ -171,7 +171,13 @@ public enum ErrorCode {
     DISCLOSURE_STOCK_NOT_OWNED("605", "본인이 상장한 종목에만 공시를 작성할 수 있습니다."),
 
     /** 진행 중이 아닌 리그(대기실, 종료)에 공시를 작성하려는 경우. */
-    DISCLOSURE_LEAGUE_NOT_STARTED("606", "진행 중인 리그에서만 공시를 작성할 수 있습니다.");
+    DISCLOSURE_LEAGUE_NOT_STARTED("606", "진행 중인 리그에서만 공시를 작성할 수 있습니다."),
+
+    /** 공시가 없거나, 다른 리그·종목의 공시이거나, 이미 삭제된 경우. */
+    DISCLOSURE_NOT_FOUND("607", "공시를 찾을 수 없습니다."),
+
+    /** 공시 작성자가 아닌 플레이어가 공시를 삭제하려는 경우. */
+    DISCLOSURE_NOT_AUTHOR("608", "공시 작성자만 삭제할 수 있습니다.");
 
     private final String code;
     private final String message;

@@ -279,6 +279,100 @@ class DisclosureServiceTest {
         then(imageStorage).should(never()).delete(anyString());
     }
 
+    @Test
+    @DisplayName("공시 작성자는 자신의 공시를 삭제할 수 있고, 삭제한 공시는 조회 대상에서 빠지며 첨부 이미지도 지운다")
+    void delete() {
+        League league = startedLeague();
+        PublishedDisclosure result = publishAsHost(league, "제목", "본문", png("a.png"));
+
+        disclosureService.delete(league.hostMemberId, league.leagueId, league.hostStockId,
+                result.disclosureId());
+
+        entityManager.flush();
+        entityManager.clear();
+        Disclosure deleted = entityManager.find(Disclosure.class, result.disclosureId());
+        assertThat(deleted.isDeleted()).isTrue();
+        assertThat(deleted.getStatus()).isEqualTo(DisclosureStatus.DELETED);
+        assertThat(images(result.disclosureId())).isEmpty();
+        // 파일은 커밋된 뒤에 지운다 (ImageServiceTest). 테스트 트랜잭션은 커밋하지 않으므로 아직 남아 있어야 한다.
+        then(imageStorage).should(never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("공시를 삭제해도 공시 행은 남긴다 (공시 기반 AI 뉴스는 삭제 후에도 유지)")
+    void deleteKeepsRow() {
+        League league = startedLeague();
+        PublishedDisclosure result = publishAsHost(league, "제목", "본문");
+
+        disclosureService.delete(league.hostMemberId, league.leagueId, league.hostStockId,
+                result.disclosureId());
+
+        entityManager.clear();
+        Disclosure deleted = entityManager.find(Disclosure.class, result.disclosureId());
+        assertThat(deleted).isNotNull();
+        assertThat(deleted.getTitle().getValue()).isEqualTo("제목");
+    }
+
+    @Test
+    @DisplayName("종료된 리그의 공시도 작성자는 삭제할 수 있다")
+    void deleteInEndedLeague() {
+        League league = startedLeague();
+        PublishedDisclosure result = publishAsHost(league, "제목", "본문");
+        // 리그가 끝나면 현재 거래일이 없다
+        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
+
+        disclosureService.delete(league.hostMemberId, league.leagueId, league.hostStockId,
+                result.disclosureId());
+
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(entityManager.find(Disclosure.class, result.disclosureId()).isDeleted())
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("공시 작성자 본인만 삭제할 수 있다 (같은 리그의 다른 참여자는 삭제 불가)")
+    void deleteByOtherPlayer() {
+        League league = startedLeague();
+        PublishedDisclosure result = publishAsHost(league, "제목", "본문", png("a.png"));
+
+        assertBiz(() -> disclosureService.delete(league.otherMemberId, league.leagueId,
+                league.hostStockId, result.disclosureId()), ErrorCode.DISCLOSURE_NOT_AUTHOR);
+
+        entityManager.clear();
+        assertThat(entityManager.find(Disclosure.class, result.disclosureId()).isDeleted())
+                .isFalse();
+        assertThat(images(result.disclosureId())).hasSize(1);
+        then(imageStorage).should(never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("리그에 입장하지 않은 회원은 공시를 삭제할 수 없다")
+    void deleteByOutsider() {
+        League league = startedLeague();
+        PublishedDisclosure result = publishAsHost(league, "제목", "본문");
+
+        assertBiz(() -> disclosureService.delete(OUTSIDER_MEMBER_ID, league.leagueId,
+                league.hostStockId, result.disclosureId()), ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("이미 삭제했거나 없는 공시, 다른 종목의 공시는 삭제할 수 없다")
+    void deleteNotFound() {
+        League league = startedLeague();
+        PublishedDisclosure result = publishAsHost(league, "제목", "본문");
+
+        assertBiz(() -> disclosureService.delete(league.hostMemberId, league.leagueId,
+                league.hostStockId + 1, result.disclosureId()), ErrorCode.DISCLOSURE_NOT_FOUND);
+        assertBiz(() -> disclosureService.delete(league.hostMemberId, league.leagueId,
+                league.hostStockId, 999_999L), ErrorCode.DISCLOSURE_NOT_FOUND);
+
+        disclosureService.delete(league.hostMemberId, league.leagueId, league.hostStockId,
+                result.disclosureId());
+        assertBiz(() -> disclosureService.delete(league.hostMemberId, league.leagueId,
+                league.hostStockId, result.disclosureId()), ErrorCode.DISCLOSURE_NOT_FOUND);
+    }
+
     private PublishedDisclosure publishAsHost(League league, String title, String body,
                                               ImageFile... images) {
         return disclosureService.publish(league.hostMemberId, league.leagueId,

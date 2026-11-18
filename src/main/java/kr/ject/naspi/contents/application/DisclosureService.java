@@ -18,7 +18,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 공시 작성.
+ * 공시 작성·삭제.
  *
  * <p>정책 (docs/policies/v1/domain/contents.md "공시"): 상장자는 자기 종목에 공시를 작성할 수 있고 작성 횟수는
  * 제한하지 않는다. 제목 1~30자, 본문 1~300자, 이미지는 선택이며 JPEG·PNG로 최대 4개다. 작성을 마치면 공시 기반
@@ -109,5 +109,40 @@ public class DisclosureService {
             imageService.discard(stored);
             throw e;
         }
+    }
+
+    /**
+     * 자신이 작성한 공시를 삭제한다.
+     *
+     * <p>정책 (docs/policies/v1/domain/contents.md "삭제"): 공시 작성자 본인만 삭제할 수 있다. 삭제한 공시와 공시에
+     * 달린 댓글은 조회할 수 없지만, 공시 기반 AI 뉴스와 이미 체결된 거래는 유지한다. 그래서 공시 행은 지우지 않고
+     * 상태만 바꾸며, 첨부 이미지는 더 이상 볼 수 없으므로 파일까지 지운다 (파일은 커밋 후 삭제). 작성과 달리
+     * 리그 상태는 따지지 않아 종료된 리그의 공시도 삭제할 수 있다 (docs/issues/v1/contents.md CNT-03 결정).
+     *
+     * <p>TODO: 뉴스 자동 재시도 유지·수동 재시도 차단(CNT-06, CNT-07)과 댓글 조회 차단(CNT-09)은 해당 기능을
+     *       구현할 때 {@link Disclosure#isDeleted()}로 처리한다.
+     *
+     * @param memberId 삭제하는 회원 ID
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param disclosureId 공시 ID
+     * @throws NaspiBizException 리그에 입장하지 않았거나, 공시가 없거나(다른 리그·종목, 이미 삭제 포함),
+     *         작성자가 아닌 경우
+     */
+    public void delete(long memberId, long leagueId, long stockId, long disclosureId) {
+        // 회원의 플레이어 정보 조회
+        long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        // 공시 상태 변경과 이미지 메타데이터 삭제를 한 트랜잭션으로 묶는다
+        transactionTemplate.executeWithoutResult(status -> {
+            // 경로의 리그·종목에 속한 공시만 삭제 대상으로 본다 (다른 리그·종목의 공시 ID로 지우는 것 방지)
+            Disclosure disclosure = disclosureRepository.findById(disclosureId)
+                    .filter(d -> d.getLeagueId() == leagueId && d.getStockId() == stockId)
+                    .orElseThrow(() -> new NaspiBizException(ErrorCode.DISCLOSURE_NOT_FOUND));
+            // 작성자 본인 확인 후 소프트 삭제 (공시 기반 AI 뉴스가 참조하므로 행은 남긴다)
+            disclosure.delete(playerId);
+            // 삭제한 공시의 이미지는 볼 수 없으므로 메타데이터를 지우고, 파일은 커밋 후 저장소에서 지운다
+            imageService.deleteAll(disclosureId);
+        });
     }
 }

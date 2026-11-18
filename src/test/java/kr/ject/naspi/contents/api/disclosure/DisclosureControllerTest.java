@@ -8,8 +8,11 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -115,6 +118,34 @@ class DisclosureControllerTest {
     @DisplayName("로그인하지 않으면 공시를 작성할 수 없다")
     void unauthenticated() throws Exception {
         mockMvc.perform(multipart(URL).param("title", "제목").param("body", "본문"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("공시 작성자는 POST /disclosures/{id}/delete로 공시를 삭제한다")
+    void delete() throws Exception {
+        mockMvc.perform(post(URL + "/5/delete").with(loginMember()).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("000"));
+
+        then(disclosureService).should().delete(MEMBER_ID, 3L, 11L, 5L);
+    }
+
+    @Test
+    @DisplayName("공시 작성자가 아니면 비즈니스 오류 코드로 응답한다")
+    void deleteNotAuthor() throws Exception {
+        willThrow(new NaspiBizException(ErrorCode.DISCLOSURE_NOT_AUTHOR))
+                .given(disclosureService).delete(anyLong(), anyLong(), anyLong(), anyLong());
+
+        mockMvc.perform(post(URL + "/5/delete").with(loginMember()).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("608"));
+    }
+
+    @Test
+    @DisplayName("로그인하지 않으면 공시를 삭제할 수 없다")
+    void deleteUnauthenticated() throws Exception {
+        mockMvc.perform(post(URL + "/5/delete").with(csrf()))
                 .andExpect(status().isUnauthorized());
     }
 

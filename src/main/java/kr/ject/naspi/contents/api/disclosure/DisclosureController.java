@@ -22,9 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 공시 작성.
+ * 공시 작성·삭제.
  */
-@Tag(name = "공시", description = "공시 작성")
+@Tag(name = "공시", description = "공시 작성·삭제")
 @RestController
 @RequestMapping("/api/leagues/{leagueId}/stocks/{stockId}/disclosures")
 @RequiredArgsConstructor
@@ -88,6 +88,49 @@ public class DisclosureController {
         return Result.success(DisclosureResponse.from(disclosureService.publish(
                 loginMember.memberId(), leagueId, stockId, request.title(), request.body(),
                 toImageFiles(request.images()))));
+    }
+
+    /**
+     * 자신이 작성한 공시를 삭제한다.
+     *
+     * @param loginMember 로그인한 회원
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param disclosureId 공시 ID
+     * @return 성공 응답
+     * @throws NaspiBizException 공시가 없거나 작성자가 아닌 경우
+     */
+    @Operation(
+            summary = "공시 삭제",
+            description = """
+                    자신이 작성한 공시를 삭제한다. 삭제한 공시와 공시에 달린 댓글은 더 이상 조회되지 않는다. \
+                    공시를 바탕으로 만든 AI 뉴스와 이미 체결된 거래는 그대로 유지된다. 첨부 이미지도 함께 삭제된다.
+
+                    **요청**
+                    - 로그인 세션 쿠키가 필요하다. \
+                    `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
+                    - 요청 본문은 없다.
+                    - 리그 상태와 관계없이 삭제할 수 있다 (종료된 리그의 공시 포함).
+
+                    **성공 시** HTTP 200, `code` `"000"`, `data` 없음.
+
+                    **실패 응답** (`code`는 3자리 문자열)
+
+                    | HTTP | code | 상황 | 프론트 처리 |
+                    |---|---|---|---|
+                    | 200 | `"607"` | 공시가 없거나 이미 삭제됨 (다른 리그·종목의 공시 포함) | 목록 새로고침 |
+                    | 200 | `"608"` | 작성자가 아님 | 안내 (삭제 버튼은 작성자에게만 노출) |
+                    | 200 | `"004"` | 리그에 입장하지 않은 회원 | 안내 후 홈으로 |
+                    | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
+                    """)
+    @PostMapping("/{disclosureId}/delete")
+    public Result<Void> delete(
+            @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
+            @PathVariable long leagueId,
+            @PathVariable long stockId,
+            @PathVariable long disclosureId) {
+        disclosureService.delete(loginMember.memberId(), leagueId, stockId, disclosureId);
+        return Result.success();
     }
 
     private static List<ImageFile> toImageFiles(List<MultipartFile> images) {

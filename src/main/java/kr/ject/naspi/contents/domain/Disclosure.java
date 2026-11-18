@@ -12,6 +12,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -88,5 +90,30 @@ public class Disclosure {
                                      LocalDateTime createdAt) {
         return new Disclosure(leagueId, stockId, authorPlayerId, title, body, tradingDay,
                 createdAt);
+    }
+
+    /**
+     * 작성자가 공시를 삭제한다. 정책: 공시 작성자 본인만 삭제할 수 있다.
+     *
+     * @param playerId 삭제하려는 플레이어 ID
+     * @throws NaspiBizException 이미 삭제된 공시이거나 작성자가 아닌 경우
+     */
+    public void delete(long playerId) {
+        if (isDeleted()) {
+            throw new NaspiBizException(ErrorCode.DISCLOSURE_NOT_FOUND);
+        }
+        if (authorPlayerId != playerId) {
+            throw new NaspiBizException(ErrorCode.DISCLOSURE_NOT_AUTHOR);
+        }
+        this.status = DisclosureStatus.DELETED;
+    }
+
+    /**
+     * 삭제된 공시인지 확인한다. 삭제된 공시와 공시에 달린 댓글은 조회할 수 없다.
+     *
+     * @return 삭제되었으면 true
+     */
+    public boolean isDeleted() {
+        return status == DisclosureStatus.DELETED;
     }
 }
