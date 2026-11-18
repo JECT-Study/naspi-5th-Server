@@ -89,7 +89,7 @@
   - [ ] 거래일 집계가 종가 기준이다 — `./gradlew test --tests "kr.ject.naspi.league.*TradingDay*"`
 
 ### INT-07 league가 asset의 domain을 직접 참조하지 않는다
-- Jira:
+- Jira: ND-81
 - 목적: 경계 규칙 위반 정리. `LeagueStartUseCase`가 `kr.ject.naspi.asset.domain.StockListing`을 import한다 (`LeagueStartUseCase.java:8`)
 - 내용: `StockListing`에 해당하는 입력 타입을 asset `application`에 두고 `InitialAssetAllocationService#allocate`가 그것을 받게 한다
 - 선행: 없음
