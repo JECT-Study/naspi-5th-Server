@@ -94,5 +94,5 @@
 - 내용: `StockListing`에 해당하는 입력 타입을 asset `application`에 두고 `InitialAssetAllocationService#allocate`가 그것을 받게 한다
 - 선행: 없음
 - 완료 조건 (확인 방법)
-  - [ ] `grep -rn "import kr.ject.naspi.asset.domain" src/main/java --exclude-dir=asset` 결과 없음
-  - [ ] `./gradlew test --tests "kr.ject.naspi.league.application.LeagueStartUseCaseTest" --tests "kr.ject.naspi.asset.application.InitialAssetAllocationServiceTest"`
+  - [x] `grep -rn "import kr.ject.naspi.asset.domain" src/main/java --exclude-dir=asset` 결과 없음
+  - [x] `./gradlew test --tests "kr.ject.naspi.league.application.LeagueStartUseCaseTest" --tests "kr.ject.naspi.asset.application.InitialAssetAllocationServiceTest"`
