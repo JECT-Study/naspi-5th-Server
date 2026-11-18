@@ -38,7 +38,7 @@
   - [x] 인증 실패 등으로 막힌 요청도 로그에 남는다 — `./gradlew test --tests "kr.ject.naspi.global.logging.*"`
 
 ### COM-03 하위 모듈 참조용 UseCase 규칙 추가
-- Jira:
+- Jira: ND-69
 - 목적: 하위 모듈을 참조해야 하는 예외적인 경우를 Service와 구분해, 의존 방향을 지키면서도 하위 모듈을 참조할 수 있게 한다
 - 작업 내용: `application` 계층의 Service는 상위 모듈만 참조하고, 하위 모듈을 참조해야 하는 경우는 UseCase로 작성하도록 규칙 추가
 - 완료 조건 (확인 방법)
@@ -66,3 +66,11 @@
 - 완료 조건 (확인 방법)
   - [x] PR에서 컴파일과 실행 jar 생성을 검증한다 — `.github/workflows/verify.yml`, `./gradlew assemble testClasses`
   - [ ] 저장소 브랜치 보호에서 `verify`를 `development/**` 필수 상태 검사로 지정한다 — GitHub Settings → Branches
+
+### COM-06 웹소켓 발행 이벤트 다중 서버 구성
+- Jira: ND-49
+- 목적: 서버가 여러 대일 때 한 인스턴스에서 발생한 이벤트를 다른 인스턴스에 연결된 클라이언트에게도 발행한다
+- 작업 내용: 내장 브로커 전제인 `TopicMessagePublisher`를 Redis Pub/Sub(또는 메시지 브로커) 구현으로 교체한다. 로컬 메모리 캐시(`StockSnapshotCache` 등)도 같은 전제라 함께 검토한다 (CLAUDE.md, `docs/design/asset-realtime.md`)
+- 완료 조건 (확인 방법)
+  - [ ] 인스턴스 A에서 발생한 이벤트가 인스턴스 B에 구독한 클라이언트에게 발행된다 — 서버 2대 실행 후 STOMP 구독 확인
+- 결정 필요: Redis Pub/Sub와 RabbitMQ 중 선택 (새 기술 도입은 승인 필요)
