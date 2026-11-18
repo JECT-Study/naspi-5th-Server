@@ -89,9 +89,7 @@ class LeagueDetailUseCaseTest {
         for (int i = 0; i < 2; i++) {
             guest = member("손님");
             guestPlayer = leagueService.join(guest, league.inviteCode());
-            stockListingService.list(league.leagueId(), guestPlayer.playerId(),
-                    "종목" + i, "소개");
-            leagueService.completeListing(guestPlayer.playerId());
+            stockListingService.list(league.leagueId(), guest, "종목" + i, "소개");
         }
         leagueStartUseCase.start(host, league.leagueId());
         leagueService.recordWithdrawal(guest);

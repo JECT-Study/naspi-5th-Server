@@ -15,6 +15,7 @@ import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.domain.StockRepository;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
+import kr.ject.naspi.member.application.MemberService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,8 +29,8 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({LeagueLeaveUseCase.class, LeagueStartUseCase.class, LeagueService.class,
         LeagueCreationUseCase.class, InviteCodeIssuer.class, LeagueJoinLimit.class,
         StockListingService.class, StockQueryService.class, LocalStockSnapshotCache.class,
-        InitialAssetAllocationService.class,
-        MutableClock.Config.class})
+        InitialAssetAllocationService.class, MutableClock.Config.class, LeagueQueryService.class,
+        MemberService.class})
 class LeagueLeaveUseCaseTest {
 
     private static final long HOST_MEMBER_ID = 1L;
@@ -96,10 +97,10 @@ class LeagueLeaveUseCaseTest {
         CreatedLeague created = createLeague();
         CreatedLeague other = createLeague();
         long memberId = nextMemberId++;
-        JoinedLeague joined = leagueService.join(memberId, created.inviteCode());
-        stockListingService.list(created.leagueId(), joined.playerId(), "나간종목", "소개");
-        leagueService.completeListing(joined.playerId());
-        stockListingService.list(other.leagueId(), joined.playerId() + 1000, "나간종목", "소개");
+        final JoinedLeague joined = leagueService.join(memberId, created.inviteCode());
+        stockListingService.list(created.leagueId(), memberId, "나간종목", "소개");
+        leagueService.join(memberId, other.inviteCode());
+        stockListingService.list(other.leagueId(), memberId, "나간종목", "소개");
 
         useCaseUnderTest.leave(memberId, created.leagueId());
         flushAndClear();
@@ -218,9 +219,8 @@ class LeagueLeaveUseCaseTest {
         CreatedLeague listedRoom = createLeague();
         long memberId = nextMemberId++;
         final JoinedLeague unlisted = leagueService.join(memberId, unlistedRoom.inviteCode());
-        JoinedLeague listed = leagueService.join(memberId, listedRoom.inviteCode());
-        stockListingService.list(listedRoom.leagueId(), listed.playerId(), "탈퇴종목", "소개");
-        leagueService.completeListing(listed.playerId());
+        final JoinedLeague listed = leagueService.join(memberId, listedRoom.inviteCode());
+        stockListingService.list(listedRoom.leagueId(), memberId, "탈퇴종목", "소개");
 
         useCaseUnderTest.leaveAllWaitingRooms(memberId);
         flushAndClear();
@@ -271,11 +271,10 @@ class LeagueLeaveUseCaseTest {
 
     /** 리그에 입장해 상장을 마친 참여자를 추가한다. */
     private JoinedLeague join(CreatedLeague created) {
-        JoinedLeague joined = leagueService.join(nextMemberId++, created.inviteCode());
+        long memberId = nextMemberId++;
+        JoinedLeague joined = leagueService.join(memberId, created.inviteCode());
         // 리그 시작 시 초기 자산을 배분하려면 참여자마다 실제 종목이 상장되어 있어야 한다.
-        stockListingService.list(created.leagueId(), joined.playerId(),
-                "종목" + joined.playerId(), "소개");
-        leagueService.completeListing(joined.playerId());
+        stockListingService.list(created.leagueId(), memberId, "종목" + joined.playerId(), "소개");
         return joined;
     }
 

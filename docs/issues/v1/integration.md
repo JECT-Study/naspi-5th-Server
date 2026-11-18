@@ -109,7 +109,7 @@
   - market → league는 상위 모듈 참조라 Service에서 league `application`을 호출한다
 - 선행: LEA-05, MKT-01, MKT-02
 - 완료 조건 (확인 방법)
-  - [ ] market에서 상장 시 참여자 전환을 호출한다 — `grep -rn "completeListing" src/main/java/kr/ject/naspi/market` 결과 있음
-  - [ ] market에 회원 ID를 플레이어 ID로 쓰는 임시 코드가 없다 — `grep -rn "long listerPlayerId = memberId\|long playerId = memberId" src/main/java/kr/ject/naspi/market` 결과 없음
-  - [ ] 대기자가 상장하면 참여자가 되고, 참여자 3명·대기자 0명이면 리그를 시작할 수 있다 — `./gradlew test --tests "kr.ject.naspi.market.*" --tests "kr.ject.naspi.league.*"`
-  - [ ] 시작된 리그에서 상장·이름 수정이 거절되고 소개 수정은 허용된다, 만료된 대기실 상장이 거절된다 — 같은 테스트
+  - [x] market에서 상장 시 참여자 전환을 호출한다 — `grep -rn "completeListing" src/main/java/kr/ject/naspi/market` 결과 있음
+  - [x] market에 회원 ID를 플레이어 ID로 쓰는 임시 코드가 없다 — `grep -rn "long listerPlayerId = memberId\|long playerId = memberId" src/main/java/kr/ject/naspi/market` 결과 없음
+  - [x] 대기자가 상장하면 참여자가 되고, 참여자 3명·대기자 0명이면 리그를 시작할 수 있다 — `./gradlew test --tests "kr.ject.naspi.market.*" --tests "kr.ject.naspi.league.*"`
+  - [x] 시작된 리그에서 상장·이름 수정이 거절되고 소개 수정은 허용된다, 만료된 대기실 상장이 거절된다 — 같은 테스트

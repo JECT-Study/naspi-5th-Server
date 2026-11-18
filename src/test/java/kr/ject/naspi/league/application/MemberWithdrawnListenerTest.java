@@ -25,7 +25,8 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @Import({MemberWithdrawnListener.class, MemberService.class, LeagueLeaveUseCase.class,
         LeagueStartUseCase.class, LeagueService.class, LeagueCreationUseCase.class,
-        InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
+        InviteCodeIssuer.class, LeagueJoinLimit.class, LeagueQueryService.class,
+        StockListingService.class,
         StockQueryService.class, LocalStockSnapshotCache.class,
         InitialAssetAllocationService.class, MutableClock.Config.class})
 class MemberWithdrawnListenerTest {
@@ -130,9 +131,7 @@ class MemberWithdrawnListenerTest {
 
     private void join(CreatedLeague league, long memberId) {
         JoinedLeague joined = leagueService.join(memberId, league.inviteCode());
-        stockListingService.list(league.leagueId(), joined.playerId(),
-                "종목" + joined.playerId(), "소개");
-        leagueService.completeListing(joined.playerId());
+        stockListingService.list(league.leagueId(), memberId, "종목" + joined.playerId(), "소개");
     }
 
     private long playerIdOf(CreatedLeague league, long memberId) {
