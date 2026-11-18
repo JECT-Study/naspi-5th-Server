@@ -8,6 +8,7 @@ import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
+import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
 import lombok.RequiredArgsConstructor;
@@ -84,5 +85,22 @@ public class LeagueService {
                 .orElseThrow(() -> new NaspiRuntimeException(
                         "상장한 플레이어를 찾을 수 없습니다. playerId=" + playerId));
         player.completeListing(LocalDateTime.now(clock));
+    }
+
+    /**
+     * 회원 탈퇴 시 시작·종료된 리그의 플레이어에 탈퇴일시를 기록한다. 플레이어 행은 남긴다.
+     *
+     * <p>정책 (docs/policies/v1/domain/member.md "회원 탈퇴"): 종료 전 탈퇴인지 종료 후 탈퇴인지는
+     * 탈퇴일시와 리그 종료 시각을 비교해 판정한다. 대기실은 퇴장 처리로 플레이어가 삭제되므로 대상이 아니다.
+     *
+     * @param memberId 탈퇴한 회원 ID
+     */
+    @Transactional
+    public void recordWithdrawal(long memberId) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (LeagueStatus status : new LeagueStatus[] {LeagueStatus.STARTED, LeagueStatus.ENDED}) {
+            playerRepository.findAllByMemberIdAndLeagueStatus(memberId, status)
+                    .forEach(player -> player.withdraw(now));
+        }
     }
 }
