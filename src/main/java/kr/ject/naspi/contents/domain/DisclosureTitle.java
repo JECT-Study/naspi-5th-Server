@@ -23,8 +23,8 @@ public class DisclosureTitle {
     /** 제목 최대 글자 수. */
     public static final int MAX_LENGTH = 30;
 
-    // 이모지 등 4바이트 문자를 허용하므로 글자 수의 4배로 잡는다
-    @Column(name = "title", nullable = false, length = MAX_LENGTH * 4)
+    // 이모지 등 4바이트 문자를 허용하므로 글자 수의 4배로 잡는다. 작성 후 수정 불가 (updatable = false)
+    @Column(name = "title", nullable = false, updatable = false, length = MAX_LENGTH * 4)
     private String value;
 
     private DisclosureTitle(String value) {

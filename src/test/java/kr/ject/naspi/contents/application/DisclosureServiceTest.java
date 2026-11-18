@@ -11,6 +11,7 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
+import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -18,7 +19,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import kr.ject.naspi.contents.domain.Disclosure;
+import kr.ject.naspi.contents.domain.DisclosureBody;
 import kr.ject.naspi.contents.domain.DisclosureStatus;
+import kr.ject.naspi.contents.domain.DisclosureTitle;
 import kr.ject.naspi.contents.domain.Image;
 import kr.ject.naspi.contents.domain.ImageStorage;
 import kr.ject.naspi.global.exception.ErrorCode;
@@ -41,6 +44,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
@@ -150,6 +154,33 @@ class DisclosureServiceTest {
         }
 
         assertThat(events.stream(DisclosurePublished.class)).hasSize(20);
+    }
+
+    @Test
+    @DisplayName("작성이 완료된 공시는 수정할 수 없다 (제목·본문·작성 정보가 저장 후 바뀌지 않는다)")
+    void publishedDisclosureIsImmutable() throws Exception {
+        League league = startedLeague();
+        PublishedDisclosure result = disclosureService.publish(league.hostMemberId,
+                league.leagueId, league.hostStockId, "원래 제목", "원래 본문", List.of());
+        entityManager.flush();
+        entityManager.clear();
+
+        // 공시 수정 API·메서드가 없으므로, 영속 상태의 필드를 강제로 바꿔도 DB에 반영되지 않는지 확인한다.
+        Disclosure loaded = entityManager.find(Disclosure.class, result.disclosureId());
+        ReflectionTestUtils.setField(loaded, "title", DisclosureTitle.of("바꾼 제목"));
+        ReflectionTestUtils.setField(loaded, "body", DisclosureBody.of("바꾼 본문"));
+        ReflectionTestUtils.setField(loaded, "tradingDay", 5);
+        entityManager.flush();
+        entityManager.clear();
+
+        Disclosure reloaded = entityManager.find(Disclosure.class, result.disclosureId());
+        assertThat(reloaded.getTitle().getValue()).isEqualTo("원래 제목");
+        assertThat(reloaded.getBody().getValue()).isEqualTo("원래 본문");
+        assertThat(reloaded.getTradingDay()).isEqualTo(2);
+        assertThat(Disclosure.class.getMethods())
+                .extracting(Method::getName)
+                .noneMatch(name -> name.startsWith("set") || name.startsWith("update")
+                        || name.startsWith("edit") || name.startsWith("change"));
     }
 
     @Test

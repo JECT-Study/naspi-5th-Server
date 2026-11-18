@@ -5,7 +5,7 @@
 ## 공시
 
 ### CNT-01 상장자는 자기 종목에 이미지와 함께 공시를 작성할 수 있다
-- Jira: ND-14
+- Jira: ND-14, ND-16
 - 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시)
 - 선행: MKT-01, GLB-05
 - 내용: 상장자가 자기 종목에 공시 작성, `DisclosurePublished` 이벤트 발행

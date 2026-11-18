@@ -23,8 +23,8 @@ public class DisclosureBody {
     /** 본문 최대 글자 수. */
     public static final int MAX_LENGTH = 300;
 
-    // 이모지 등 4바이트 문자를 허용하므로 글자 수의 4배로 잡는다
-    @Column(name = "body", nullable = false, length = MAX_LENGTH * 4)
+    // 이모지 등 4바이트 문자를 허용하므로 글자 수의 4배로 잡는다. 작성 후 수정 불가 (updatable = false)
+    @Column(name = "body", nullable = false, updatable = false, length = MAX_LENGTH * 4)
     private String value;
 
     private DisclosureBody(String value) {
