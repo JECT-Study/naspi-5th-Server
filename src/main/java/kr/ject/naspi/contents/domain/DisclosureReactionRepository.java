@@ -1,5 +1,7 @@
 package kr.ject.naspi.contents.domain;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -33,6 +35,15 @@ public interface DisclosureReactionRepository {
      * @return 반응 수
      */
     long countByDisclosureIdAndType(Long disclosureId, DisclosureReactionType type);
+
+    /**
+     * 여러 공시의 반응을 한 번에 찾는다 (공시 목록의 반응 집계용). 리그 인원이 최대 10명이라 공시 1건의 반응도 최대
+     * 10개다.
+     *
+     * @param disclosureIds 공시 ID 목록
+     * @return 반응 목록
+     */
+    List<DisclosureReaction> findAllByDisclosureIdIn(Collection<Long> disclosureIds);
 
     /**
      * 반응을 삭제한다 (반응 취소).

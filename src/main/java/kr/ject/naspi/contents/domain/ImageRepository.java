@@ -1,5 +1,6 @@
 package kr.ject.naspi.contents.domain;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -22,6 +23,15 @@ public interface ImageRepository {
      * @return 이미지 목록, 없으면 빈 목록
      */
     List<Image> findAllByDisclosureIdOrderBySortOrderAsc(Long disclosureId);
+
+    /**
+     * 여러 공시의 이미지를 한 번에 찾는다 (공시 목록용). 공시별로 첨부 순서대로 정렬한다.
+     *
+     * @param disclosureIds 공시 ID 목록
+     * @return 이미지 목록, 없으면 빈 목록
+     */
+    List<Image> findAllByDisclosureIdInOrderByDisclosureIdAscSortOrderAsc(
+            Collection<Long> disclosureIds);
 
     /**
      * 이미지를 한 번에 삭제한다.

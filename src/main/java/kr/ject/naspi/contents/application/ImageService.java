@@ -4,7 +4,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import kr.ject.naspi.contents.domain.Image;
 import kr.ject.naspi.contents.domain.ImageFormat;
@@ -137,6 +141,35 @@ public class ImageService {
                         imageStorage.signedUrl(image.getObjectKey(), signedUrlExpiration),
                         expiresAt))
                 .toList();
+    }
+
+    /**
+     * 공시 목록용 이미지 미리보기를 공시별로 만든다. 서명 URL은 첫 이미지에만 발급해 IAM {@code signBlob} 호출을
+     * 공시 1건당 최대 1번으로 줄인다 (docs/issues/v1/contents.md CNT-02 결정).
+     *
+     * @param disclosureIds 공시 ID 목록
+     * @return 공시 ID별 미리보기. 이미지가 없는 공시는 담지 않는다
+     */
+    public Map<Long, ImagePreview> previews(Collection<Long> disclosureIds) {
+        // 빈 페이지면 IN () 쿼리를 보내지 않는다
+        if (disclosureIds.isEmpty()) {
+            return Map.of();
+        }
+        // 만료 시각 계산
+        LocalDateTime expiresAt = LocalDateTime.now(clock).plus(signedUrlExpiration);
+        // 공시 목록의 이미지는 첫 장만 보여주므로 서명 URL도 첫 장에만 발급하고, 나머지는 개수만 알려준다
+        Map<Long, List<Image>> byDisclosure = imageRepository
+                .findAllByDisclosureIdInOrderByDisclosureIdAscSortOrderAsc(disclosureIds).stream()
+                .collect(Collectors.groupingBy(Image::getDisclosureId));
+        Map<Long, ImagePreview> previews = new HashMap<>();
+        byDisclosure.forEach((disclosureId, images) -> {
+            // 첫번째 이미지에만 서명 URL 발급
+            Image first = images.get(0);
+            previews.put(disclosureId, new ImagePreview(images.size(), new ImageUrl(first.getId(),
+                    imageStorage.signedUrl(first.getObjectKey(), signedUrlExpiration),
+                    expiresAt)));
+        });
+        return previews;
     }
 
     /**

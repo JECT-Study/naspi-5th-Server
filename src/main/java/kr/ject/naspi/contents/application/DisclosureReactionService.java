@@ -1,7 +1,12 @@
 package kr.ject.naspi.contents.application;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureReaction;
 import kr.ject.naspi.contents.domain.DisclosureReactionRepository;
@@ -90,6 +95,42 @@ public class DisclosureReactionService {
             reaction.changeTo(type);
             return summarize(disclosureId, type);
         }));
+    }
+
+    /**
+     * 여러 공시의 반응을 한 번에 집계한다 (공시 목록·상세 조회용). 반응이 없는 공시도 0으로 담는다.
+     *
+     * @param disclosureIds 공시 ID 목록
+     * @param playerId 조회하는 플레이어 ID (내 반응 표시용)
+     * @return 공시 ID별 반응 집계
+     */
+    public Map<Long, DisclosureReactionSummary> summarizeAll(Collection<Long> disclosureIds,
+                                                             long playerId) {
+        if (disclosureIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<DisclosureReaction>> byDisclosure = reactionRepository
+                .findAllByDisclosureIdIn(disclosureIds).stream()
+                .collect(Collectors.groupingBy(DisclosureReaction::getDisclosureId));
+        Map<Long, DisclosureReactionSummary> summaries = new HashMap<>();
+        for (long disclosureId : disclosureIds) {
+            List<DisclosureReaction> reactions = byDisclosure.getOrDefault(disclosureId,
+                    List.of());
+            summaries.put(disclosureId, new DisclosureReactionSummary(disclosureId,
+                    countOf(reactions, DisclosureReactionType.LIKE),
+                    countOf(reactions, DisclosureReactionType.DISLIKE),
+                    reactions.stream()
+                            .filter(r -> r.getPlayerId() == playerId)
+                            .map(DisclosureReaction::getType)
+                            .findFirst()
+                            .orElse(null)));
+        }
+        return summaries;
+    }
+
+    private static long countOf(List<DisclosureReaction> reactions,
+                                DisclosureReactionType type) {
+        return reactions.stream().filter(r -> r.getType() == type).count();
     }
 
     /** 리그에 입장한 회원인지, 리그가 진행 중인지 확인하고 플레이어 ID를 돌려준다. */

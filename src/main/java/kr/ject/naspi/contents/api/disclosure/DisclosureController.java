@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 공시 작성·삭제.
  */
-@Tag(name = "공시", description = "공시 작성·삭제")
+@Tag(name = "공시", description = "공시 작성·삭제·조회")
 @RestController
 @RequestMapping("/api/leagues/{leagueId}/stocks/{stockId}/disclosures")
 @RequiredArgsConstructor

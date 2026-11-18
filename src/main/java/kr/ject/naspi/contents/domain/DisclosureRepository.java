@@ -1,5 +1,6 @@
 package kr.ject.naspi.contents.domain;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -22,4 +23,15 @@ public interface DisclosureRepository {
      * @return 공시
      */
     Optional<Disclosure> findById(Long id);
+
+    /**
+     * 종목의 게시 중인(삭제되지 않은) 공시를 최신순으로 커서 이후부터 찾는다.
+     *
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param cursor 이 ID보다 작은(이전에 작성된) 공시부터 찾는다. 첫 페이지면 null
+     * @param limit 최대 개수
+     * @return 공시 목록 (ID 내림차순)
+     */
+    List<Disclosure> findPublishedByStock(long leagueId, long stockId, Long cursor, int limit);
 }

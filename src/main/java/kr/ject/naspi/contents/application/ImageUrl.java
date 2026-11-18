@@ -8,7 +8,8 @@ import java.time.LocalDateTime;
  *
  * @param imageId 이미지 ID
  * @param signedUrl 서명 URL (만료 전까지 여러 번 사용 가능)
- * @param expiresAt 만료 일시 (KST)
+ * @param expiresAt 서명 URL 만료 일시 (KST). 이미지 저장 만료가 아니라 URL 접근 가능 기한이며, 지나면 새 URL을
+ *                  발급받아야 한다 (이미지 파일은 공시가 삭제될 때까지 남아 있다)
  */
 public record ImageUrl(long imageId, String signedUrl, LocalDateTime expiresAt) {
 }
