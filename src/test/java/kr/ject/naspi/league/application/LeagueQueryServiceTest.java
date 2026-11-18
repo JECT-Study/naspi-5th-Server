@@ -181,7 +181,7 @@ class LeagueQueryServiceTest {
     }
 
     @Test
-    @DisplayName("대기실에 있는 동안 탈퇴한 회원은 이름 없이 목록에 남는다")
+    @DisplayName("탈퇴 기록 없이 회원 정보가 없는 플레이어는 이름 없이 남는다")
     void withdrawnMemberHasNoName() {
         long host = member("방장");
         long guest = member("손님");
@@ -196,6 +196,32 @@ class LeagueQueryServiceTest {
                 .filteredOn(player -> player.playerId() == joined.playerId())
                 .singleElement()
                 .extracting(LeaguePlayer::name).isNull();
+    }
+
+    @Test
+    @DisplayName("진행 중인 리그에서 탈퇴한 참여자의 표시 이름은 '탈퇴한 사용자'다")
+    void withdrawnParticipantShownAsWithdrawnUser() {
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        JoinedLeague guest = leagueService.join(member("손님"), league.inviteCode());
+        stockListingService.list(league.leagueId(), guest.playerId(), "손님종목", "소개");
+        leagueService.completeListing(guest.playerId());
+        leagueStartUseCase.start(host, league.leagueId());
+        long guestMemberId = entityManager.find(Player.class, guest.playerId()).getMemberId();
+        leagueService.recordWithdrawal(guestMemberId);
+        entityManager.remove(entityManager.find(Member.class, guestMemberId));
+        entityManager.flush();
+
+        LeaguePlayers players = queryService.getPlayers(host, league.leagueId());
+
+        assertThat(players.players())
+                .filteredOn(player -> player.playerId() == guest.playerId())
+                .singleElement()
+                .extracting(LeaguePlayer::name).isEqualTo("탈퇴한 사용자");
+        assertThat(players.players())
+                .filteredOn(player -> player.playerId() == league.hostPlayerId())
+                .singleElement()
+                .extracting(LeaguePlayer::name).isEqualTo("방장");
     }
 
     @Test

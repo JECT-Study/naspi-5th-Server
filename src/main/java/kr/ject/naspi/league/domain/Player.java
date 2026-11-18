@@ -30,6 +30,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Player {
 
+    /** 탈퇴한 회원의 표시 이름. */
+    public static final String WITHDRAWN_DISPLAY_NAME = "탈퇴한 사용자";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -56,6 +59,10 @@ public class Player {
     /** 상장일시 (종목 상장을 마쳐 참여자가 된 일시). 대기자는 비어 있다. */
     @Column(name = "listed_at")
     private LocalDateTime listedAt;
+
+    /** 탈퇴일시 (시작된 리그에서 회원이 탈퇴한 일시). 탈퇴하지 않았으면 비어 있다. */
+    @Column(name = "withdrawn_at")
+    private LocalDateTime withdrawnAt;
 
     private Player(long leagueId, long memberId, LocalDateTime joinedAt) {
         this.leagueId = leagueId;
@@ -85,5 +92,34 @@ public class Player {
     public void completeListing(LocalDateTime listedAt) {
         this.listed = true;
         this.listedAt = Objects.requireNonNull(listedAt, "listedAt");
+    }
+
+    /**
+     * 회원 탈퇴로 탈퇴일시를 기록한다. 플레이어 행은 지우지 않는다.
+     *
+     * @param withdrawnAt 탈퇴일시
+     * @throws IllegalStateException 이미 탈퇴일시가 기록된 경우
+     */
+    public void withdraw(LocalDateTime withdrawnAt) {
+        Objects.requireNonNull(withdrawnAt, "withdrawnAt");
+        if (this.withdrawnAt != null) {
+            throw new IllegalStateException("이미 탈퇴한 플레이어입니다. playerId=" + id);
+        }
+        this.withdrawnAt = withdrawnAt;
+    }
+
+    /** 탈퇴한 플레이어인지 여부. */
+    public boolean isWithdrawn() {
+        return withdrawnAt != null;
+    }
+
+    /**
+     * 리그 종료 시각 전에 탈퇴했는지 판정한다. 종료 시각 정각의 탈퇴는 종료 후로 본다.
+     *
+     * @param endsAt 리그 종료 시각
+     * @return 종료 시각 전에 탈퇴했으면 true
+     */
+    public boolean isWithdrawnBefore(LocalDateTime endsAt) {
+        return withdrawnAt != null && withdrawnAt.isBefore(endsAt);
     }
 }
