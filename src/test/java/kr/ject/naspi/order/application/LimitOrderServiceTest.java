@@ -264,6 +264,26 @@ class LimitOrderServiceTest {
     }
 
     @Test
+    @DisplayName("주문을 취소하고 같은 가격으로 다시 넣으면 새 접수 시각 기준이므로 먼저 대기하던 다른 주문보다 뒤에 체결된다")
+    void reorderedOrderLosesTimePriority() {
+        PlacedOrder original = place(SELLER, OrderSide.SELL, 11_000, 10);
+        PlacedOrder other = place(LISTER, OrderSide.SELL, 11_000, 10);
+        cancel(SELLER, original.orderId());
+        PlacedOrder reordered = place(SELLER, OrderSide.SELL, 11_000, 10);
+
+        place(BUYER, OrderSide.BUY, 11_000, 10);
+
+        // 취소 전이었다면 original이 other보다 먼저 접수되어 먼저 체결된다. 재주문은 새 주문이라 가장 뒤에 선다.
+        assertThat(reordered.orderId()).isGreaterThan(other.orderId());
+        assertThat(entityManager.find(Order.class, other.orderId()).getStatus())
+                .isEqualTo(OrderStatus.FILLED);
+        assertThat(entityManager.find(Order.class, reordered.orderId()).getStatus())
+                .isEqualTo(OrderStatus.PENDING);
+        assertThat(entityManager.find(Order.class, original.orderId()).getStatus())
+                .isEqualTo(OrderStatus.CANCELED);
+    }
+
+    @Test
     @DisplayName("본인 주문이 아니면 취소할 수 없고 주문은 그대로 남는다")
     void rejectCancelOfOthersOrder() {
         PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 10);
