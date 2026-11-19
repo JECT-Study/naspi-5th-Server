@@ -58,7 +58,7 @@
 ## 뉴스
 
 ### CNT-05 공시가 게시되면 AI가 공시 내용을 바탕으로 뉴스 1개를 생성한다
-- Jira:
+- Jira: ND-19
 - 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/domain/contents.md#뉴스---공시-기반-ai-뉴스)
 - 선행: CNT-01, GLB-06
 - 내용: `DisclosurePublished` 비동기 구독

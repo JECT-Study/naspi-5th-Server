@@ -11,6 +11,7 @@ import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.member.application.MemberService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +24,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({LeagueCreationUseCase.class, LeagueService.class, LeagueJoinLimit.class,
-        InviteCodeIssuer.class, StockListingService.class, MutableClock.Config.class})
+        InviteCodeIssuer.class, StockListingService.class, MutableClock.Config.class,
+        LeagueQueryService.class, MemberService.class})
 class LeagueJoinLimitTest {
 
     private static final long MEMBER_ID = 1L;

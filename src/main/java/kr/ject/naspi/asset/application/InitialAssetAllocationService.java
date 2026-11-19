@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 배분이 완료되지 않으면 거래할 수 없다. 모든 참여자의 계좌와 보유 주식을 한 트랜잭션에서 저장해
  * 일부만 배분된 상태가 남지 않게 한다.
  *
- * <p>리그 시작 이벤트는 {@link LeagueStartedListener}가 받아 호출한다.
+ * <p>리그 시작 UseCase가 리그 시작과 같은 트랜잭션에서 직접 호출한다. 배분이 실패하면 리그 시작도 롤백된다.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,17 +33,20 @@ public class InitialAssetAllocationService {
      * 리그 참여자 전원에게 초기 주식과 현금을 배분한다.
      *
      * @param leagueId 리그 ID
-     * @param listings 리그의 모든 상장 종목과 상장자 (참여자당 1종목)
+     * @param listedStocks 리그의 모든 상장 종목과 상장자 (참여자당 1종목)
      * @throws IllegalArgumentException 상장 종목 목록이 배분 조건에 맞지 않는 경우
      * @throws NaspiRuntimeException 이미 배분된 리그인 경우
      */
     @Transactional
-    public void allocate(long leagueId, List<StockListing> listings) {
+    public void allocate(long leagueId, List<ListedStock> listedStocks) {
         if (accountRepository.existsByLeagueId(leagueId)) {
             throw new NaspiRuntimeException("이미 초기 자산이 배분된 리그입니다: " + leagueId);
         }
 
         // 모든 종목에 대해 자산 배분 처리
+        List<StockListing> listings = listedStocks.stream()
+                .map(stock -> new StockListing(stock.stockId(), stock.listerPlayerId()))
+                .toList();
         InitialAllocation allocation = InitialAllocation.calculate(listings);
 
         List<Account> accounts = allocation.allocations().stream()

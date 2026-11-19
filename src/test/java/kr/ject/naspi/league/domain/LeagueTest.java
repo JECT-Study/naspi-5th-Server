@@ -10,6 +10,7 @@ import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class LeagueTest {
 
@@ -145,6 +146,31 @@ class LeagueTest {
         assertThatThrownBy(() -> league.start(participants(3), EXPIRES_AT))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("대기실·진행 중 리그는 통과하고, 만료·삭제된 대기실은 리그 없음, 종료된 리그는 거절한다")
+    void requireOngoing() {
+        League waiting = newLeague();
+        waiting.requireOngoing(EXPIRES_AT.minusNanos(1));
+        assertThatThrownBy(() -> waiting.requireOngoing(EXPIRES_AT))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+
+        League deleted = newLeague();
+        ReflectionTestUtils.setField(deleted, "status", LeagueStatus.DELETED);
+        assertThatThrownBy(() -> deleted.requireOngoing(CREATED_AT))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+
+        League started = newLeague();
+        started.start(participants(3), STARTED_AT);
+        started.requireOngoing(started.getEndsAt().minusNanos(1));
+        assertThatThrownBy(() -> started.requireOngoing(started.getEndsAt()))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
+
+        League ended = newLeague();
+        ReflectionTestUtils.setField(ended, "status", LeagueStatus.ENDED);
+        assertThatThrownBy(() -> ended.requireOngoing(STARTED_AT))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
     }
 
     private static League newLeague() {

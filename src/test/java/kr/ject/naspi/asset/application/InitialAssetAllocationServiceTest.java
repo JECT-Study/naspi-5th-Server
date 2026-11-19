@@ -9,7 +9,6 @@ import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.asset.domain.AccountRepository;
 import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.asset.domain.HoldingRepository;
-import kr.ject.naspi.asset.domain.StockListing;
 import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,9 +25,9 @@ class InitialAssetAllocationServiceTest {
     private static final long LEAGUE_ID = 1L;
 
     /** 참여자 4명: 다른 참여자에게 833주씩, 상장자에게 2,500 + 잔여 1주. */
-    private static final List<StockListing> LISTINGS = List.of(
-            new StockListing(101, 1), new StockListing(102, 2),
-            new StockListing(103, 3), new StockListing(104, 4));
+    private static final List<ListedStock> LISTINGS = List.of(
+            new ListedStock(101, 1), new ListedStock(102, 2),
+            new ListedStock(103, 3), new ListedStock(104, 4));
 
     @Autowired
     private InitialAssetAllocationService service;
@@ -95,8 +94,8 @@ class InitialAssetAllocationServiceTest {
     @Test
     @DisplayName("배분 조건에 맞지 않으면 어떤 참여자에게도 자산을 배분하지 않는다")
     void allocatesNothingOnInvalidListings() {
-        List<StockListing> invalid = List.of(
-                new StockListing(101, 1), new StockListing(102, 1), new StockListing(103, 3));
+        List<ListedStock> invalid = List.of(
+                new ListedStock(101, 1), new ListedStock(102, 1), new ListedStock(103, 3));
 
         assertThatThrownBy(() -> service.allocate(LEAGUE_ID, invalid))
                 .isInstanceOf(IllegalArgumentException.class);

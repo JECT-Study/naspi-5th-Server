@@ -18,7 +18,7 @@ public record LeaguePlayers(long leagueId, boolean startable, LeagueTradingDay t
      * 리그 플레이어.
      *
      * @param playerId 플레이어 ID
-     * @param name 회원 이름. 탈퇴한 회원이면 {@code null}
+     * @param name 회원 이름. 탈퇴한 참여자면 '탈퇴한 사용자'
      * @param host 방장 여부
      * @param listed 상장 완료 여부 (true 참여자, false 대기자)
      * @param joinedAt 참여일시

@@ -89,10 +89,27 @@
   - [ ] 거래일 집계가 종가 기준이다 — `./gradlew test --tests "kr.ject.naspi.league.*TradingDay*"`
 
 ### INT-07 league가 asset의 domain을 직접 참조하지 않는다
-- Jira:
+- Jira: ND-81
 - 목적: 경계 규칙 위반 정리. `LeagueStartUseCase`가 `kr.ject.naspi.asset.domain.StockListing`을 import한다 (`LeagueStartUseCase.java:8`)
 - 내용: `StockListing`에 해당하는 입력 타입을 asset `application`에 두고 `InitialAssetAllocationService#allocate`가 그것을 받게 한다
 - 선행: 없음
 - 완료 조건 (확인 방법)
-  - [ ] `grep -rn "import kr.ject.naspi.asset.domain" src/main/java --exclude-dir=asset` 결과 없음
-  - [ ] `./gradlew test --tests "kr.ject.naspi.league.application.LeagueStartUseCaseTest" --tests "kr.ject.naspi.asset.application.InitialAssetAllocationServiceTest"`
+  - [x] `grep -rn "import kr.ject.naspi.asset.domain" src/main/java --exclude-dir=asset` 결과 없음
+  - [x] `./gradlew test --tests "kr.ject.naspi.league.application.LeagueStartUseCaseTest" --tests "kr.ject.naspi.asset.application.InitialAssetAllocationServiceTest"`
+
+### INT-08 종목 상장·수정이 league의 플레이어 ID·리그 상태를 쓰고, 상장하면 대기자가 참여자가 된다
+- Jira: ND-91
+- 목적: MKT-01·MKT-02(market)의 상장·수정을 LEA-05(대기자 → 참여자 전환)와 리그 상태에 연결한다 (market ↔ league 연동). 지금은 상장해도 대기자로 남아 방장 외 참여자가 생기지 않고, 리그를 시작할 수 없다
+- 내용
+  - `StockListingService#list`·`StockEditService`가 회원 ID를 플레이어 ID 자리에 쓰는 임시 코드를 `LeagueQueryService#findPlayerId(memberId, leagueId)`로 바꾼다 (리그에 입장하지 않은 회원은 거절)
+  - 상장 후 같은 트랜잭션에서 `LeagueService#completeListing(playerId)`를 호출한다
+  - 상장과 이름·소개 수정은 대기실에서만, 소개만 수정은 대기실·진행 중 리그에서 허용한다 (MKT-02)
+  - 만료된 대기실(생성 후 7일 경과)에는 상장할 수 없다 (MKT-01, ND-76)
+  - 리그 생성(`LeagueCreationUseCase`)의 방장 상장 호출도 바뀐 시그니처에 맞춘다
+  - market → league는 상위 모듈 참조라 Service에서 league `application`을 호출한다
+- 선행: LEA-05, MKT-01, MKT-02
+- 완료 조건 (확인 방법)
+  - [x] market에서 상장 시 참여자 전환을 호출한다 — `grep -rn "completeListing" src/main/java/kr/ject/naspi/market` 결과 있음
+  - [x] market에 회원 ID를 플레이어 ID로 쓰는 임시 코드가 없다 — `grep -rn "long listerPlayerId = memberId\|long playerId = memberId" src/main/java/kr/ject/naspi/market` 결과 없음
+  - [x] 대기자가 상장하면 참여자가 되고, 참여자 3명·대기자 0명이면 리그를 시작할 수 있다 — `./gradlew test --tests "kr.ject.naspi.market.*" --tests "kr.ject.naspi.league.*"`
+  - [x] 시작된 리그에서 상장·이름 수정이 거절되고 소개 수정은 허용된다, 만료된 대기실 상장이 거절된다 — 같은 테스트

@@ -62,8 +62,7 @@ public class LeagueQueryService {
      * 리그 플레이어 목록과 리그 시작 가능 여부, 시작된 리그면 현재 거래일을 조회한다. 해당 리그에 입장한 회원만
      * 조회할 수 있다.
      *
-     * <p>TODO: 대기실에 있는 동안 탈퇴한 회원은 이름 없이 그대로 보여준다. 대기실 상태 탈퇴 처리(LEA-15)가
-     * 정해지면 퇴장 처리 등에 맞춰 바꾼다.
+     * <p>시작된 리그에서 탈퇴한 참여자는 '탈퇴한 사용자'로 표시한다 (member.md 진행 중인 리그 처리).
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -82,19 +81,25 @@ public class LeagueQueryService {
 
         // 리그 상세 정보 조회
         Map<Long, String> names = memberService.getNames(players.stream()
+                .filter(player -> !player.isWithdrawn())
                 .map(Player::getMemberId)
                 .filter(Objects::nonNull)
                 .toList());
         // 리그 참여자 상세 정보 조회
         List<LeaguePlayer> result = players.stream()
                 .sorted(Comparator.comparing(Player::getJoinedAt).thenComparing(Player::getId))
-                .map(player -> new LeaguePlayer(player.getId(), names.get(player.getMemberId()),
+                .map(player -> new LeaguePlayer(player.getId(), displayNameOf(player, names),
                         player.getId().equals(league.getHostPlayerId()), player.isListed(),
                         player.getJoinedAt(), player.getListedAt()))
                 .toList();
         // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
         boolean startable = league.getStatus() == LeagueStatus.WAITING && League.canStart(players);
         return new LeaguePlayers(league.getId(), startable, tradingDayOf(league), result);
+    }
+
+    private String displayNameOf(Player player, Map<Long, String> names) {
+        return player.isWithdrawn() ? Player.WITHDRAWN_DISPLAY_NAME
+                : names.get(player.getMemberId());
     }
 
     /**
@@ -123,7 +128,7 @@ public class LeagueQueryService {
      *
      * @param memberId 회원 ID
      * @param leagueId 리그 ID
-     * @return 플레이어 ID. 리그에 입장하지 않은 회원(탈퇴 포함)이면 빈 값
+     * @return 플레이어 ID. 리그에 입장하지 않은 회원이면 빈 값. 탈퇴 후에는 해당 회원 ID로 로그인할 수 없다
      */
     public Optional<Long> findPlayerId(long memberId, long leagueId) {
         return playerRepository.findByLeagueIdAndMemberId(leagueId, memberId).map(Player::getId);

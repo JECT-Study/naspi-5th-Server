@@ -309,13 +309,36 @@ public class League {
         }
     }
 
-    /** 방장·참여자 권한이 나뉘는 대기실 상태인지 확인한다. 시작 이후에는 모두 같은 권한이다. */
-    private void requireWaitingRoom(LocalDateTime now) {
+    /**
+     * 대기실 상태인지 확인한다. 시작 이후에는 방장·참여자 권한이 나뉘지 않는다.
+     *
+     * @param now 현재 일시
+     * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그인 경우
+     *         ({@code LEAGUE_ALREADY_STARTED})
+     */
+    public void requireWaitingRoom(LocalDateTime now) {
         if (isUnavailable(now)) {
             throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
         }
         if (status != LeagueStatus.WAITING) {
             throw new NaspiBizException(ErrorCode.LEAGUE_ALREADY_STARTED);
+        }
+    }
+
+    /**
+     * 대기실이거나 진행 중인 리그인지 확인한다. 종료 시각이 지난 리그는 종료 처리 전이라도 종료로 본다.
+     *
+     * @param now 현재 일시
+     * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 종료된 리그인 경우
+     *         ({@code LEAGUE_ALREADY_ENDED})
+     */
+    public void requireOngoing(LocalDateTime now) {
+        if (isUnavailable(now)) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
+        }
+        boolean endTimePassed = status == LeagueStatus.STARTED && !now.isBefore(endsAt);
+        if (status == LeagueStatus.ENDED || endTimePassed) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED);
         }
     }
 

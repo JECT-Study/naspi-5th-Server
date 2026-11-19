@@ -3,16 +3,16 @@
 > 정책: [docs/policies/v1/asset.md](../../policies/v1/domain/asset.md)
 
 ### AST-01 리그가 시작되면 모든 참여자에게 총 1억 원 상당의 주식과 현금이 배분된다
-- Jira: ND-11
+- Jira: ND-11, ND-81
 - 정책: [asset.md#초기-자산-배분](../../policies/v1/domain/asset.md#초기-자산-배분)
 - 선행: LEA-09, MKT-04
-- 내용: `LeagueStarted` 구독, 배분 완료 시 거래 개시 가능 상태로 전환
+- 내용: 리그 시작 UseCase(LEA-09)가 같은 트랜잭션에서 `InitialAssetAllocationService#allocate`를 직접 호출, 배분 완료 시 거래 개시 가능 상태로 전환 (`LeagueStarted` 이벤트는 ND-81에서 제거)
 - 완료 조건
   - [X] 종목당 5,000주: 상장자 2,500주, 나머지 2,500주를 다른 참여자에게 균등 배분, 잔여분은 상장자
   - [X] 초기 현금 = 1억 원 - 배분받은 전체 주식 수 × 10,000원
   - [X] 참여자 3~10명 전 구간 단위 테스트 (잔여 주식 발생 케이스 포함)
   - [X] 배분은 원자적으로 처리 (일부만 배분된 상태로 거래 개시 불가)
-  - [X] `LeagueStarted` 구독 구현 (이벤트 발행은 LEA-09)
+  - [X] 리그 시작 시 배분 호출 연결 (LEA-09 `LeagueStartUseCase`가 직접 호출)
   - [X] 초기 배분 주식의 매입 금액 = 배분 수량 × 10,000원
 
 ### AST-02 참여자는 자신의 현금, 보유 주식, 예약 자산, 총자산을 조회할 수 있다
