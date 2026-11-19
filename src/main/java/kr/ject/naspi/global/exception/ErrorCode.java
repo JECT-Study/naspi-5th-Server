@@ -155,7 +155,38 @@ public enum ErrorCode {
     INVALID_ORDER_STATUS_TRANSITION("502", "처리할 수 없는 주문 상태입니다."),
 
     /** 주문 가격이 당일 상·하한가 범위를 벗어난 경우. */
-    ORDER_PRICE_OUT_OF_LIMIT("503", "주문 가격이 당일 상·하한가 범위를 벗어났습니다.");
+    ORDER_PRICE_OUT_OF_LIMIT("503", "주문 가격이 당일 상·하한가 범위를 벗어났습니다."),
+
+    // contents (6xx)
+    /** JPEG·PNG가 아니거나 확장자·Content-Type·파일 내용이 서로 맞지 않는 이미지를 올린 경우. */
+    INVALID_IMAGE_FORMAT("600", "JPEG, PNG 이미지만 업로드할 수 있습니다."),
+
+    /** 이미지가 비어 있거나 5MB를 넘는 경우. */
+    INVALID_IMAGE_SIZE("601", "이미지는 5MB 이하만 업로드할 수 있습니다."),
+
+    /** 공시 1건에 이미지를 4개보다 많이 첨부한 경우. */
+    IMAGE_COUNT_EXCEEDED("602", "이미지는 최대 4개까지 첨부할 수 있습니다."),
+
+    /** 공시 제목이 비었거나 30자를 넘는 경우. */
+    INVALID_DISCLOSURE_TITLE("603", "공시 제목은 1~30자로 입력해야 합니다."),
+
+    /** 공시 본문이 비었거나 300자를 넘는 경우. */
+    INVALID_DISCLOSURE_BODY("604", "공시 본문은 1~300자로 입력해야 합니다."),
+
+    /** 본인이 상장하지 않은 종목에 공시를 작성하려는 경우. */
+    DISCLOSURE_STOCK_NOT_OWNED("605", "본인이 상장한 종목에만 공시를 작성할 수 있습니다."),
+
+    /** 진행 중이 아닌 리그(대기실, 종료)에 공시를 작성하려는 경우. */
+    DISCLOSURE_LEAGUE_NOT_STARTED("606", "진행 중인 리그에서만 공시를 작성할 수 있습니다."),
+
+    /** 공시가 없거나, 다른 리그·종목의 공시이거나, 이미 삭제된 경우. */
+    DISCLOSURE_NOT_FOUND("607", "공시를 찾을 수 없습니다."),
+
+    /** 공시 작성자가 아닌 플레이어가 공시를 삭제하려는 경우. */
+    DISCLOSURE_NOT_AUTHOR("608", "공시 작성자만 삭제할 수 있습니다."),
+
+    /** 진행 중이 아닌 리그(대기실, 종료)의 공시에 반응하거나 반응을 바꾸려는 경우. */
+    DISCLOSURE_REACTION_LEAGUE_NOT_STARTED("609", "진행 중인 리그에서만 공시에 반응할 수 있습니다.");
 
     private final String code;
     private final String message;

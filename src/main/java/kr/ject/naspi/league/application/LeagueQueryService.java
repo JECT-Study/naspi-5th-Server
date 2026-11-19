@@ -135,6 +135,22 @@ public class LeagueQueryService {
     }
 
     /**
+     * 진행 중인 리그의 현재 거래일을 조회한다. contents가 공시를 진행 중인 리그에서만 받고, 몇 거래일차에
+     * 작성됐는지 기록할 때 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @return 현재 거래일. 진행 중이 아닌 리그(대기실, 종료)면 빈 값
+     * @throws NaspiBizException 리그가 없는 경우 (만료·삭제된 대기실 포함)
+     */
+    public Optional<LeagueTradingDay> findCurrentTradingDay(long leagueId) {
+        League league = getLeague(leagueId);
+        if (!league.isTradable()) {
+            return Optional.empty();
+        }
+        return Optional.of(tradingDayOf(league));
+    }
+
+    /**
      * 회원이 참여 중인 진행 중(시작 후 종료 전) 리그의 플레이어를 모두 조회한다. 회원 탈퇴 처리에서 asset 등이
      * 탈퇴자의 리그별 플레이어를 찾을 때 쓴다. 탈퇴 트랜잭션 안에서 회원이 삭제되기 전에 호출해야 한다.
      *
