@@ -12,6 +12,7 @@ import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
@@ -29,9 +30,9 @@ import org.springframework.test.context.ActiveProfiles;
 @DataJpaTest
 @Import({LeagueQueryService.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, StockListingService.class,
-        StockQueryService.class, LocalStockSnapshotCache.class,
-        MemberService.class, LeagueStartUseCase.class, InitialAssetAllocationService.class,
-        MutableClock.Config.class})
+        StockQueryService.class, LocalStockSnapshotCache.class, MemberService.class,
+        LeagueStartUseCase.class,
+        StockOpeningService.class, InitialAssetAllocationService.class, MutableClock.Config.class})
 class LeagueQueryServiceTest {
 
     private long kakaoId = 1000L;
@@ -181,7 +182,7 @@ class LeagueQueryServiceTest {
     }
 
     @Test
-    @DisplayName("대기실에 있는 동안 탈퇴한 회원은 이름 없이 목록에 남는다")
+    @DisplayName("탈퇴 기록 없이 회원 정보가 없는 플레이어는 이름 없이 남는다")
     void withdrawnMemberHasNoName() {
         long host = member("방장");
         long guest = member("손님");
@@ -196,6 +197,32 @@ class LeagueQueryServiceTest {
                 .filteredOn(player -> player.playerId() == joined.playerId())
                 .singleElement()
                 .extracting(LeaguePlayer::name).isNull();
+    }
+
+    @Test
+    @DisplayName("진행 중인 리그에서 탈퇴한 참여자의 표시 이름은 '탈퇴한 사용자'다")
+    void withdrawnParticipantShownAsWithdrawnUser() {
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        long guestMember = member("손님");
+        JoinedLeague guest = leagueService.join(guestMember, league.inviteCode());
+        stockListingService.list(league.leagueId(), guestMember, "손님종목", "소개");
+        leagueStartUseCase.start(host, league.leagueId());
+        long guestMemberId = entityManager.find(Player.class, guest.playerId()).getMemberId();
+        leagueService.recordWithdrawal(guestMemberId);
+        entityManager.remove(entityManager.find(Member.class, guestMemberId));
+        entityManager.flush();
+
+        LeaguePlayers players = queryService.getPlayers(host, league.leagueId());
+
+        assertThat(players.players())
+                .filteredOn(player -> player.playerId() == guest.playerId())
+                .singleElement()
+                .extracting(LeaguePlayer::name).isEqualTo("탈퇴한 사용자");
+        assertThat(players.players())
+                .filteredOn(player -> player.playerId() == league.hostPlayerId())
+                .singleElement()
+                .extracting(LeaguePlayer::name).isEqualTo("방장");
     }
 
     @Test
@@ -222,9 +249,8 @@ class LeagueQueryServiceTest {
         long host = memberOf(first);
         final long guest = memberOf(second);
         // host를 두 번째 리그의 참여자로 입장시킨다.
-        JoinedLeague joined = leagueService.join(host, second.inviteCode());
-        stockListingService.list(second.leagueId(), joined.playerId(), "호스트종목", "소개");
-        leagueService.completeListing(joined.playerId());
+        final JoinedLeague joined = leagueService.join(host, second.inviteCode());
+        stockListingService.list(second.leagueId(), host, "호스트종목", "소개");
         leagueStartUseCase.start(host, first.leagueId());
         leagueStartUseCase.start(guest, second.leagueId());
         CreatedLeague waiting = useCase.create(host, "대기", "대기종목", "소개");
@@ -294,11 +320,11 @@ class LeagueQueryServiceTest {
     private CreatedLeague leagueWithParticipants(int count) {
         CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         for (int i = 1; i < count; i++) {
-            JoinedLeague joined = leagueService.join(member("참여자"), league.inviteCode());
+            long memberId = member("참여자");
+            JoinedLeague joined = leagueService.join(memberId, league.inviteCode());
             // 리그 시작 시 초기 자산을 배분하려면 참여자마다 실제 종목이 상장되어 있어야 한다.
-            stockListingService.list(league.leagueId(), joined.playerId(),
+            stockListingService.list(league.leagueId(), memberId,
                     "종목" + joined.playerId(), "소개");
-            leagueService.completeListing(joined.playerId());
         }
         return league;
     }

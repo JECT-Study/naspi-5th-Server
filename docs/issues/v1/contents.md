@@ -5,7 +5,7 @@
 ## 공시
 
 ### CNT-01 상장자는 자기 종목에 이미지와 함께 공시를 작성할 수 있다
-- Jira:
+- Jira: ND-14, ND-16
 - 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시)
 - 선행: MKT-01, GLB-05
 - 내용: 상장자가 자기 종목에 공시 작성, `DisclosurePublished` 이벤트 발행
@@ -15,14 +15,14 @@
 - 결정 필요: 작성 가능 기간 (대기실 상태에서도 가능한지, 진행 중 리그만인지)
 
 ### CNT-02 참여자는 종목별 공시 목록과 상세 내용을 볼 수 있다
-- Jira:
+- Jira: ND-15
 - 선행: CNT-01
 - 완료 조건
   - [ ] 종목별 공시 목록, 상세 (이미지, 반응 수, 연결된 뉴스)
 - 결정 필요: 리그 전체 피드 제공 여부, 정렬·페이징 방식
 
 ### CNT-03 공시 작성자는 자신의 공시를 삭제할 수 있다
-- Jira:
+- Jira: ND-18
 - 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시)
 - 선행: CNT-01
 - 완료 조건
@@ -32,7 +32,7 @@
   - [ ] 진행 중인 자동 재시도는 계속, 수동 재시도는 불가
 
 ### CNT-04 참여자는 공시에 호재 또는 악재로 반응할 수 있다
-- Jira:
+- Jira: ND-17
 - 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시)
 - 선행: CNT-01
 - 완료 조건
@@ -44,7 +44,7 @@
 ## 뉴스
 
 ### CNT-05 공시가 게시되면 AI가 공시 내용을 바탕으로 뉴스 1개를 생성한다
-- Jira:
+- Jira: ND-19
 - 정책: [contents.md#뉴스---공시-기반-ai-뉴스](../../policies/v1/domain/contents.md#뉴스---공시-기반-ai-뉴스)
 - 선행: CNT-01, GLB-06
 - 내용: `DisclosurePublished` 비동기 구독

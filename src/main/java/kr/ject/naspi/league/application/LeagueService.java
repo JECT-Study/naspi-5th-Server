@@ -8,14 +8,16 @@ import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
+import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 대기실 입장과 상장 완료 처리.
+ * 대기실 입장과 상장 완료 처리, 상장·종목 수정 전 리그 상태 확인.
  *
  * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 다른 사용자는 초대 코드로 대기실에 대기자로 입장한다.
  * 생성 후 7일이 지난 대기실의 초대 코드로는 입장할 수 없다.
@@ -84,5 +86,53 @@ public class LeagueService {
                 .orElseThrow(() -> new NaspiRuntimeException(
                         "상장한 플레이어를 찾을 수 없습니다. playerId=" + playerId));
         player.completeListing(LocalDateTime.now(clock));
+    }
+
+    /**
+     * 회원 탈퇴 시 시작·종료된 리그의 플레이어에 탈퇴일시를 기록한다. 플레이어 행은 남긴다.
+     *
+     * <p>정책 (docs/policies/v1/domain/member.md "회원 탈퇴"): 종료 전 탈퇴인지 종료 후 탈퇴인지는
+     * 탈퇴일시와 리그 종료 시각을 비교해 판정한다. 대기실은 퇴장 처리로 플레이어가 삭제되므로 대상이 아니다.
+     *
+     * @param memberId 탈퇴한 회원 ID
+     */
+    @Transactional
+    public void recordWithdrawal(long memberId) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (LeagueStatus status : new LeagueStatus[] {LeagueStatus.STARTED, LeagueStatus.ENDED}) {
+            playerRepository.findAllByMemberIdAndLeagueStatus(memberId, status)
+                    .forEach(player -> player.withdraw(now));
+        }
+    }
+
+    /**
+     * 리그 행을 잠그고 대기실 상태인지 확인한다. 상장·종목 이름 수정 전에 그 트랜잭션 안에서 호출한다.
+     * 락은 호출한 트랜잭션이 끝날 때 풀려 시작·추방·퇴장·만료 처리와 직렬화된다.
+     *
+     * @param leagueId 리그 ID
+     * @throws NaspiBizException 리그가 없거나 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}),
+     *         이미 시작·종료된 리그인 경우({@code LEAGUE_ALREADY_STARTED})
+     * @throws org.springframework.transaction.IllegalTransactionStateException 진행 중인 트랜잭션이 없는 경우
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockWaitingRoom(long leagueId) {
+        League league = leagueRepository.findWithLockById(leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        league.requireWaitingRoom(LocalDateTime.now(clock));
+    }
+
+    /**
+     * 리그 행을 잠그고 대기실 또는 진행 중인 리그인지 확인한다. 종목 소개 수정 전에 그 트랜잭션 안에서 호출한다.
+     *
+     * @param leagueId 리그 ID
+     * @throws NaspiBizException 리그가 없거나 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}),
+     *         종료된 리그인 경우({@code LEAGUE_ALREADY_ENDED})
+     * @throws org.springframework.transaction.IllegalTransactionStateException 진행 중인 트랜잭션이 없는 경우
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockOngoing(long leagueId) {
+        League league = leagueRepository.findWithLockById(leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        league.requireOngoing(LocalDateTime.now(clock));
     }
 }

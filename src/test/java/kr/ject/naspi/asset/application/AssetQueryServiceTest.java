@@ -14,7 +14,6 @@ import java.util.Map;
 import kr.ject.naspi.asset.application.PlayerAsset.HoldingAsset;
 import kr.ject.naspi.asset.application.PlayerTotalAsset.HoldingTotal;
 import kr.ject.naspi.asset.domain.Account;
-import kr.ject.naspi.asset.domain.StockListing;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.global.exception.NaspiRuntimeException;
@@ -63,8 +62,8 @@ class AssetQueryServiceTest {
         long stockB = listStock(2L, "라마바");
         long stockC = listStock(3L, "사아자");
         allocationService.allocate(LEAGUE_ID, List.of(
-                new StockListing(stockA, 1L), new StockListing(stockB, 2L),
-                new StockListing(stockC, 3L)));
+                new ListedStock(stockA, 1L), new ListedStock(stockB, 2L),
+                new ListedStock(stockC, 3L)));
         setCurrentPrice(stockA, 12_000);
         setCurrentPrice(stockB, 10_000);
         setCurrentPrice(stockC, 8_000);
@@ -106,7 +105,7 @@ class AssetQueryServiceTest {
         long stockA = listStock(1L, "가나다");
         long stockB = listStock(2L, "라마바");
         allocationService.allocate(LEAGUE_ID, List.of(
-                new StockListing(stockA, 1L), new StockListing(stockB, 2L)));
+                new ListedStock(stockA, 1L), new ListedStock(stockB, 2L)));
 
         assertThatThrownBy(() -> service.getPlayerAsset(2L, 1L))
                 .isInstanceOf(NaspiBizException.class)
@@ -119,7 +118,7 @@ class AssetQueryServiceTest {
         long stockA = listStock(1L, "가나다");
         long stockB = listStock(2L, "라마바");
         allocationService.allocate(LEAGUE_ID, List.of(
-                new StockListing(stockA, 1L), new StockListing(stockB, 2L)));
+                new ListedStock(stockA, 1L), new ListedStock(stockB, 2L)));
 
         assertThatThrownBy(() -> service.getPlayerAsset(LEAGUE_ID, 1L))
                 .isInstanceOf(NaspiRuntimeException.class);
@@ -225,7 +224,7 @@ class AssetQueryServiceTest {
         long stockA = listStock(1L, "가나다");
         long stockB = listStock(2L, "라마바");
         allocationService.allocate(LEAGUE_ID, List.of(
-                new StockListing(stockA, 1L), new StockListing(stockB, 2L)));
+                new ListedStock(stockA, 1L), new ListedStock(stockB, 2L)));
         // 종목 A 보유 수량을 모두 0으로 만든다. 수량 0 종목은 결과에서 빠지고 가격도 필요 없다
         entityManager.flush();
         entityManager.getEntityManager()
@@ -271,7 +270,7 @@ class AssetQueryServiceTest {
         long otherA = persistStock(2L, 11L, "다른가");
         long otherB = persistStock(2L, 12L, "다른나");
         allocationService.allocate(2L, List.of(
-                new StockListing(otherA, 11L), new StockListing(otherB, 12L)));
+                new ListedStock(otherA, 11L), new ListedStock(otherB, 12L)));
 
         List<PlayerTotalAsset> assets = service.aggregateTotalAssets(LEAGUE_ID,
                 Map.of(stocks[0], 9_000L, stocks[1], 11_000L, stocks[2], 10_000L));
@@ -308,8 +307,8 @@ class AssetQueryServiceTest {
         long stockB = listStock(2L, "라마바");
         long stockC = listStock(3L, "사아자");
         allocationService.allocate(LEAGUE_ID, List.of(
-                new StockListing(stockA, 1L), new StockListing(stockB, 2L),
-                new StockListing(stockC, 3L)));
+                new ListedStock(stockA, 1L), new ListedStock(stockB, 2L),
+                new ListedStock(stockC, 3L)));
         setCurrentPrice(stockA, 12_000);
         setCurrentPrice(stockB, 10_000);
         setCurrentPrice(stockC, 8_000);

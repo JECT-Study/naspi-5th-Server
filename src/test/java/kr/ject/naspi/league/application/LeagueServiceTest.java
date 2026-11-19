@@ -17,6 +17,7 @@ import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.member.application.MemberService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,11 +27,16 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({LeagueService.class, LeagueCreationUseCase.class, InviteCodeIssuer.class,
-        LeagueJoinLimit.class, StockListingService.class, LeagueServiceTest.FixedClock.class})
+        LeagueJoinLimit.class, StockListingService.class, LeagueServiceTest.FixedClock.class,
+        LeagueQueryService.class, MemberService.class})
 class LeagueServiceTest {
 
     private static final long HOST_MEMBER_ID = 1L;
@@ -178,6 +184,48 @@ class LeagueServiceTest {
         assertThatThrownBy(() -> service.join(League.MAX_PLAYERS + 1L, created.inviteCode()))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_FULL);
+    }
+
+    @Test
+    @DisplayName("상장·이름 수정 전 확인: 대기실은 통과하고 시작된 리그는 거절한다")
+    void lockWaitingRoom() {
+        CreatedLeague created = createLeague();
+        service.lockWaitingRoom(created.leagueId());
+
+        League league = entityManager.find(League.class, created.leagueId());
+        league.start(listedPlayers(created.leagueId()), NOW);
+
+        assertThatThrownBy(() -> service.lockWaitingRoom(created.leagueId()))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_STARTED);
+        assertThatThrownBy(() -> service.lockWaitingRoom(999_999L))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("소개 수정 전 확인: 대기실·진행 중 리그는 통과하고 종료된 리그는 거절한다")
+    void lockOngoing() {
+        CreatedLeague created = createLeague();
+        service.lockOngoing(created.leagueId());
+
+        League league = entityManager.find(League.class, created.leagueId());
+        league.start(listedPlayers(created.leagueId()), NOW);
+        service.lockOngoing(created.leagueId());
+
+        ReflectionTestUtils.setField(league, "status", LeagueStatus.ENDED);
+        assertThatThrownBy(() -> service.lockOngoing(created.leagueId()))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
+        assertThatThrownBy(() -> service.lockOngoing(999_999L))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("진행 중인 트랜잭션이 없으면 락이 바로 풀리므로 리그 상태 확인 락을 걸 수 없다")
+    void lockRequiresTransaction() {
+        assertThatThrownBy(() -> service.lockWaitingRoom(1L))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.lockOngoing(1L))
+                .isInstanceOf(IllegalTransactionStateException.class);
     }
 
     /** 리그 시작 조건(상장을 마친 참여자 3명)을 만족하는 플레이어 목록. 저장하지 않는다. */

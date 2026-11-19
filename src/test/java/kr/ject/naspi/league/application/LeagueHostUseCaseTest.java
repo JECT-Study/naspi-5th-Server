@@ -10,10 +10,12 @@ import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.domain.StockRepository;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
+import kr.ject.naspi.member.application.MemberService;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,10 +28,11 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({LeagueHostUseCase.class, LeagueLeaveUseCase.class, LeagueStartUseCase.class,
+        StockOpeningService.class,
         LeagueService.class, LeagueCreationUseCase.class, InviteCodeIssuer.class,
         LeagueJoinLimit.class, StockListingService.class, StockQueryService.class,
         LocalStockSnapshotCache.class, InitialAssetAllocationService.class,
-        MutableClock.Config.class})
+        MutableClock.Config.class, LeagueQueryService.class, MemberService.class})
 class LeagueHostUseCaseTest {
 
     private static final long HOST_MEMBER_ID = 1L;
@@ -208,9 +211,9 @@ class LeagueHostUseCaseTest {
     @DisplayName("방장이 추방한 참여자의 종목은 삭제되고 다른 참여자의 종목은 유지된다")
     void kickDeletesOnlyKickedPlayersStock() {
         CreatedLeague created = createLeague();
-        JoinedLeague kicked = leagueService.join(nextMemberId++, created.inviteCode());
-        stockListingService.list(created.leagueId(), kicked.playerId(), "추방종목", "소개");
-        leagueService.completeListing(kicked.playerId());
+        long kickedMemberId = nextMemberId++;
+        JoinedLeague kicked = leagueService.join(kickedMemberId, created.inviteCode());
+        stockListingService.list(created.leagueId(), kickedMemberId, "추방종목", "소개");
 
         useCaseUnderTest.kick(HOST_MEMBER_ID, created.leagueId(), kicked.playerId());
         flushAndClear();
@@ -310,11 +313,10 @@ class LeagueHostUseCaseTest {
 
     /** 리그에 입장해 상장을 마친 참여자를 추가한다. */
     private JoinedLeague joinListed(CreatedLeague created) {
-        JoinedLeague joined = leagueService.join(nextMemberId++, created.inviteCode());
+        long memberId = nextMemberId++;
+        JoinedLeague joined = leagueService.join(memberId, created.inviteCode());
         // 리그 시작 시 초기 자산을 배분하려면 참여자마다 실제 종목이 상장되어 있어야 한다.
-        stockListingService.list(created.leagueId(), joined.playerId(),
-                "종목" + joined.playerId(), "소개");
-        leagueService.completeListing(joined.playerId());
+        stockListingService.list(created.leagueId(), memberId, "종목" + joined.playerId(), "소개");
         return joined;
     }
 
