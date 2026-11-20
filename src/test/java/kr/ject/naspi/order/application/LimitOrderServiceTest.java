@@ -160,6 +160,45 @@ class LimitOrderServiceTest {
     }
 
     @Test
+    @DisplayName("종료 시각 이후에는 지정가 주문을 접수하지 않고 자산도 예약하지 않는다")
+    void rejectAfterLeagueEnd() {
+        League ended = startedLeagueAt("DDDDDDD", NOW.minusDays(8));
+
+        assertThatThrownBy(() -> service.placeLimitOrder(new PlaceLimitOrder(
+                ended.getId(), BUYER, stockId, OrderSide.BUY, 9_000, 1), TRADING_DAY, BASE_PRICE))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
+
+        Long orders = entityManager.getEntityManager()
+                .createQuery("select count(o) from Order o where o.leagueId = :l", Long.class)
+                .setParameter("l", ended.getId()).getSingleResult();
+        assertThat(orders).isZero();
+        assertThat(account(BUYER).getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("종료 시각 이후에는 미체결 주문을 취소할 수 없다")
+    void rejectCancelAfterLeagueEnd() {
+        League ended = startedLeagueAt("DDDDDDD", NOW.minusDays(8));
+
+        assertThatThrownBy(() -> service.cancelOrder(ended.getId(), BUYER, 1L))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
+    }
+
+    @Test
+    @DisplayName("접수 시각과 체결 시각은 거래 가능 판정 시각과 같다")
+    void orderAndExecutionTimeEqualsTradableCheckTime() {
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 10);
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 12_000, 4);
+
+        assertThat(entityManager.find(Order.class, sell.orderId()).getOrderedAt()).isEqualTo(NOW);
+        assertThat(entityManager.find(Order.class, buy.orderId()).getOrderedAt()).isEqualTo(NOW);
+        assertThat(events.stream(TradeExecuted.class).toList())
+                .extracting(TradeExecuted::executedAt).containsExactly(NOW);
+    }
+
+    @Test
     @DisplayName("리그에 없는 종목은 접수를 거절한다")
     void rejectUnknownStock() {
         assertThatThrownBy(() -> service.placeLimitOrder(new PlaceLimitOrder(
@@ -375,16 +414,20 @@ class LimitOrderServiceTest {
     }
 
     private League startedLeague(String inviteCode) {
+        return startedLeagueAt(inviteCode, NOW);
+    }
+
+    private League startedLeagueAt(String inviteCode, LocalDateTime startedAt) {
         League league = entityManager.persistAndFlush(League.create(
-                LeagueName.of("리그"), InviteCode.of(inviteCode), NOW.minusDays(1)));
+                LeagueName.of("리그"), InviteCode.of(inviteCode), startedAt.minusDays(1)));
         List<Player> players = LongStream.rangeClosed(1, League.MIN_PARTICIPANTS_TO_START)
                 .mapToObj(memberId -> {
-                    Player player = Player.enter(league.getId(), memberId, NOW.minusDays(1));
-                    player.completeListing(NOW.minusDays(1));
+                    Player player = Player.enter(league.getId(), memberId, startedAt.minusDays(1));
+                    player.completeListing(startedAt.minusDays(1));
                     return player;
                 })
                 .toList();
-        league.start(players, NOW);
+        league.start(players, startedAt);
         return entityManager.persistAndFlush(league);
     }
 }

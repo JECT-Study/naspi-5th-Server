@@ -336,10 +336,34 @@ public class League {
         if (isUnavailable(now)) {
             throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
         }
-        boolean endTimePassed = status == LeagueStatus.STARTED && !now.isBefore(endsAt);
-        if (status == LeagueStatus.ENDED || endTimePassed) {
+        if (isEnded(now)) {
             throw new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED);
         }
+    }
+
+    /**
+     * 거래할 수 있는 리그인지 검증한다. 시작되어 종료 시각 전인 리그만 통과한다.
+     * 시작할 때 초기 자산 배분이 같은 트랜잭션에서 끝나므로(LeagueStartUseCase) 시작 상태면 배분도 완료된 것이다.
+     *
+     * @param now 판정 시각
+     * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 종료되었거나 종료 시각 이후인
+     *         경우({@code LEAGUE_ALREADY_ENDED}), 아직 시작하지 않은 경우({@code LEAGUE_NOT_TRADABLE})
+     */
+    public void requireTradable(LocalDateTime now) {
+        if (isUnavailable(now)) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
+        }
+        if (isEnded(now)) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED);
+        }
+        if (status != LeagueStatus.STARTED) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_NOT_TRADABLE);
+        }
+    }
+
+    private boolean isEnded(LocalDateTime now) {
+        return status == LeagueStatus.ENDED
+                || (status == LeagueStatus.STARTED && !now.isBefore(endsAt));
     }
 
     private void markDeleted() {

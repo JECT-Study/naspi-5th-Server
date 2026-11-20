@@ -1,6 +1,5 @@
 package kr.ject.naspi.order.application;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 import kr.ject.naspi.asset.application.AssetReservationService;
 import kr.ject.naspi.asset.application.AssetSettlementService;
@@ -51,7 +50,6 @@ public class LimitOrderService {
     private final AssetSettlementService assetSettlementService;
     private final OrderRepository orderRepository;
     private final ApplicationEventPublisher eventPublisher;
-    private final Clock clock;
 
     /**
      * 지정가 주문을 접수하고 바로 매칭한다.
@@ -72,10 +70,9 @@ public class LimitOrderService {
         Order.validatePrice(command.price());
         Order.validateQuantity(command.quantity());
 
-        leagueTradingService.lockForTrading(command.leagueId());
         // 접수 시각은 락을 잡은 뒤에 정한다. 락을 기다린 시간만큼 오래된 시각이 찍히면 09:00 전환 전 시각으로
-        // 전환 후에 처리된 주문이 생길 수 있다.
-        LocalDateTime now = LocalDateTime.now(clock);
+        // 전환 후에 처리된 주문이 생길 수 있다. 거래 가능 판정 시각을 접수·체결 시각으로 그대로 쓴다.
+        LocalDateTime now = leagueTradingService.lockForTrading(command.leagueId());
         final Order order = Order.limit(command.leagueId(), command.playerId(), command.stockId(),
                 command.side(), command.price(), command.quantity(), tradingDay, now);
         validateStockInLeague(command);
