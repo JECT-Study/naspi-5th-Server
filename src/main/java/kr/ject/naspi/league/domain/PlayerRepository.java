@@ -104,4 +104,22 @@ public interface PlayerRepository {
      * @return 플레이어 목록
      */
     List<Player> findAllByMemberIdAndLeagueStatus(Long memberId, LeagueStatus leagueStatus);
+
+    /**
+     * 회원이 입장한 플레이어 중 주어진 상태의 리그에 속한 것을 모두 찾는다.
+     *
+     * @param memberId 회원 ID
+     * @param leagueStatuses 리그 상태 목록
+     * @return 플레이어 목록
+     */
+    List<Player> findAllByMemberIdAndLeagueStatusIn(Long memberId,
+            Collection<LeagueStatus> leagueStatuses);
+
+    /**
+     * 주어진 리그들에 입장한 플레이어(참여자 + 대기자)를 모두 찾는다.
+     *
+     * @param leagueIds 리그 ID 목록
+     * @return 플레이어 목록
+     */
+    List<Player> findAllByLeagueIdIn(Collection<Long> leagueIds);
 }
