@@ -25,6 +25,17 @@ public interface OrderRepository {
     Optional<Order> findById(Long id);
 
     /**
+     * 주문을 비관적 쓰기 락으로 조회한다. 취소처럼 주문 상태를 바꾸기 전에 쓴다.
+     *
+     * <p>같은 리그의 주문 처리는 리그 거래 락으로 이미 직렬화되지만, 주문 상태 전환과 예약 해제가 한 번만
+     * 일어나도록 주문 행도 잠근다. 락 순서는 리그 락 → 주문 락 → asset 락이다.
+     *
+     * @param id 주문 ID
+     * @return 주문. 없으면 비어 있다
+     */
+    Optional<Order> findWithLockById(Long id);
+
+    /**
      * 종목에서 체결을 기다리는 지정가 주문을 접수 순서로 조회한다. 호가창을 만드는 데 쓴다.
      *
      * @param stockId 종목 ID

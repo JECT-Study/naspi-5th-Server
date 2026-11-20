@@ -212,4 +212,39 @@ class OrderMatcherTest {
         assertThat(asks.get(2).getRemainingQuantity()).isEqualTo(2);
         assertThat(buy.getStatus()).isEqualTo(OrderStatus.FILLED);
     }
+
+    @Test
+    @DisplayName("주문이 접수 순서대로 하나씩 처리되면 같은 가격에서는 먼저 접수된 주문부터 전량 체결되고 호가창은 교차하지 않는다")
+    void sequentialArrivalKeepsTimePriority() {
+        // 서비스는 리그 락 안에서 주문을 접수 순서(id 순서)대로 하나씩 처리한다. 이를 흉내 내어 접수할 때마다
+        // 호가창을 다시 만들고 매칭한다.
+        List<Order> all = new ArrayList<>();
+        List<Order> asks = new ArrayList<>();
+        for (Order order : List.of(
+                limit(1, OrderSide.SELL, 11_000, 10),
+                limit(1, OrderSide.SELL, 11_000, 10),
+                limit(1, OrderSide.SELL, 11_000, 10),
+                limit(2, OrderSide.BUY, 11_000, 4),
+                limit(1, OrderSide.SELL, 11_000, 10),
+                limit(2, OrderSide.BUY, 11_000, 12),
+                limit(2, OrderSide.BUY, 11_000, 20))) {
+            OrderBook book = OrderBook.of(STOCK_ID, all);
+            all.add(order);
+            OrderMatcher.match(book, order, order.getPrice());
+            if (order.getSide() == OrderSide.SELL) {
+                asks.add(order);
+            }
+
+            OrderBook after = OrderBook.of(STOCK_ID, all);
+            if (after.bestBid().isPresent() && after.bestAsk().isPresent()) {
+                assertThat(after.bestBid().get()).isLessThan(after.bestAsk().get());
+            }
+        }
+
+        // 매도 40주 중 매수 36주가 체결: 먼저 접수된 매도 주문부터 전량 체결되고 마지막 한 건만 부분 체결
+        assertThat(asks).extracting(Order::getStatus).containsExactly(
+                OrderStatus.FILLED, OrderStatus.FILLED, OrderStatus.FILLED,
+                OrderStatus.PARTIALLY_FILLED);
+        assertThat(asks.get(3).getRemainingQuantity()).isEqualTo(4);
+    }
 }
