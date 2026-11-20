@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
+import kr.ject.naspi.contents.domain.NewsRepository;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -32,6 +33,7 @@ public class DisclosureQueryService {
     private final ImageService imageService;
     private final DisclosureReactionService reactionService;
     private final LeagueQueryService leagueQueryService;
+    private final NewsRepository newsRepository;
 
     /**
      * 공시 조회 서비스를 만든다.
@@ -40,15 +42,18 @@ public class DisclosureQueryService {
      * @param imageService 이미지 서명 URL 발급
      * @param reactionService 반응 집계
      * @param leagueQueryService 플레이어 조회
+     * @param newsRepository 뉴스 저장소
      */
     public DisclosureQueryService(DisclosureRepository disclosureRepository,
                                   ImageService imageService,
                                   DisclosureReactionService reactionService,
-                                  LeagueQueryService leagueQueryService) {
+                                  LeagueQueryService leagueQueryService,
+                                  NewsRepository newsRepository) {
         this.disclosureRepository = disclosureRepository;
         this.imageService = imageService;
         this.reactionService = reactionService;
         this.leagueQueryService = leagueQueryService;
+        this.newsRepository = newsRepository;
     }
 
     /**
@@ -96,10 +101,10 @@ public class DisclosureQueryService {
     }
 
     /**
-     * 공시 상세를 조회한다.
+     * 공시 상세를 조회한다. 공시로 만든 AI 뉴스를 생성 상태와 함께 준다.
      *
-     * <p>TODO: 공시 기반 AI 뉴스(CNT-05, CNT-08)를 구현하면 연결된 뉴스를 함께 준다. 뉴스는 공시가 삭제돼도 조회할
-     *       수 있어야 하므로 뉴스 조회는 이 메서드가 아니라 뉴스 쪽 API로 제공한다.
+     * <p>TODO: 공시가 삭제돼도 이미 발행된 뉴스는 볼 수 있어야 하므로, 삭제된 공시의 뉴스는 뉴스 쪽 API(CNT-08)로
+     *       제공한다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -121,7 +126,9 @@ public class DisclosureQueryService {
                 d.getBody().getValue(), d.getTradingDay(), d.getCreatedAt(),
                 d.getAuthorPlayerId(), d.getAuthorPlayerId() == playerId,
                 imageService.issueUrls(d.getId()),
-                reactionService.summarizeAll(List.of(d.getId()), playerId).get(d.getId()));
+                reactionService.summarizeAll(List.of(d.getId()), playerId).get(d.getId()),
+                newsRepository.findByDisclosureId(d.getId()).map(DisclosureNews::from)
+                        .orElse(null));
     }
 
     /** 리그 참여자만 공시를 볼 수 있다. 리그 상태는 따지지 않아 종료된 리그도 조회할 수 있다. */
