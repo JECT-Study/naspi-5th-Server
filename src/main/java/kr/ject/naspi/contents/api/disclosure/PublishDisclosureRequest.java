@@ -18,6 +18,6 @@ record PublishDisclosureRequest(
         String title,
         @Schema(description = "공시 본문 (1~300자)", example = "3개월 끊었습니다. 체력이 곧 실적입니다.")
         String body,
-        @Schema(description = "첨부 이미지 (선택). JPEG(.jpg/.jpeg)·PNG, 최대 4개, 1장 최대 5MB")
+        @Schema(description = "첨부 이미지 (선택). JPEG(.jpg/.jpeg)·PNG, 최대 4개, 1장 최대 50MB")
         List<MultipartFile> images) {
 }

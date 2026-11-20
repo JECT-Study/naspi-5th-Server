@@ -36,7 +36,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *       남은 객체 키를 경고 로그로 남긴다 (수동 정리 대상).</li>
  * </ul>
  *
- * <p>정책 (docs/policies/v1/domain/contents.md "공시"): JPEG·PNG, 공시 1건에 최대 4개, 1장 최대 5MB.
+ * <p>정책 (docs/policies/v1/domain/contents.md "공시"): JPEG·PNG, 공시 1건에 최대 4개, 1장 최대 50MB.
  *
  * <p>TODO: 공시 조회(CNT-02)에서 {@link #issueUrls}를, 공시 삭제(CNT-03)에서 {@link #deleteAll}을 호출하도록 연동한다.
  */

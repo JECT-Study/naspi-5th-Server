@@ -29,8 +29,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Image {
 
-    /** 정책상 이미지 1장의 최대 크기 (5MB). */
-    public static final long MAX_SIZE_BYTES = 5L * 1024 * 1024;
+    /** 정책상 이미지 1장의 최대 크기 (50MB). */
+    public static final long MAX_SIZE_BYTES = 50L * 1024 * 1024;
 
     /** 정책상 공시 1건에 첨부할 수 있는 최대 이미지 수. */
     public static final int MAX_COUNT_PER_DISCLOSURE = 4;

@@ -107,7 +107,7 @@ class ImageServiceTest {
     }
 
     @Test
-    @DisplayName("이미지는 1장 최대 5MB이며 빈 파일은 거절한다")
+    @DisplayName("이미지는 1장 최대 50MB이며 빈 파일은 거절한다")
     void storeSizeLimit() {
         byte[] tooLarge = new byte[(int) Image.MAX_SIZE_BYTES + 1];
         System.arraycopy(PNG, 0, tooLarge, 0, PNG.length);

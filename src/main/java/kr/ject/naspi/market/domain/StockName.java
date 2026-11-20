@@ -14,7 +14,8 @@ import lombok.NoArgsConstructor;
  * 종목 이름.
  *
  * <p>정책 (docs/policies/v1/domain/market.md "종목 상장"): 앞뒤 공백을 제거한 뒤 최대 12자이며,
- * 글자, 숫자, 공백만 사용할 수 있다 (특수문자·이모지 불가). 같은 리그 안의 중복 검사는 저장소가 맡는다.
+ * 모든 문자를 사용할 수 있지만 특수문자만으로는 구성할 수 없다 (글자 또는 숫자가 하나 이상 있어야 한다).
+ * 같은 리그 안의 중복 검사는 저장소가 맡는다.
  */
 @Embeddable
 @Getter
@@ -25,7 +26,8 @@ public class StockName {
     /** 이름 최대 글자 수. */
     public static final int MAX_LENGTH = 12;
 
-    private static final Pattern VALID = Pattern.compile("^[\\p{L}\\p{N} ]+$");
+    /** 글자 또는 숫자가 하나 이상 있는지 확인하는 패턴. 특수문자·이모지·공백만으로 된 이름을 거른다. */
+    private static final Pattern HAS_LETTER_OR_DIGIT = Pattern.compile("[\\p{L}\\p{N}]");
 
     @Column(name = "name", nullable = false, length = MAX_LENGTH * 4)
     private String value;
@@ -39,7 +41,7 @@ public class StockName {
      *
      * @param input 입력한 이름
      * @return 종목 이름
-     * @throws NaspiBizException 비어 있거나 12자를 넘거나 허용하지 않는 문자를 포함한 경우
+     * @throws NaspiBizException 비어 있거나 12자를 넘거나 특수문자만으로 구성된 경우
      */
     public static StockName of(String input) {
         if (input == null) {
@@ -48,7 +50,7 @@ public class StockName {
         String trimmed = input.strip();
         if (trimmed.isEmpty()
                 || trimmed.codePointCount(0, trimmed.length()) > MAX_LENGTH
-                || !VALID.matcher(trimmed).matches()) {
+                || !HAS_LETTER_OR_DIGIT.matcher(trimmed).find()) {
             throw new NaspiBizException(ErrorCode.INVALID_STOCK_NAME);
         }
         return new StockName(trimmed);

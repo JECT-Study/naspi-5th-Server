@@ -164,8 +164,8 @@ public enum ErrorCode {
     /** JPEG·PNG가 아니거나 확장자·Content-Type·파일 내용이 서로 맞지 않는 이미지를 올린 경우. */
     INVALID_IMAGE_FORMAT("600", "JPEG, PNG 이미지만 업로드할 수 있습니다."),
 
-    /** 이미지가 비어 있거나 5MB를 넘는 경우. */
-    INVALID_IMAGE_SIZE("601", "이미지는 5MB 이하만 업로드할 수 있습니다."),
+    /** 이미지가 비어 있거나 50MB를 넘는 경우. */
+    INVALID_IMAGE_SIZE("601", "이미지는 50MB 이하만 업로드할 수 있습니다."),
 
     /** 공시 1건에 이미지를 4개보다 많이 첨부한 경우. */
     IMAGE_COUNT_EXCEEDED("602", "이미지는 최대 4개까지 첨부할 수 있습니다."),

@@ -95,3 +95,13 @@
   - [x] 원 미만 절사
   - [x] 참여자별 현금, 종목별 보유 수량·평가액, 총자산을 함께 반환
 - 진행: asset 쪽 구현 완료 (`AssetQueryService.aggregateTotalAssets(leagueId, Map<종목 ID, 평가 가격(원)>)`, 반환 `PlayerTotalAsset`). 탈퇴자도 집계하고 `withdrawn`으로 표시하며 제외는 league가 한다. 평가 가격 누락은 `NaspiRuntimeException`. league가 market 평가 가격을 받아 이 API를 호출하는 연결은 [INT-05](integration.md), [INT-06](integration.md)에서 한다
+
+### AST-09 참여자는 진행 중인 리그에서 종목별 본인 보유 현황을 조회할 수 있다
+- Jira:
+- 정책: [asset.md#자산-조회](../../policies/v1/domain/asset.md#자산-조회)
+- 선행: AST-02
+- 완료 조건
+  - [ ] 진행 중인 리그에서 종목별로 본인의 평균 매입가, 보유 수량, 평가 금액, 평가 손익, 수익률을 조회할 수 있어야 한다.
+  - [ ] 보유 수량에는 매도 주문에 예약된 수량을 포함하고, 보유 수량이 0주이면 평가 손익·수익률을 산정하지 않는다.
+  - [ ] 산정 기준은 AST-02와 같다 (평균 매입가 원 미만 절사, 수익률 소수점 첫째 자리 반올림·음수는 절댓값 기준).
+  - [ ] 로그인한 회원 본인(해당 리그의 플레이어)의 현황만 조회할 수 있어야 한다.
