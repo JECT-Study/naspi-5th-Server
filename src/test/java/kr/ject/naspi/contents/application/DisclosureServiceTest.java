@@ -24,6 +24,8 @@ import kr.ject.naspi.contents.domain.DisclosureStatus;
 import kr.ject.naspi.contents.domain.DisclosureTitle;
 import kr.ject.naspi.contents.domain.Image;
 import kr.ject.naspi.contents.domain.ImageStorage;
+import kr.ject.naspi.contents.domain.News;
+import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -119,13 +121,21 @@ class DisclosureServiceTest {
     }
 
     @Test
-    @DisplayName("공시 작성을 마치면 공시 기반 AI 뉴스 생성을 요청한다 (공시 게시 이벤트)")
+    @DisplayName("공시를 작성하면 생성 중인 공시 기반 AI 뉴스 1개를 함께 만들고, 내용 생성을 요청한다 (공시 게시 이벤트)")
     void publishEvent() {
         League league = startedLeague();
 
         PublishedDisclosure result = disclosureService.publish(league.hostMemberId,
                 league.leagueId, league.hostStockId, "제목", "본문", List.of());
 
+        News news = entityManager.getEntityManager()
+                .createQuery("select n from News n where n.disclosureId = :id", News.class)
+                .setParameter("id", result.disclosureId())
+                .getSingleResult();
+        assertThat(news.getStatus()).isEqualTo(NewsStatus.PENDING);
+        assertThat(news.getStockId()).isEqualTo(league.hostStockId);
+        assertThat(news.getTradingDay()).isEqualTo(2);
+        assertThat(news.getTitle()).isNull();
         assertThat(events.stream(DisclosurePublished.class)).containsExactly(
                 new DisclosurePublished(result.disclosureId(), league.leagueId,
                         league.hostStockId, league.hostPlayerId));
