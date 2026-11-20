@@ -19,7 +19,7 @@
   - [X] 당일 상·하한가 범위 밖 가격은 접수 거절
   - [X] 자산 예약 실패 시 거절
   - [X] 접수 직후 매칭(ORD-03), 미체결 잔량은 대기 주문으로 유지
-  - [ ] 09:00 정각 이후 접수 주문은 새 거래일 주문
+  - [X] 09:00 정각 이후 접수 주문은 새 거래일 주문
 - 진행: `LimitOrderService.placeLimitOrder`(리그 락 → 상·하한가 → 예약 → 호가창 조회 → 저장 → 매칭 → 체결마다 정산·`TradeExecuted` 발행)를 구현했다. 매칭 직후 정산과 이벤트 발행, 자전거래 취소 시 예약 해제까지 이 서비스가 처리한다. 리그 락·거래 가능 상태 확인(`LeagueTradingService.lockForTrading`, 시작 상태만 거래 가능)과 `TradeExecuted` 이벤트 클래스를 만들었다. 접수 서비스는 상위 모듈(league, market, asset)의 Service만 호출한다.
 - 진행 (API): `POST /api/leagues/{leagueId}/orders/limit`(`LimitOrderController`)를 만들었다. `OrderPlacementService`가 로그인 회원의 플레이어를 `LeagueQueryService.findPlayerId`로 직접 찾아(리그에 입장하지 않은 회원은 `FORBIDDEN`) `LimitOrderService`에 넘기므로, 요청 본문의 플레이어·회원 ID는 쓰지 않는다.
 - TODO (임시 값, 운영 배포 전 제거): 거래일 계산(league 소관)과 거래일별 기준가(MKT-06)가 아직 없어 `OrderPlacementService`가 모든 주문을 **1일차, 기준가 시초가 10,000원**으로 처리한다. 그래서 2일차 이후에는 정책과 다르게 동작한다(거래일 표시, 상·하한가). league·market에 생기면 `OrderPlacementService`가 직접 조회하도록 교체하고, 위 "09:00 이후 새 거래일" 조건도 이때 함께 닫는다. `LimitOrderService`의 `tradingDay`·`basePrice` 인자도 이때 없앨 수 있는지 다시 본다.
@@ -124,7 +124,7 @@
 - 정책: [order.md#미체결-주문-관리](../../policies/v1/domain/order.md#미체결-주문-관리)
 - 선행: LEA-12, AST-06
 - 완료 조건
-  - [ ] 종료 시각 이후 주문 접수·체결 불가
+  - [X] 종료 시각 이후 주문 접수·체결 불가
   - [ ] 모든 미체결 주문 취소 및 예약 자산 해제
 - 확인 필요: 이 처리가 리그 락을 잡지 않고 주문 상태를 바꾸는 경로가 되는지에 따라 주문 행 락의 필요성을 동시성 테스트로 확인한다 ([ORD-09](#ord-09-지정가-주문의-미체결-잔량은-다음-거래일-0900에-자동으로-만료된다) 확인 필요 참고).
 

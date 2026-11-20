@@ -19,11 +19,10 @@ import org.springframework.stereotype.Service;
 public class OrderPlacementService {
 
     /**
-     * TODO: 임시 값. 거래일 계산(league)과 거래일별 기준가(MKT-06)가 생기면 제거하고 league·market에서
-     * 조회한다. 지금은 모든 주문을 1일차, 시초가(10,000원) 기준으로 처리하므로 2일차 이후에는 정책과
-     * 다르게 동작한다. 이 값이 남아 있는 채로 운영에 배포하면 안 된다.
+     * TODO: 임시 값. 거래일별 기준가(MKT-06)가 생기면 제거하고 market에서 조회한다. 지금은 모든 주문을
+     * 시초가(10,000원) 기준으로 처리하므로 2일차 이후에는 정책과 다르게 동작한다. 이 값이 남아 있는 채로
+     * 운영에 배포하면 안 된다.
      */
-    private static final int TEMPORARY_TRADING_DAY = 1;
     private static final long TEMPORARY_BASE_PRICE = 10_000L;
 
     private final LeagueQueryService leagueQueryService;
@@ -47,7 +46,7 @@ public class OrderPlacementService {
         return limitOrderService.placeLimitOrder(
                 new PlaceLimitOrder(leagueId, playerIdOf(memberId, leagueId), stockId, side,
                         price, quantity),
-                TEMPORARY_TRADING_DAY, TEMPORARY_BASE_PRICE);
+                TEMPORARY_BASE_PRICE);
     }
 
     /**

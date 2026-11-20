@@ -6,6 +6,7 @@ import kr.ject.naspi.asset.application.AssetSettlementService;
 import kr.ject.naspi.asset.application.TradeSettlement;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.league.application.LeagueTradingService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.PriceLimit;
@@ -45,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class LimitOrderService {
 
     private final LeagueTradingService leagueTradingService;
+    private final LeagueQueryService leagueQueryService;
     private final StockQueryService stockQueryService;
     private final AssetReservationService assetReservationService;
     private final AssetSettlementService assetSettlementService;
@@ -54,18 +56,17 @@ public class LimitOrderService {
     /**
      * 지정가 주문을 접수하고 바로 매칭한다.
      *
-     * <p>TODO: 거래일 계산(league)과 거래일별 기준가(MKT-06)가 아직 없어 임시로 인자로 받는다. 생기면 이 서비스가
-     * 직접 조회하도록 바꾸고 인자를 없앤다.
+     * <p>거래일은 락을 잡은 뒤 거래 가능 판정 시각으로 계산한다 (09:00:00부터 새 거래일). TODO: 거래일별 기준가
+     * (MKT-06)가 아직 없어 임시로 인자로 받는다. 생기면 이 서비스가 직접 조회하도록 바꾸고 인자를 없앤다.
      *
      * @param command 주문 요청
-     * @param tradingDay 접수 시점의 거래일 (1일차부터)
      * @param basePrice 당일 기준가 (100원 이상, 100원 단위). 상·하한가 계산에 쓴다
      * @return 접수 직후 주문 상태
      * @throws NaspiBizException 가격·수량이 정책에 맞지 않거나, 거래할 수 없는 리그이거나, 종목이 리그에 없거나,
      *     가격이 상·하한가를 벗어나거나, 예약할 자산이 부족한 경우
      */
     @Transactional
-    public PlacedOrder placeLimitOrder(PlaceLimitOrder command, int tradingDay, long basePrice) {
+    public PlacedOrder placeLimitOrder(PlaceLimitOrder command, long basePrice) {
         // 락 없이 확인할 수 있는 입력은 락을 잡기 전에 거른다.
         Order.validatePrice(command.price());
         Order.validateQuantity(command.quantity());
@@ -73,6 +74,7 @@ public class LimitOrderService {
         // 접수 시각은 락을 잡은 뒤에 정한다. 락을 기다린 시간만큼 오래된 시각이 찍히면 09:00 전환 전 시각으로
         // 전환 후에 처리된 주문이 생길 수 있다. 거래 가능 판정 시각을 접수·체결 시각으로 그대로 쓴다.
         LocalDateTime now = leagueTradingService.lockForTrading(command.leagueId());
+        int tradingDay = leagueQueryService.getTradingDayNumberAt(command.leagueId(), now);
         final Order order = Order.limit(command.leagueId(), command.playerId(), command.stockId(),
                 command.side(), command.price(), command.quantity(), tradingDay, now);
         validateStockInLeague(command);
