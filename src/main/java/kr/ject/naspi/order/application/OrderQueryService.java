@@ -60,7 +60,7 @@ public class OrderQueryService {
         List<Trade> trades = order.getSide() == OrderSide.BUY
                 ? tradeRepository.findAllByBuyOrderIdOrderByExecutedAtAscIdAsc(order.getId())
                 : tradeRepository.findAllBySellOrderIdOrderByExecutedAtAscIdAsc(order.getId());
-        return OrderDetail.of(order, stockNameOf(leagueId, order.getStockId()),
+        return OrderDetail.of(order, stockNameIn(stockNamesOf(leagueId), order),
                 OrderFill.group(trades));
     }
 
@@ -86,8 +86,7 @@ public class OrderQueryService {
         long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
         leagueQueryService.requireTradable(leagueId);
-        Map<Long, String> stockNames = stockQueryService.findAllByLeagueId(leagueId).stream()
-                .collect(Collectors.toMap(LeagueStock::stockId, LeagueStock::name));
+        Map<Long, String> stockNames = stockNamesOf(leagueId);
         if (stockId != null && !stockNames.containsKey(stockId)) {
             throw new NaspiBizException(ErrorCode.STOCK_NOT_FOUND);
         }
@@ -132,12 +131,8 @@ public class OrderQueryService {
         return name;
     }
 
-    private String stockNameOf(long leagueId, long stockId) {
+    private Map<Long, String> stockNamesOf(long leagueId) {
         return stockQueryService.findAllByLeagueId(leagueId).stream()
-                .filter(stock -> stock.stockId() == stockId)
-                .map(LeagueStock::name)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "주문의 종목을 리그에서 찾을 수 없습니다. stockId=" + stockId));
+                .collect(Collectors.toMap(LeagueStock::stockId, LeagueStock::name));
     }
 }
