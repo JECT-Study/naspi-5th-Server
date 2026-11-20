@@ -15,7 +15,7 @@ import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.common.security.SecurityConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.member.application.MemberService;
+import kr.ject.naspi.member.application.MemberWithdrawalUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +42,7 @@ class MemberWithdrawControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private MemberService memberService;
+    private MemberWithdrawalUseCase memberWithdrawalUseCase;
 
     @MockitoBean
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
@@ -56,7 +56,7 @@ class MemberWithdrawControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"));
 
-        then(memberService).should().withdraw(MEMBER_ID);
+        then(memberWithdrawalUseCase).should().withdraw(MEMBER_ID);
         assertThat(session.isInvalid()).isTrue();
     }
 
@@ -64,7 +64,7 @@ class MemberWithdrawControllerTest {
     @DisplayName("회원 정보가 없으면 회원 없음으로 응답한다")
     void withdrawUnknownMember() throws Exception {
         willThrow(new NaspiBizException(ErrorCode.MEMBER_NOT_FOUND))
-                .given(memberService).withdraw(MEMBER_ID);
+                .given(memberWithdrawalUseCase).withdraw(MEMBER_ID);
 
         mockMvc.perform(post("/api/members/me/withdraw").session(loginSession()))
                 .andExpect(status().isOk())
@@ -78,7 +78,7 @@ class MemberWithdrawControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("003"));
 
-        then(memberService).should(never()).withdraw(anyLong());
+        then(memberWithdrawalUseCase).should(never()).withdraw(anyLong());
     }
 
     private MockHttpSession loginSession() {

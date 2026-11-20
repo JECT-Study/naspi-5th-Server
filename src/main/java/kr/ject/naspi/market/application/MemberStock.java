@@ -6,7 +6,7 @@ package kr.ject.naspi.market.application;
  * @param stockId 종목 ID
  * @param name 종목 이름
  * @param description 종목 소개
- * @param listerName 상장자 이름. 탈퇴한 회원이면 {@code null}
+ * @param listerName 상장자 이름. 시작된 리그에서 탈퇴한 상장자면 '탈퇴한 사용자'
  * @param mine 조회한 회원 본인이 상장한 종목인지 여부
  */
 public record MemberStock(long stockId, String name, String description, String listerName,

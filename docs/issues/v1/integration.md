@@ -18,20 +18,6 @@
 
 ---
 
-### INT-01 회원 탈퇴 시 order가 미체결 주문을 취소한 뒤 asset 현금 폐기를 호출한다
-- Jira:
-- 목적: AST-07(ND-59)에서 만든 asset 현금 폐기·거래 차단을 실제 탈퇴 흐름에 연결한다 (asset ↔ order 연동)
-- 배경: C안으로 결정. asset은 `MemberWithdrawn` 리스너를 두지 않고 `AssetWithdrawalService`만 제공한다. 순서(주문 취소 → 예약 해제 → 현금 폐기)는 order가 한 곳에서 보장한다 (`docs/policies/README.md` 이벤트 표)
-- 내용
-  - order가 `MemberWithdrawn`을 같은 트랜잭션(회원 삭제 전)에서 받아, 탈퇴 회원의 진행 중 리그 미체결 주문을 모두 취소하고 `releaseCashForBuy` / `releaseStockForSell`로 예약을 해제한다 (ORD-11)
-  - 이어서 `AssetWithdrawalService.discardCashOfMember(memberId)`를 호출한다. 예약 현금·예약 주식이 남아 있으면 `NaspiRuntimeException`으로 거절되므로 해제가 먼저 끝나야 한다
-- 선행: AST-07 (asset 쪽 완료), ORD-07 (사용자 취소, `feature/ND-39,ND-40,ND-72` 진행 중), ORD-11
-- 완료 조건 (확인 방법)
-  - [ ] order에서 탈퇴 처리가 asset 현금 폐기를 호출한다 — `grep -rn "discardCashOfMember" src/main/java/kr/ject/naspi/order` 결과 있음
-  - [ ] 탈퇴하면 진행 중 리그의 예약 현금·예약 주식이 0, 예수금이 0, 보유 수량은 그대로다 — `./gradlew test --tests "kr.ject.naspi.order.*Withdraw*"`
-  - [ ] 탈퇴 후 남은 세션으로 매수·매도하면 `WITHDRAWN_PLAYER`로 거절된다 — 같은 테스트
-  - [ ] asset 쪽 기존 테스트가 그대로 통과한다 — `./gradlew test --tests "kr.ject.naspi.asset.application.AssetWithdrawalServiceTest" --tests "kr.ject.naspi.asset.application.AssetReservationServiceTest"`
-
 ### INT-02 시장가 매수 체결·취소 후 남은 예약금을 asset 해제 API로 푼다
 - Jira:
 - 목적: AST-05(ND-32)의 미체크 조건 "시장가 매수: 체결 또는 취소 처리 후 예약금 중 실제 총체결 금액을 제외한 나머지 전액 해제"를 시장가 주문 흐름에 연결한다 (asset ↔ order 연동)
