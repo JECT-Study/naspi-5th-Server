@@ -28,6 +28,7 @@ import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
+import kr.ject.naspi.order.domain.CancelReason;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
@@ -338,6 +339,8 @@ class LimitOrderServiceTest {
         assertThat(account(SELLER).getDeposit()).isEqualTo(1_000_000 + 44_000);
         assertThat(holding(SELLER).getQuantity()).isEqualTo(96);
         assertThat(holding(SELLER).getReservedQuantity()).isEqualTo(6);
+        assertThat(entityManager.find(Order.class, buy.orderId()).getCancelReason()).isNull();
+        assertThat(entityManager.find(Order.class, sell.orderId()).getCancelReason()).isNull();
     }
 
     @Test
@@ -350,6 +353,7 @@ class LimitOrderServiceTest {
         assertThat(buy.status()).isEqualTo(OrderStatus.PARTIALLY_FILLED);
         assertThat(buy.remainingQuantity()).isEqualTo(7);
         assertThat(account(BUYER).getReservedDeposit()).isEqualTo(77_000);
+        assertThat(entityManager.find(Order.class, buy.orderId()).getCancelReason()).isNull();
     }
 
     @Test
@@ -363,6 +367,11 @@ class LimitOrderServiceTest {
         assertThat(account(SELLER).getReservedDeposit()).isZero();
         assertThat(entityManager.find(Order.class, sell.orderId()).getStatus())
                 .isEqualTo(OrderStatus.PENDING);
+        assertThat(entityManager.find(Order.class, sell.orderId()).getCancelReason()).isNull();
+        Order canceledBuy = entityManager.find(Order.class, buy.orderId());
+        assertThat(canceledBuy.getCancelReason()).isEqualTo(CancelReason.SELF_TRADE_PREVENTED);
+        assertThat(canceledBuy.getCanceledAt())
+                .isEqualTo(NOW).isEqualTo(canceledBuy.getOrderedAt());
         assertThat(events.stream(TradeExecuted.class)).isEmpty();
     }
 
@@ -379,6 +388,22 @@ class LimitOrderServiceTest {
                 .isEqualTo(OrderStatus.CANCELED);
         assertThat(account(BUYER).getReservedDeposit()).isZero();
         assertThat(account(BUYER).getDeposit()).isEqualTo(1_000_000);
+        Order order = entityManager.find(Order.class, buy.orderId());
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(order.getCanceledAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("직접 취소의 취소 일시는 접수 시각이 아니라 취소 요청을 거래 가능으로 판정한 시각이다")
+    void cancelRecordsJudgedTime() {
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 10);
+        setClock(NOW.plusMinutes(30));
+
+        cancel(BUYER, buy.orderId());
+
+        Order order = entityManager.find(Order.class, buy.orderId());
+        assertThat(order.getCanceledAt()).isEqualTo(NOW.plusMinutes(30));
+        assertThat(order.getOrderedAt()).isEqualTo(NOW);
     }
 
     @Test
@@ -395,6 +420,9 @@ class LimitOrderServiceTest {
         assertThat(holding(SELLER).getReservedQuantity()).isZero();
         assertThat(account(SELLER).getDeposit()).isEqualTo(1_000_000 + 33_000);
         assertThat(holding(BUYER).getQuantity()).isEqualTo(3);
+        Order order = entityManager.find(Order.class, sell.orderId());
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(order.getRemainingQuantity()).isEqualTo(7);
     }
 
     @Test
@@ -474,6 +502,9 @@ class LimitOrderServiceTest {
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         assertThat(account(BUYER).getReservedDeposit()).isZero();
+        Order order = entityManager.find(Order.class, buy.orderId());
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(order.getCanceledAt()).isEqualTo(NOW);
     }
 
     @Test

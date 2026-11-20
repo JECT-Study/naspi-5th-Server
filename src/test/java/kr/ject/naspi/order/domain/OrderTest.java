@@ -101,38 +101,93 @@ class OrderTest {
         Order order = limit(OrderSide.BUY, 10_000, 30);
         order.fill(10);
 
-        order.cancel();
+        order.cancel(CancelReason.USER_REQUESTED, NOW.plusMinutes(1));
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(order.getCanceledAt()).isEqualTo(NOW.plusMinutes(1));
         assertThat(order.filledQuantity()).isEqualTo(10);
+        assertThat(order.getRemainingQuantity()).isEqualTo(20);
         assertThat(order.isResting()).isFalse();
     }
 
     @Test
-    @DisplayName("지정가 주문의 미체결 잔여 수량은 만료될 수 있다")
-    void expire() {
+    @DisplayName("대기·부분 체결·체결 완료 주문에는 취소 일시와 취소 사유가 없다")
+    void openOrderHasNoCancelInfo() {
         Order order = limit(OrderSide.BUY, 10_000, 30);
+        assertThat(order.getCanceledAt()).isNull();
+        assertThat(order.getCancelReason()).isNull();
 
-        order.expire();
+        order.fill(10);
+        assertThat(order.getCanceledAt()).isNull();
+        assertThat(order.getCancelReason()).isNull();
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        order.fill(20);
+        assertThat(order.getCanceledAt()).isNull();
+        assertThat(order.getCancelReason()).isNull();
     }
 
     @Test
-    @DisplayName("체결 완료·취소·만료된 주문은 더 이상 상태를 바꿀 수 없다")
+    @DisplayName("지정가 주문의 미체결 잔여 수량은 거래일 변경으로 만료되며 사유와 만료 일시가 기록된다")
+    void expire() {
+        Order order = limit(OrderSide.BUY, 10_000, 30);
+        order.fill(10);
+        LocalDateTime switchAt = LocalDateTime.of(2026, 11, 15, 9, 0);
+
+        order.expire(switchAt);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.TRADING_DAY_EXPIRED);
+        assertThat(order.getCanceledAt()).isEqualTo(switchAt);
+        assertThat(order.filledQuantity()).isEqualTo(10);
+        assertThat(order.getRemainingQuantity()).isEqualTo(20);
+    }
+
+    @Test
+    @DisplayName("거래일 변경 만료 사유는 취소가 아니라 만료로만 기록한다")
+    void cancelRejectsExpirationReason() {
+        Order order = limit(OrderSide.BUY, 10_000, 30);
+
+        assertThatThrownBy(() -> order.cancel(CancelReason.TRADING_DAY_EXPIRED, NOW))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("취소 사유와 취소 일시 없이는 취소할 수 없다")
+    void cancelRequiresReasonAndTime() {
+        Order order = limit(OrderSide.BUY, 10_000, 30);
+
+        assertThatThrownBy(() -> order.cancel(null, NOW))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> order.cancel(CancelReason.USER_REQUESTED, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("체결 완료·취소·만료된 주문은 더 이상 상태를 바꿀 수 없고 기록된 취소 일시·사유도 바뀌지 않는다")
     void terminalStatesAreFinal() {
         Order filled = limit(OrderSide.BUY, 10_000, 1);
         filled.fill(1);
         Order canceled = limit(OrderSide.BUY, 10_000, 1);
-        canceled.cancel();
+        canceled.cancel(CancelReason.USER_REQUESTED, NOW);
         Order expired = limit(OrderSide.BUY, 10_000, 1);
-        expired.expire();
+        expired.expire(NOW);
 
         for (Order order : new Order[] {filled, canceled, expired}) {
-            assertThatThrownBy(order::cancel).isInstanceOf(NaspiBizException.class);
-            assertThatThrownBy(order::expire).isInstanceOf(NaspiBizException.class);
+            assertThatThrownBy(() -> order.cancel(CancelReason.SELF_TRADE_PREVENTED,
+                    NOW.plusHours(1))).isInstanceOf(NaspiBizException.class);
+            assertThatThrownBy(() -> order.expire(NOW.plusHours(1)))
+                    .isInstanceOf(NaspiBizException.class);
             assertThatThrownBy(() -> order.fill(1)).isInstanceOf(NaspiBizException.class);
         }
+        assertThat(canceled.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(canceled.getCanceledAt()).isEqualTo(NOW);
+        assertThat(expired.getCancelReason()).isEqualTo(CancelReason.TRADING_DAY_EXPIRED);
+        assertThat(expired.getCanceledAt()).isEqualTo(NOW);
+        assertThat(filled.getCancelReason()).isNull();
+        assertThat(filled.getCanceledAt()).isNull();
     }
 
     @Test

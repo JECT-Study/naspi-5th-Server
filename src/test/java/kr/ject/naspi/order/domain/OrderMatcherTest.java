@@ -109,6 +109,7 @@ class OrderMatcherTest {
         assertThat(buy.getStatus()).isEqualTo(OrderStatus.PARTIALLY_FILLED);
         assertThat(buy.getRemainingQuantity()).isEqualTo(20);
         assertThat(buy.isResting()).isTrue();
+        assertThat(buy.getCancelReason()).isNull();
     }
 
     @Test
@@ -137,6 +138,10 @@ class OrderMatcherTest {
         assertThat(buy.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(mine.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(mine.getRemainingQuantity()).isEqualTo(10);
+        assertThat(buy.getCancelReason()).isEqualTo(CancelReason.SELF_TRADE_PREVENTED);
+        assertThat(buy.getCanceledAt()).isEqualTo(buy.getOrderedAt());
+        assertThat(buy.getRemainingQuantity()).isEqualTo(10);
+        assertThat(mine.getCancelReason()).isNull();
     }
 
     @Test
@@ -154,6 +159,29 @@ class OrderMatcherTest {
         assertThat(buy.filledQuantity()).isEqualTo(4);
         assertThat(other.getStatus()).isEqualTo(OrderStatus.FILLED);
         assertThat(mine.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(buy.getCancelReason()).isEqualTo(CancelReason.SELF_TRADE_PREVENTED);
+        assertThat(buy.getRemainingQuantity()).isEqualTo(6);
+    }
+
+    @Test
+    @DisplayName("시장가 주문이 일부 체결 뒤 내 주문과 체결될 차례가 되면 체결 가능 수량 부족이 아니라 내 주문 간 체결 방지로 취소된다")
+    void marketSelfTradeTakesPriority() {
+        Order other = limit(2, OrderSide.SELL, 10_000, 4);
+        Order mine = limit(1, OrderSide.SELL, 10_100, 10);
+        Order buy = market(1, OrderSide.BUY, 10);
+
+        OrderMatcher.match(book(other, mine), buy, 10_500);
+
+        assertThat(buy.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(buy.getCancelReason()).isEqualTo(CancelReason.SELF_TRADE_PREVENTED);
+        assertThat(buy.filledQuantity()).isEqualTo(4);
+        assertThat(buy.getRemainingQuantity()).isEqualTo(6);
+
+        Order mine2 = limit(1, OrderSide.SELL, 10_000, 10);
+        Order buy2 = market(1, OrderSide.BUY, 10);
+        OrderMatcher.match(book(mine2), buy2, 10_500);
+        assertThat(buy2.getCancelReason()).isEqualTo(CancelReason.SELF_TRADE_PREVENTED);
+        assertThat(buy2.filledQuantity()).isZero();
     }
 
     @Test
@@ -170,6 +198,9 @@ class OrderMatcherTest {
         assertThat(buy.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(buy.filledQuantity()).isEqualTo(10);
         assertThat(far.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(buy.getCancelReason()).isEqualTo(CancelReason.MARKET_PARTIALLY_FILLED);
+        assertThat(buy.getRemainingQuantity()).isEqualTo(5);
+        assertThat(buy.getCanceledAt()).isEqualTo(buy.getOrderedAt());
     }
 
     @Test
@@ -182,6 +213,25 @@ class OrderMatcherTest {
         assertThat(result.executions()).isEmpty();
         assertThat(buy.getStatus()).isEqualTo(OrderStatus.CANCELED);
         assertThat(buy.filledQuantity()).isZero();
+        assertThat(buy.getCancelReason()).isEqualTo(CancelReason.MARKET_NOT_FILLED);
+        assertThat(buy.getRemainingQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("시장가 주문의 보호 범위 안에 상대 호가가 없으면 체결 가능 수량 없음으로 전량 취소한다")
+    void marketOrderOutOfProtection() {
+        Order far = limit(1, OrderSide.SELL, 11_000, 10);
+        Order buy = market(2, OrderSide.BUY, 10);
+
+        OrderMatcher.match(book(far), buy, 10_500);
+
+        assertThat(buy.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(buy.getCancelReason()).isEqualTo(CancelReason.MARKET_NOT_FILLED);
+
+        Order edge = limit(1, OrderSide.SELL, 10_500, 10);
+        Order buy2 = market(2, OrderSide.BUY, 10);
+        OrderMatcher.match(book(edge), buy2, 10_500);
+        assertThat(buy2.getStatus()).isEqualTo(OrderStatus.FILLED);
     }
 
     @Test
@@ -193,6 +243,8 @@ class OrderMatcherTest {
         OrderMatcher.match(book(ask), buy, 10_500);
 
         assertThat(buy.getStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(buy.getCancelReason()).isNull();
+        assertThat(buy.getCanceledAt()).isNull();
     }
 
     @Test

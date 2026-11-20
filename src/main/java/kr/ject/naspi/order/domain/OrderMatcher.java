@@ -12,9 +12,11 @@ import java.util.List;
  *   <li>체결 가격: 먼저 접수되어 대기 중이던 주문의 가격이다.</li>
  *   <li>체결 수량: 전량 또는 일부이며, 한 건의 체결 수량은 두 주문의 잔여 수량 중 작은 쪽이다.</li>
  *   <li>자전거래 금지: 같은 플레이어의 주문과 체결될 차례가 되면 신규 주문의 잔여 수량을 취소하고
- *       멈춘다. 기존 대기 주문과 이미 체결된 부분은 유지한다.</li>
+ *       멈춘다. 기존 대기 주문과 이미 체결된 부분은 유지한다. 사유는
+ *       {@link CancelReason#SELF_TRADE_PREVENTED}이며 시장가보다 우선한다.</li>
  *   <li>시장가: 보호 범위 안에서 체결 가능한 수량을 체결하고 잔여 수량은 취소한다. 체결 가능
- *       수량이 0이면 전량 취소한다.</li>
+ *       수량이 0이면 전량 취소한다. 사유는 일부 체결이면 {@link CancelReason#MARKET_PARTIALLY_FILLED},
+ *       체결이 없으면 {@link CancelReason#MARKET_NOT_FILLED}이다.</li>
  * </ul>
  *
  * <p>매칭은 주문 엔티티의 상태를 바꾼다. 정산(현금·주식 이동)과 저장은 호출하는 쪽이 맡는다.
@@ -69,8 +71,17 @@ public final class OrderMatcher {
 
         if (incoming.getStatus().isOpen()
                 && (selfTradePrevented || incoming.getType() == OrderType.MARKET)) {
-            incoming.cancel();
+            // 접수·체결·취소가 같은 순간으로 기록되도록 접수 시각을 취소 시각으로 쓴다
+            incoming.cancel(cancelReasonOf(incoming, selfTradePrevented), incoming.getOrderedAt());
         }
         return new MatchResult(List.copyOf(executions), selfTradePrevented);
+    }
+
+    private static CancelReason cancelReasonOf(Order incoming, boolean selfTradePrevented) {
+        if (selfTradePrevented) {
+            return CancelReason.SELF_TRADE_PREVENTED;
+        }
+        return incoming.filledQuantity() > 0
+                ? CancelReason.MARKET_PARTIALLY_FILLED : CancelReason.MARKET_NOT_FILLED;
     }
 }
