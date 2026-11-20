@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "properties": {
+    "publishable": {
+      "type": "boolean",
+      "description": "공시에서 기사 소재로 쓸 사실을 하나 이상 파악했으면 true, 없는 사실을 만들어야만 기사를 쓸 수 있으면 false"
+    },
+    "reason": {
+      "type": "string",
+      "description": "publishable 이 false 이면 미생성 사유, true 이면 빈 문자열"
+    },
+    "title": {
+      "type": "string",
+      "description": "기사 제목, 1~30자. publishable 이 false 이면 빈 문자열"
+    },
+    "body": {
+      "type": "string",
+      "description": "기사 본문, 1~100자. publishable 이 false 이면 빈 문자열"
+    },
+    "sentiment": {
+      "type": "string",
+      "enum": ["POSITIVE", "NEGATIVE"],
+      "description": "기사 핵심 논조. 호재면 POSITIVE, 악재면 NEGATIVE"
+    },
+    "summary": {
+      "type": "string",
+      "description": "이번 공시 원문에서 확인한 사실만의 요약. 다음 기사 작성 때 과거 요약으로 쓰인다. publishable 이 false 이면 빈 문자열"
+    }
+  },
+  "required": ["publishable", "reason", "title", "body", "sentiment", "summary"],
+  "additionalProperties": false
+}

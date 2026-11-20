@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * API에서 발생한 예외를 공통 응답({@link Result})으로 변환한다.
@@ -110,6 +111,17 @@ public class GlobalExceptionHandler {
                                                  HttpServletRequest request) {
         return invalidInput(request, e,
                 List.of(new Result.FieldError(e.getParameterName(), "필수 값입니다.")));
+    }
+
+    /**
+     * 업로드 파일이 multipart 상한({@code spring.servlet.multipart.max-file-size})을 넘으면 이미지 크기 오류로 응답한다.
+     * 파일 업로드는 이미지만 받으므로 정책 상한(5MB)을 넘은 경우와 같은 결과 코드를 쓴다.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Result<Void>> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException e, HttpServletRequest request) {
+        return handleNaspiBizException(
+                new NaspiBizException(ErrorCode.INVALID_IMAGE_SIZE), request);
     }
 
     /**

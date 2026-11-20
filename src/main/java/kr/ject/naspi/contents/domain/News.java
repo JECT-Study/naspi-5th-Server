@@ -1,0 +1,123 @@
+package kr.ject.naspi.contents.domain;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDateTime;
+import java.util.Objects;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * 뉴스 (ERD: news).
+ *
+ * <p>정책 (docs/policies/v1/domain/contents.md "뉴스 - 공시 기반 AI 뉴스"): 종목과 다대일, 공시와 일대일
+ * ({@code disclosure_id} 유니크)이다. 제목 최대 30자, 본문 최대 100자, 이미지 없음, 삭제 불가.
+ * 제목·본문·호재/악재는 발행된 뉴스에만 있다.
+ */
+@Entity
+@Table(name = "news",
+        uniqueConstraints = @UniqueConstraint(name = "uk_news_disclosure_id",
+                columnNames = "disclosure_id"),
+        indexes = @Index(name = "idx_news_stock_id", columnList = "stock_id"))
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class News {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "league_id", nullable = false, updatable = false)
+    private Long leagueId;
+
+    @Column(name = "stock_id", nullable = false, updatable = false)
+    private Long stockId;
+
+    /** 공시 기반 AI 뉴스의 원본 공시. 공시 없이 만드는 뉴스(v2 일일 요약 등)를 위해 비워 둘 수 있다. */
+    @Column(name = "disclosure_id", updatable = false)
+    private Long disclosureId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "news_type", nullable = false, updatable = false, length = 20)
+    private NewsType type;
+
+    /** 호재·악재. 발행된 뉴스에만 있다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sentiment", length = 20)
+    private NewsSentiment sentiment;
+
+    /** 제목. 발행된 뉴스에만 있다. */
+    @Column(name = "title", length = NewsGenerationResult.Generated.TITLE_MAX_LENGTH)
+    private String title;
+
+    /** 본문. 발행된 뉴스에만 있다. */
+    @Column(name = "body", length = NewsGenerationResult.Generated.BODY_MAX_LENGTH)
+    private String body;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private NewsStatus status;
+
+    /** 원본 공시를 작성한 거래일 번호 (1~7). */
+    @Column(name = "trading_day", nullable = false, updatable = false)
+    private int tradingDay;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    private News(long leagueId, long stockId, long disclosureId, int tradingDay,
+                 LocalDateTime createdAt) {
+        this.leagueId = leagueId;
+        this.stockId = stockId;
+        this.disclosureId = disclosureId;
+        this.type = NewsType.DISCLOSURE;
+        this.status = NewsStatus.PENDING;
+        this.tradingDay = tradingDay;
+        this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
+    }
+
+    /**
+     * 공시의 생성 중(PENDING) 뉴스를 만든다.
+     *
+     * @param disclosure 원본 공시 (저장되어 ID가 있어야 한다)
+     * @param createdAt 작성 일시
+     * @return 생성 중인 뉴스 (저장 전)
+     */
+    public static News requestFrom(Disclosure disclosure, LocalDateTime createdAt) {
+        return new News(disclosure.getLeagueId(), disclosure.getStockId(), disclosure.getId(),
+                disclosure.getTradingDay(), createdAt);
+    }
+
+    /**
+     * AI 생성 결과를 반영한다. 생성되면 제목·본문·호재/악재를 채워 발행하고, 미생성·실패는 상태만 바꾼다.
+     * 생성 중인 뉴스에만 한 번 반영할 수 있다.
+     *
+     * @param result 생성 결과
+     * @throws IllegalStateException 생성 중인 뉴스가 아닌 경우
+     */
+    public void complete(NewsGenerationResult result) {
+        if (status != NewsStatus.PENDING) {
+            throw new IllegalStateException("생성 중인 뉴스가 아닙니다: id=%d, status=%s"
+                    .formatted(id, status));
+        }
+        switch (result) {
+            case NewsGenerationResult.Generated generated -> {
+                this.title = generated.title();
+                this.body = generated.body();
+                this.sentiment = generated.sentiment();
+                this.status = NewsStatus.PUBLISHED;
+            }
+            case NewsGenerationResult.Skipped skipped -> this.status = NewsStatus.SKIPPED;
+            case NewsGenerationResult.Failed failed -> this.status = NewsStatus.FAILED;
+        }
+    }
+}

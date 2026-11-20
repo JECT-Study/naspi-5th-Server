@@ -19,6 +19,12 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+  # 파일 업로드 상한. 이미지 정책 상한(1장 5MB, 공시당 4장)은 서비스에서 검사하고 결과 코드로 응답하므로,
+  # 여기는 그보다 넉넉하게 둔다. Gateway 요청 크기 제한도 max-request-size 이상이어야 한다.
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 25MB
   session:
     # 로그인 전 세션(카카오 인증 진행 중, 가입 대기)의 유지 시간.
     # 로그인을 마치면 naspi.auth.login-session-timeout 으로 늘린다.
@@ -79,6 +85,15 @@ naspi:
     # API 호출과 로그인 후 이동을 허용할 프론트 출처. 여러 개면 쉼표로 구분하고, 첫 번째가 로그인 후 기본 이동 출처다.
     # 프로필별 값은 아래 development / local 프로필에 있다. 환경 변수가 있으면 그 값을 쓴다.
     allowed-origins: ${NASPI_CORS_ALLOWED_ORIGINS:https://www.naspi.my,https://naspi.my}
+  # 이미지 저장소 (contents 모듈). storage: gcs(기본) | local
+  # gcs 인증은 ADC 를 쓴다 (GKE: Workload Identity, 키 파일 없음). 버킷은 비공개로 두고 서명 URL 로만 내려받는다.
+  image:
+    storage: gcs
+    # 서명 URL 유효 시간. 만료 전에는 여러 번 쓸 수 있다
+    signed-url-expiration: ${NASPI_IMAGE_SIGNED_URL_EXPIRATION:5m}
+    gcs:
+      project-id: ${GCS_PROJECT_ID:naspi-511311}
+      bucket: ${GCS_BUCKET:naspi-image-storage}
   # Swagger UI·API 문서 접속 계정 (HTTP Basic). k8s: ID는 naspi-cm-common, 비밀번호는 naspi-secret-common
   # 로컬도 SWAGGER_PASSWORD 환경 변수를 직접 주입한다 (IDE 실행 설정 등).
   # 기본값을 빈 값으로 둬야 변수가 없을 때 시작에 실패한다. 기본값이 없으면 "${SWAGGER_PASSWORD}" 문자열이 비밀번호가 된다.
@@ -110,6 +125,13 @@ naspi:
       # 호가 (OrderBookTopic)
       orderbook:
         interval: 1s
+  # AI 공시브리핑 생성 (OpenRouterProperties). 타임아웃·재시도 간격은 기본값을 쓴다
+  ai:
+    openrouter:
+      # TODO: k8s manifest 의 naspi-secret-common 에 OPENROUTER_API_KEY 추가. 없으면 호출이 401 로 실패한다
+      api-key: ${OPENROUTER_API_KEY:}
+      # 이미지 입력과 structured outputs(json_schema) 를 모두 지원하는 모델이어야 한다
+      model: ${OPENROUTER_MODEL:google/gemini-2.5-flash}
 
 logging:
   structured:
@@ -164,6 +186,12 @@ spring:
   h2:
     console:
       enabled: true
+  # 로컬 이미지 저장소(naspi.image.local.dir)를 /local-images/** 로 내려준다
+  web:
+    resources:
+      static-locations: file:./build/local-images/
+  mvc:
+    static-path-pattern: /local-images/**
   # 로컬 Redis (docker run -d --name naspi-redis -p 6379:6379 redis:7)
   data:
     redis:
@@ -174,6 +202,15 @@ naspi:
   cors:
     # 로컬 프론트 (Vite 기본 포트 5173)
     allowed-origins: http://localhost:5173
+  # 로컬은 GCP 인증 없이 파일 시스템에 저장하고 /local-images/** 로 내려준다 (spring.web.resources 위 설정).
+  # 실제 GCS 로 확인하려면 storage 를 gcs 로 바꾸고 서비스 계정 impersonation 으로 ADC 로그인한다
+  # (gcloud auth application-default login --impersonate-service-account=naspi-gcs-sa@naspi-511311.iam.gserviceaccount.com).
+  # 일반 사용자 ADC 로는 서명 URL 을 만들 수 없다.
+  image:
+    storage: local
+    local:
+      dir: ./build/local-images
+      base-url: http://localhost:8080/local-images
 
 server:
   servlet:

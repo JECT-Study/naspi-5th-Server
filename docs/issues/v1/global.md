@@ -34,13 +34,16 @@
   - [ ] 비동기 리스너 실패 시 로그 및 재시도 정책 정의
 
 ### GLB-05 사용자는 JPEG/PNG 이미지를 업로드할 수 있다
-- Jira:
+- Jira: ND-14
 - 정책: [contents.md#공시](../../policies/v1/domain/contents.md#공시) — JPEG(.jpg/.jpeg), PNG
 - 내용: 이미지 업로드/조회 추상화, 확장자·MIME 검증
 - 완료 조건
-  - [ ] JPEG/PNG 외 형식 거절
-  - [ ] 로컬은 파일 시스템, 운영은 외부 저장소로 교체 가능한 구조
-- 결정 필요: 저장소(S3, NCP Object Storage 등), 파일 크기 제한
+  - [x] JPEG/PNG 외 형식 거절 (확장자·Content-Type·파일 시그니처 모두 일치)
+  - [x] 로컬은 파일 시스템, 운영은 외부 저장소로 교체 가능한 구조 (`ImageStorage`: `GcsImageStorage` / `LocalImageStorage`)
+  - [x] 이미지는 공시에 종속 (공시 1건 최대 4개, ERD `disclosure_image`). 별도 API 없이 공시 등록·조회·삭제에서 `ImageService` 호출
+- 결정: 저장소는 GCS (비공개 버킷, V4 서명 URL 5분, Workload Identity), 파일 크기 1장 최대 5MB
+- 결정: 이미지 전용 API는 두지 않는다. 등록은 공시 등록(CNT-01), 서명 URL은 공시 조회 응답(CNT-02), 삭제는 공시 삭제(CNT-03)에 포함
+- 결정 필요: 크기 제한을 policy.md 에 반영
 
 ### GLB-06 시스템은 AI 모델을 호출해 텍스트를 생성할 수 있다
 - Jira:

@@ -2,11 +2,14 @@ package kr.ject.naspi.league.application;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
@@ -97,6 +100,45 @@ public class LeagueQueryService {
         return new LeaguePlayers(league.getId(), startable, tradingDayOf(league), result);
     }
 
+    /**
+     * 회원이 입장한 대기실·진행 중·종료 리그 목록을 조회한다. 저장된 리그 상태를 그대로 응답하며, 저장 상태가
+     * 삭제·만료인 리그는 제외한다. 상장 전인 대기자가 입장한 대기실도 포함한다.
+     *
+     * @param memberId 조회하는 회원 ID
+     * @return 회원의 입장 일시 최신순(같으면 리그 ID 내림차순) 리그 목록. 입장한 리그가 없으면 빈 목록
+     */
+    public List<MyLeague> getMyLeagues(long memberId) {
+        List<Player> myPlayers = playerRepository.findAllByMemberIdAndLeagueStatusIn(memberId,
+                Set.of(LeagueStatus.WAITING, LeagueStatus.STARTED, LeagueStatus.ENDED));
+        if (myPlayers.isEmpty()) {
+            return List.of();
+        }
+        List<Long> leagueIds = myPlayers.stream().map(Player::getLeagueId).toList();
+        Map<Long, League> leagues = new HashMap<>();
+        leagueRepository.findAllByIdIn(leagueIds)
+                .forEach(league -> leagues.put(league.getId(), league));
+        Map<Long, List<Player>> playersByLeague = new HashMap<>();
+        playerRepository.findAllByLeagueIdIn(leagueIds).forEach(player -> playersByLeague
+                .computeIfAbsent(player.getLeagueId(), id -> new ArrayList<>()).add(player));
+
+        return myPlayers.stream()
+                .sorted(Comparator.comparing(Player::getJoinedAt).reversed()
+                        .thenComparing(Comparator.comparing(Player::getLeagueId).reversed()))
+                .map(player -> toMyLeague(leagues.get(player.getLeagueId()), player,
+                        playersByLeague.get(player.getLeagueId())))
+                .toList();
+    }
+
+    private MyLeague toMyLeague(League league, Player me, List<Player> players) {
+        boolean waiting = league.getStatus() == LeagueStatus.WAITING;
+        return new MyLeague(league.getId(), league.getName().getValue(), league.getStatus(),
+                players.size(), players.stream().filter(Player::isListed).count(),
+                league.isHost(me), me.isListed(), me.getJoinedAt(), league.getCreatedAt(),
+                waiting ? league.waitingRoomExpiresAt() : null, league.getStartedAt(),
+                league.getEndsAt(),
+                league.getStatus() == LeagueStatus.STARTED ? tradingDayOf(league) : null);
+    }
+
     private String displayNameOf(Player player, Map<Long, String> names) {
         return player.isWithdrawn() ? Player.WITHDRAWN_DISPLAY_NAME
                 : names.get(player.getMemberId());
@@ -132,6 +174,22 @@ public class LeagueQueryService {
      */
     public Optional<Long> findPlayerId(long memberId, long leagueId) {
         return playerRepository.findByLeagueIdAndMemberId(leagueId, memberId).map(Player::getId);
+    }
+
+    /**
+     * 진행 중인 리그의 현재 거래일을 조회한다. contents가 공시를 진행 중인 리그에서만 받고, 몇 거래일차에
+     * 작성됐는지 기록할 때 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @return 현재 거래일. 진행 중이 아닌 리그(대기실, 종료)면 빈 값
+     * @throws NaspiBizException 리그가 없는 경우 (만료·삭제된 대기실 포함)
+     */
+    public Optional<LeagueTradingDay> findCurrentTradingDay(long leagueId) {
+        League league = getLeague(leagueId);
+        if (!league.isTradable()) {
+            return Optional.empty();
+        }
+        return Optional.of(tradingDayOf(league));
     }
 
     /**
