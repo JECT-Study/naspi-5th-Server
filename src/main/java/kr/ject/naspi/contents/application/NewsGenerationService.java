@@ -85,8 +85,10 @@ public class NewsGenerationService {
                     news.getStatus());
             return null;
         }
-        Disclosure disclosure = disclosureRepository.findById(disclosureId).orElseThrow();  // 공시 정보 조회
-        List<String> pastSummaries = disclosureRepository.findAiSummariesBefore(            // 공시 요약 정보 조회
+        // 공시 정보 조회
+        Disclosure disclosure = disclosureRepository.findById(disclosureId).orElseThrow();
+        // 공시 요약 정보 조회
+        List<String> pastSummaries = disclosureRepository.findAiSummariesBefore(
                 disclosure.getLeagueId(), disclosure.getStockId(), disclosureId);
         return new Request(disclosure.getTitle().getValue(), disclosure.getBody().getValue(),
                 pastSummaries);
