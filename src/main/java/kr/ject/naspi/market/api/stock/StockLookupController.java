@@ -49,7 +49,7 @@ public class StockLookupController {
                     (`stockId`, `name`, `description`, `listerName`, `mine`). \
                     `mine`이 `true`인 항목이 로그인한 회원 본인의 종목이다 \
                     ("내 종목"/"친구 종목" 구분, 소개 수정 아이콘 노출에 쓴다). \
-                    `listerName`은 상장자 이름이고 탈퇴한 회원이면 `null`이다. \
+                    `listerName`은 상장자 이름이고, 시작된 리그에서 탈퇴한 상장자면 `"탈퇴한 사용자"`다. 종목 이름·소개는 탈퇴 후에도 그대로다. \
                     상장된 종목이 없으면 빈 배열.
 
                     **실패 응답** (`code`는 3자리 문자열)
@@ -92,7 +92,7 @@ public class StockLookupController {
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 종목 \
                     (`stockId`, `name`, `description`, `listerName`, `mine`). \
                     `mine`이 `true`이면 로그인한 회원 본인의 종목이다 (소개 수정 아이콘 노출에 쓴다). \
-                    `listerName`은 상장자 이름이고 탈퇴한 회원이면 `null`이다.
+                    `listerName`은 상장자 이름이고, 시작된 리그에서 탈퇴한 상장자면 `"탈퇴한 사용자"`다. 종목 이름·소개는 탈퇴 후에도 그대로다.
 
                     **실패 응답** (`code`는 3자리 문자열)
 

@@ -8,7 +8,7 @@ import kr.ject.naspi.common.response.Result;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.member.application.MemberService;
+import kr.ject.naspi.member.application.MemberWithdrawalUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class MemberWithdrawController {
 
-    private final MemberService memberService;
+    private final MemberWithdrawalUseCase memberWithdrawalUseCase;
     private final LoginSession loginSession;
 
     /**
@@ -60,7 +60,7 @@ public class MemberWithdrawController {
     public Result<Void> withdraw(
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             HttpServletRequest request) {
-        memberService.withdraw(loginMember.memberId());
+        memberWithdrawalUseCase.withdraw(loginMember.memberId());
         loginSession.logout(request);
         return Result.success();
     }

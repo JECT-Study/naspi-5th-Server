@@ -45,7 +45,7 @@ model: opus
 
 - 정책이 모호하거나 새 공통 코드 위치가 애매하면 임의로 정하지 말고 `결정 필요`에 적는다.
 - 정책과 기존 코드가 어긋나면 정책서가 기준이다. 어긋남을 계획에 명시한다.
-- 의존 방향(`member ← league ← market ← asset ← order`, `contents → league, market`)과 계층 규칙(`api → application → domain ← infra`)을 어기는 계획을 세우지 않는다. 역방향은 Spring 이벤트로 설계한다.
+- 의존 방향(`member ← league ← market ← asset ← order`, `contents → league, market`)과 계층 규칙(`api → application → domain ← infra`)을 어기는 계획을 세우지 않는다. 하위 모듈의 후속 처리는 흐름을 시작하는 모듈의 UseCase에서 직접 호출하도록 설계하고, 역방향 이벤트(하위 모듈이 상위 모듈 이벤트를 구독)는 쓰지 않는다.
 - `docs/policies/roadmap.md` 내용은 계획에 넣지 않는다.
 - Bash는 조회용(`git log/diff/status`, `scripts/find-story.sh`, `ls`)으로만 쓴다. 빌드·테스트·커밋은 하지 않는다.
 

@@ -1,17 +1,23 @@
 package kr.ject.naspi.league.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import kr.ject.naspi.asset.application.InitialAssetAllocationService;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.market.application.LeagueStockLookupService;
+import kr.ject.naspi.market.application.MemberStock;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
+import kr.ject.naspi.member.application.MemberWithdrawalUseCase;
 import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
 import org.junit.jupiter.api.DisplayName;
@@ -22,21 +28,24 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
+/**
+ * 회원 탈퇴 UseCase가 league에서 처리하는 대기실 퇴장과 탈퇴 일시 기록.
+ */
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({MemberWithdrawnListener.class, MemberService.class, LeagueLeaveUseCase.class,
+@Import({MemberWithdrawalUseCase.class, MemberService.class, LeagueLeaveUseCase.class,
         LeagueStartUseCase.class,
         StockOpeningService.class, LeagueService.class, LeagueCreationUseCase.class,
         InviteCodeIssuer.class, LeagueJoinLimit.class, LeagueQueryService.class,
-        StockListingService.class,
+        StockListingService.class, LeagueStockLookupService.class,
         StockQueryService.class, LocalStockSnapshotCache.class,
         InitialAssetAllocationService.class, MutableClock.Config.class})
-class MemberWithdrawnListenerTest {
+class MemberWithdrawalLeagueTest {
 
     private long kakaoId = 1000L;
 
     @Autowired
-    private MemberService memberService;
+    private MemberWithdrawalUseCase memberWithdrawalUseCase;
 
     @Autowired
     private LeagueService leagueService;
@@ -49,6 +58,9 @@ class MemberWithdrawnListenerTest {
 
     @Autowired
     private StockListingService stockListingService;
+
+    @Autowired
+    private LeagueStockLookupService leagueStockLookupService;
 
     @Autowired
     private TestEntityManager entityManager;
@@ -67,7 +79,7 @@ class MemberWithdrawnListenerTest {
         final JoinedLeague waitingPlayer = leagueService.join(member, waiting.inviteCode());
         entityManager.flush();
 
-        memberService.withdraw(member);
+        memberWithdrawalUseCase.withdraw(member);
         entityManager.flush();
         entityManager.clear();
 
@@ -76,6 +88,44 @@ class MemberWithdrawnListenerTest {
         assertThat(startedPlayer).isNotNull();
         assertThat(startedPlayer.getMemberId()).isEqualTo(member);
         assertThat(startedPlayer.getWithdrawnAt()).isEqualTo(now);
+    }
+
+    @Test
+    @DisplayName("이미 탈퇴한 회원은 다시 탈퇴할 수 없고, 남아 있는 플레이어의 탈퇴 일시도 바뀌지 않는다")
+    void withdrawTwice() {
+        long member = member("탈퇴자");
+        final LocalDateTime withdrawnAt = LocalDateTime.now(clock);
+        final CreatedLeague started = startedLeagueWith(member);
+        memberWithdrawalUseCase.withdraw(member);
+        entityManager.flush();
+        clock.advance(Duration.ofHours(1));
+
+        assertThatThrownBy(() -> memberWithdrawalUseCase.withdraw(member))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.MEMBER_NOT_FOUND);
+        entityManager.clear();
+        assertThat(entityManager.find(Player.class, playerIdOf(started, member)).getWithdrawnAt())
+                .isEqualTo(withdrawnAt);
+    }
+
+    @Test
+    @DisplayName("시작된 리그에서 상장자가 탈퇴해도 종목 이름·소개는 그대로 남고, 상장자 이름은 '탈퇴한 사용자'로 표시된다")
+    void withdrawnListerStockRemains() {
+        long withdrawer = member("탈퇴자");
+        long viewer = member("조회자");
+        CreatedLeague started = startedLeagueWith(withdrawer, viewer);
+        final long listerPlayerId = playerIdOf(started, withdrawer);
+        entityManager.flush();
+
+        memberWithdrawalUseCase.withdraw(withdrawer);
+        entityManager.flush();
+        entityManager.clear();
+
+        MemberStock stock = leagueStockLookupService.findAll(viewer, started.leagueId()).stream()
+                .filter(found -> found.name().equals("종목" + listerPlayerId))
+                .findFirst().orElseThrow();
+        assertThat(stock.description()).isEqualTo("소개");
+        assertThat(stock.listerName()).isEqualTo(Player.WITHDRAWN_DISPLAY_NAME);
     }
 
     @Test

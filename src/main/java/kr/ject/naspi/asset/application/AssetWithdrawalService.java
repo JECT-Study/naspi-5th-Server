@@ -12,8 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 회원 탈퇴 시 자산 처리 (AST-07, docs/policies/v1/domain/member.md "회원 탈퇴").
  *
- * <p>asset은 {@code MemberWithdrawn} 이벤트를 직접 듣지 않는다. 미체결 주문 취소 후 현금을 폐기해야 하므로
- * order가 "주문 취소, 예약 해제, 현금 폐기" 순서로 이 서비스를 호출한다 (ORD-11).
+ * <p>회원 탈퇴 UseCase가 order의 미체결 주문 취소(예약 해제 포함) 뒤에 호출한다 (ORD-11). 예약이 남아 있으면
+ * 폐기를 거절하므로 주문 취소보다 먼저 호출하면 안 된다.
  *
  * <p>현금만 폐기하고 보유 주식은 조회·변경하지 않는다. 보유 수량이 그대로 남으므로 탈퇴자의 보유분은 발행주식 총수
  * ({@code InitialAllocation.ISSUED_SHARES} = 리그 내 종목별 {@code Holding.quantity} 합)에 계속 포함되고,

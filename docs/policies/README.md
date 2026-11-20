@@ -27,16 +27,25 @@ member ← league ← market ← asset ← order
                      ↖ contents
 ```
 
-상위 모듈(화살표 왼쪽) 참조는 가능하고 하위 모듈 참조는 금지한다. 역방향 흐름은 이벤트로 처리한다.
+상위 모듈(화살표 왼쪽) 참조는 가능하고 하위 모듈 참조는 금지한다.
 `application` 계층의 Service는 상위 모듈만 참조하고, 하위 모듈을 참조해야 하는 경우는 UseCase(`XxxUseCase`)로 작성한다. UseCase는 하위 모듈도 참조할 수 있다.
+하위 모듈의 후속 처리가 필요한 흐름은 그 흐름을 시작하는 모듈의 UseCase가 하위 모듈 `application`을 같은 트랜잭션에서 직접 호출한다. 하위 모듈이 상위 모듈의 이벤트를 구독하는 방식(역방향 이벤트)은 쓰지 않는다.
+
+| 흐름 | 시작 (UseCase) | 후속 처리 |
+|---|---|---|
+| 리그 시작 | league (`LeagueStartUseCase`) | asset: 초기 자산 배분 / market: 시초가 적용 |
+| 회원 탈퇴 | member (`MemberWithdrawalUseCase`) | league: 대기실 퇴장, 시작된 리그 플레이어에 탈퇴 일시 기록 / order: 미체결 주문 취소 (예약 해제 포함) → asset: 현금 폐기 (`AssetWithdrawalService`, 주문 취소 뒤 순서 보장) / market: 처리 없음 (상장 종목은 그대로 남아 계속 거래, MKT-09) |
+| 거래일 전환 (매일 09:00 KST) | league | market: 종가 확정·기준가 적용 / order: 미체결 만료 |
+| 리그 종료 | league | order: 미체결 전체 취소 / league: 결과 산정 |
+
+체결 시 market 현재가·거래량 갱신은 order가 상위 모듈인 market을 직접 호출한다.
+
+Spring 이벤트는 `websocket` 발행과 모듈 내부 비동기 처리에만 쓴다.
 
 | 이벤트 | 발행 | 구독 |
 |---|---|---|
-| 체결 (`TradeExecuted`) | order | market: 현재가·거래량 갱신 / websocket: 매수자·매도자 자산 즉시 발행 (커밋 이후, [설계](../design/asset-realtime.md)) |
-| 거래일 전환 (`TradingDayChanged`, 매일 09:00 KST) | league | market: 종가 확정·기준가 적용 / order: 미체결 만료 |
+| 체결 (`TradeExecuted`) | order | websocket: 매수자·매도자 자산 즉시 발행 (커밋 이후, [설계](../design/asset-realtime.md)) |
 | 공시 게시 (`DisclosurePublished`) | contents | contents: AI 뉴스 비동기 생성 |
-| 회원 탈퇴 (`MemberWithdrawn`) | member | order: 주문 취소 후 asset 현금 폐기 호출 (`AssetWithdrawalService`, 순서 보장) / market: 종목 연결 해제 / league: 결과 처리 |
-| 리그 종료 | league | order: 미체결 전체 취소 / league: 결과 산정 |
 
 ## 작성 규칙
 
