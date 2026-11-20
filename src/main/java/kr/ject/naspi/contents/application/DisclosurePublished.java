@@ -1,11 +1,9 @@
 package kr.ject.naspi.contents.application;
 
 /**
- * 공시 게시 이벤트.
+ * 공시 게시 이벤트. 생성 중(PENDING)인 공시 기반 AI 뉴스의 내용을 채우는 데 쓴다.
  *
- * <p>공시와 이미지가 저장된 같은 트랜잭션 안에서 발행된다. 공시 기반 AI 뉴스 생성(CNT-05)이 이 이벤트를
- * 커밋 이후 비동기로 받아 뉴스 생성을 시작한다. 정책상 뉴스 생성이 실패해도 공시는 유지되므로, 구독하는 쪽은
- * 공시 저장 트랜잭션에 영향을 주면 안 된다 ({@code @TransactionalEventListener(AFTER_COMMIT)} + {@code @Async}).
+ * <p>공시 저장 트랜잭션 안에서 발행된다. 구독하는 쪽은 커밋 후 비동기로 받아 공시 저장에 영향을 주지 않아야 한다.
  *
  * @param disclosureId 공시 ID
  * @param leagueId 리그 ID

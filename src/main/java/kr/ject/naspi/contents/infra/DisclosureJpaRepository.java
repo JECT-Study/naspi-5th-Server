@@ -24,6 +24,22 @@ interface DisclosureJpaRepository extends Repository<Disclosure, Long>, Disclosu
                 Limit.of(limit));
     }
 
+    @Override
+    default List<String> findAiSummariesBefore(long leagueId, long stockId, long disclosureId) {
+        return findAiSummaries(leagueId, stockId, disclosureId);
+    }
+
+    // 상태와 관계없이(삭제 포함) 요약이 있는 공시만, 작성 순(ID 오름차순)으로 찾는다
+    @Query("""
+            select d.aiSummary from Disclosure d
+            where d.leagueId = :leagueId and d.stockId = :stockId and d.id < :before
+              and d.aiSummary is not null
+            order by d.id asc
+            """)
+    List<String> findAiSummaries(@Param("leagueId") long leagueId,
+                                 @Param("stockId") long stockId,
+                                 @Param("before") long before);
+
     // ID는 작성 순서대로 증가하므로 ID 내림차순이 최신순이다. 커서(마지막으로 받은 ID)보다 작은 것만 찾는다.
     @Query("""
             select d from Disclosure d

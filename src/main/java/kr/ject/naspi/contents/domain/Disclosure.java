@@ -61,6 +61,14 @@ public class Disclosure {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /** 공시 원문의 AI 요약. 같은 종목의 다음 뉴스 생성에 과거 맥락으로 쓴다. 뉴스가 발행된 공시에만 있다. 비공개. */
+    @Column(name = "ai_summary", columnDefinition = "text")
+    private String aiSummary;
+
+    /** AI가 뉴스를 만들지 않은(미생성) 사유. 운영 확인용, 비공개. */
+    @Column(name = "ai_skip_reason", columnDefinition = "text")
+    private String aiSkipReason;
+
     private Disclosure(long leagueId, long stockId, long authorPlayerId, DisclosureTitle title,
                        DisclosureBody body, int tradingDay, LocalDateTime createdAt) {
         this.leagueId = leagueId;
@@ -106,6 +114,24 @@ public class Disclosure {
             throw new NaspiBizException(ErrorCode.DISCLOSURE_NOT_AUTHOR);
         }
         this.status = DisclosureStatus.DELETED;
+    }
+
+    /**
+     * AI 요약을 기록한다. 삭제된 공시에도 기록한다.
+     *
+     * @param summary AI 요약
+     */
+    public void recordAiSummary(String summary) {
+        this.aiSummary = Objects.requireNonNull(summary, "summary");
+    }
+
+    /**
+     * AI 미생성 사유를 기록한다.
+     *
+     * @param reason 미생성 사유
+     */
+    public void recordAiSkipReason(String reason) {
+        this.aiSkipReason = reason;
     }
 
     /**

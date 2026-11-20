@@ -20,6 +20,10 @@ import kr.ject.naspi.contents.domain.DisclosureTitle;
 import kr.ject.naspi.contents.domain.Image;
 import kr.ject.naspi.contents.domain.ImageFormat;
 import kr.ject.naspi.contents.domain.ImageStorage;
+import kr.ject.naspi.contents.domain.News;
+import kr.ject.naspi.contents.domain.NewsGenerationResult;
+import kr.ject.naspi.contents.domain.NewsSentiment;
+import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -184,6 +188,49 @@ class DisclosureQueryServiceTest {
     }
 
     @Test
+    @DisplayName("공시 상세에서 공시로 만든 AI 뉴스의 제목·본문·호재/악재를 확인할 수 있다")
+    void getDetailWithPublishedNews() {
+        long id = publish(STOCK_ID, "상세 공시", 1);
+        News news = requestNews(id);
+        news.complete(new NewsGenerationResult.Generated("뉴스 제목", "뉴스 본문",
+                NewsSentiment.POSITIVE, "요약"));
+        entityManager.flush();
+
+        DisclosureDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
+                id);
+
+        assertThat(detail.news()).isEqualTo(new DisclosureNews(news.getId(),
+                NewsStatus.PUBLISHED, "뉴스 제목", "뉴스 본문", NewsSentiment.POSITIVE));
+    }
+
+    @Test
+    @DisplayName("AI 뉴스가 발행되기 전에는 생성 상태만 확인할 수 있고 제목·본문·호재/악재는 없다")
+    void getDetailWithUnpublishedNews() {
+        long pending = publish(STOCK_ID, "생성 중", 1);
+        News pendingNews = requestNews(pending);
+        long failed = publish(STOCK_ID, "실패", 1);
+        News failedNews = requestNews(failed);
+        failedNews.complete(new NewsGenerationResult.Failed("오류"));
+        entityManager.flush();
+
+        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, pending).news())
+                .isEqualTo(new DisclosureNews(pendingNews.getId(), NewsStatus.PENDING, null, null,
+                        null));
+        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, failed).news())
+                .isEqualTo(new DisclosureNews(failedNews.getId(), NewsStatus.FAILED, null, null,
+                        null));
+    }
+
+    @Test
+    @DisplayName("뉴스가 없는 공시의 상세는 뉴스 없이 조회된다")
+    void getDetailWithoutNews() {
+        long id = publish(STOCK_ID, "뉴스 없음", 1);
+
+        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id).news())
+                .isNull();
+    }
+
+    @Test
     @DisplayName("다른 종목의 공시 ID나 없는 공시는 상세 조회할 수 없다")
     void detailNotFound() {
         long id = publish(STOCK_ID, "공시", 1);
@@ -221,6 +268,11 @@ class DisclosureQueryServiceTest {
         return entityManager.persistAndFlush(Disclosure.publish(LEAGUE_ID, stockId,
                 AUTHOR_PLAYER_ID, DisclosureTitle.of(title), DisclosureBody.of("본문"),
                 tradingDay, NOW)).getId();
+    }
+
+    private News requestNews(long disclosureId) {
+        return entityManager.persistAndFlush(News.requestFrom(
+                entityManager.find(Disclosure.class, disclosureId), NOW));
     }
 
     private void attachImages(long disclosureId, int count) {
