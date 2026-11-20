@@ -215,4 +215,42 @@ class OrderTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(sell.reservedCash()).isZero();
     }
+
+    @Test
+    @DisplayName("취소 수량은 취소·만료 시점의 미체결 잔여 수량이며 거래일 변경 만료 수량도 합산한다")
+    void canceledQuantity() {
+        Order canceled = limit(OrderSide.BUY, 10_000, 10);
+        canceled.fill(3);
+        canceled.cancel(CancelReason.USER_REQUESTED, NOW);
+        Order expired = limit(OrderSide.BUY, 10_000, 10);
+        expired.fill(3);
+        expired.expire(NOW);
+        Order partial = limit(OrderSide.BUY, 10_000, 10);
+        partial.fill(3);
+        Order filled = limit(OrderSide.BUY, 10_000, 10);
+        filled.fill(10);
+
+        assertThat(canceled.canceledQuantity()).isEqualTo(7);
+        assertThat(expired.canceledQuantity()).isEqualTo(7);
+        assertThat(limit(OrderSide.BUY, 10_000, 10).canceledQuantity()).isZero();
+        assertThat(partial.canceledQuantity()).isZero();
+        assertThat(filled.canceledQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("대기 수량은 최초 주문 수량 - 체결 수량 - 취소 수량이다")
+    void pendingQuantity() {
+        Order partial = limit(OrderSide.SELL, 10_000, 10);
+        partial.fill(3);
+        Order filled = limit(OrderSide.SELL, 10_000, 10);
+        filled.fill(10);
+        Order canceled = limit(OrderSide.SELL, 10_000, 10);
+        canceled.fill(3);
+        canceled.cancel(CancelReason.USER_REQUESTED, NOW);
+
+        assertThat(limit(OrderSide.SELL, 10_000, 10).pendingQuantity()).isEqualTo(10);
+        assertThat(partial.pendingQuantity()).isEqualTo(7);
+        assertThat(filled.pendingQuantity()).isZero();
+        assertThat(canceled.pendingQuantity()).isZero();
+    }
 }

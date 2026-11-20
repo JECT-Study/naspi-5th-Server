@@ -187,6 +187,25 @@ public class Order {
     }
 
     /**
+     * 취소 수량. 취소·만료 시점의 미체결 잔여 수량이며, 거래일 변경으로 만료된 수량도 취소로 합산한다.
+     *
+     * @return 취소·만료된 주문이면 잔여 수량, 아니면 0
+     */
+    public long canceledQuantity() {
+        return status == OrderStatus.CANCELED || status == OrderStatus.EXPIRED
+                ? remainingQuantity : 0;
+    }
+
+    /**
+     * 현재 대기 수량.
+     *
+     * @return {@code 최초 주문 수량 - 체결 수량 - 취소 수량}
+     */
+    public long pendingQuantity() {
+        return quantity - filledQuantity() - canceledQuantity();
+    }
+
+    /**
      * 호가창에 남아 체결을 기다리는 주문인지 확인한다. 시장가 주문은 호가창에 남지 않는다.
      *
      * @return 지정가이고 대기 또는 부분 체결 상태면 {@code true}

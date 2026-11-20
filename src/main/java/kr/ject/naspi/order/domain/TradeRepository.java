@@ -34,4 +34,20 @@ public interface TradeRepository {
      * @return 체결 일시·ID 역순 체결 기록
      */
     List<Trade> findTop500ByStockIdOrderByExecutedAtDescIdDesc(long stockId);
+
+    /**
+     * 매수 주문의 체결 기록을 체결 순서로 조회한다.
+     *
+     * @param buyOrderId 매수 주문 ID
+     * @return 체결 일시·ID 오름차순 체결 기록
+     */
+    List<Trade> findAllByBuyOrderIdOrderByExecutedAtAscIdAsc(long buyOrderId);
+
+    /**
+     * 매도 주문의 체결 기록을 체결 순서로 조회한다.
+     *
+     * @param sellOrderId 매도 주문 ID
+     * @return 체결 일시·ID 오름차순 체결 기록
+     */
+    List<Trade> findAllBySellOrderIdOrderByExecutedAtAscIdAsc(long sellOrderId);
 }

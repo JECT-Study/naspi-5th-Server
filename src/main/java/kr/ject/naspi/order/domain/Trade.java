@@ -24,7 +24,9 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "trade", indexes = {
         @Index(name = "idx_trade_stock_day", columnList = "stock_id, trading_day"),
-        @Index(name = "idx_trade_stock_executed", columnList = "stock_id, executed_at, id")})
+        @Index(name = "idx_trade_stock_executed", columnList = "stock_id, executed_at, id"),
+        @Index(name = "idx_trade_buy_order", columnList = "buy_order_id"),
+        @Index(name = "idx_trade_sell_order", columnList = "sell_order_id")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trade {

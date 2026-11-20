@@ -80,4 +80,38 @@ class TradeJpaRepositoryTest {
 
         assertThat(trades).containsExactly(newest, middle, oldest);
     }
+
+    private Trade saveWithOrders(long sellOrderId, long buyOrderId, LocalDateTime executedAt) {
+        Order sell = order(10, 1L, OrderSide.SELL, 10_000, 5, 1);
+        ReflectionTestUtils.setField(sell, "id", sellOrderId);
+        Order buy = order(20, 1L, OrderSide.BUY, 10_000, 5, 1);
+        ReflectionTestUtils.setField(buy, "id", buyOrderId);
+        return tradeRepository.save(
+                Trade.record(new Execution(sell, buy, 10_000, 1), 1, executedAt));
+    }
+
+    @Test
+    @DisplayName("매수 주문의 체결만 체결 일시·ID 오름차순으로 조회한다")
+    void findAllByBuyOrderId_ordered() {
+        Trade late = saveWithOrders(100L, 7L, NOW.plusMinutes(1));
+        Trade early = saveWithOrders(101L, 7L, NOW);
+        Trade sameTimeAfter = saveWithOrders(102L, 7L, NOW);
+        saveWithOrders(103L, 8L, NOW);
+        entityManager.flush();
+
+        assertThat(tradeRepository.findAllByBuyOrderIdOrderByExecutedAtAscIdAsc(7L))
+                .containsExactly(early, sameTimeAfter, late);
+    }
+
+    @Test
+    @DisplayName("매도 주문의 체결만 체결 일시·ID 오름차순으로 조회한다")
+    void findAllBySellOrderId_ordered() {
+        Trade late = saveWithOrders(7L, 100L, NOW.plusMinutes(1));
+        Trade early = saveWithOrders(7L, 101L, NOW);
+        saveWithOrders(8L, 102L, NOW);
+        entityManager.flush();
+
+        assertThat(tradeRepository.findAllBySellOrderIdOrderByExecutedAtAscIdAsc(7L))
+                .containsExactly(early, late);
+    }
 }
