@@ -1,5 +1,6 @@
 package kr.ject.naspi.order.domain;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -50,4 +51,21 @@ public interface TradeRepository {
      * @return 체결 일시·ID 오름차순 체결 기록
      */
     List<Trade> findAllBySellOrderIdOrderByExecutedAtAscIdAsc(long sellOrderId);
+
+    /**
+     * 매수 주문별 체결 수량·금액 합계와 최저·최고 체결가를 한 번에 구한다. 목록 조회에서 주문마다 체결을
+     * 조회하지 않도록 쓴다.
+     *
+     * @param buyOrderIds 매수 주문 ID 목록 (비어 있지 않아야 한다)
+     * @return 체결이 있는 주문의 합계. 체결이 없는 주문은 포함되지 않는다
+     */
+    List<OrderExecutionTotal> sumByBuyOrderIds(Collection<Long> buyOrderIds);
+
+    /**
+     * 매도 주문별 체결 수량·금액 합계와 최저·최고 체결가를 한 번에 구한다.
+     *
+     * @param sellOrderIds 매도 주문 ID 목록 (비어 있지 않아야 한다)
+     * @return 체결이 있는 주문의 합계. 체결이 없는 주문은 포함되지 않는다
+     */
+    List<OrderExecutionTotal> sumBySellOrderIds(Collection<Long> sellOrderIds);
 }

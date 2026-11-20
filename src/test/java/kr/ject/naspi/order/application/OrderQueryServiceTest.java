@@ -288,6 +288,191 @@ class OrderQueryServiceTest {
                 .isEqualTo(before.fills()).hasSize(1);
     }
 
+    @Test
+    @DisplayName("대기 목록에는 미체결 잔여 수량이 있는 매수·매도 주문이 종목 이름·수량·매매 구분·주문 가격과 함께 포함된다")
+    void pendingList() {
+        final long filled = limit(sellerPlayer, OrderSide.SELL, 10_500, 1);
+        limit(buyerPlayer, OrderSide.BUY, 10_500, 1);
+        long pendingSell = limit(sellerPlayer, OrderSide.SELL, 12_000, 10);
+        long partialSell = limit(sellerPlayer, OrderSide.SELL, 11_000, 4);
+        limit(buyerPlayer, OrderSide.BUY, 11_000, 1);
+        long pendingBuy = limit(sellerPlayer, OrderSide.BUY, 9_000, 3);
+
+        List<OrderSummary> list = queryService.getOrders(SELLER_MEMBER, leagueId,
+                OrderListType.PENDING, null);
+
+        assertThat(list).extracting(OrderSummary::orderId)
+                .containsExactly(pendingBuy, partialSell, pendingSell);
+        OrderSummary buy = list.get(0);
+        assertThat(buy.stockName()).isEqualTo("종목");
+        assertThat(buy.side()).isEqualTo(OrderSide.BUY);
+        assertThat(buy.price()).isEqualTo(9_000L);
+        assertThat(buy.quantity()).isEqualTo(3);
+        assertThat(buy.pendingQuantity()).isEqualTo(3L);
+        assertThat(list).extracting(OrderSummary::orderId).doesNotContain(filled);
+    }
+
+    @Test
+    @DisplayName("일부 체결 후 잔여 수량이 대기 중인 주문은 대기 목록과 완료 목록에 모두 포함된다")
+    void partiallyFilledInBothLists() {
+        long sell = limit(sellerPlayer, OrderSide.SELL, 11_000, 10);
+        limit(buyerPlayer, OrderSide.BUY, 11_000, 3);
+
+        assertThat(queryService.getOrders(SELLER_MEMBER, leagueId, OrderListType.PENDING, null))
+                .extracting(OrderSummary::orderId).containsExactly(sell);
+        List<OrderSummary> completed = queryService.getOrders(SELLER_MEMBER, leagueId,
+                OrderListType.COMPLETED, null);
+        assertThat(completed).extracting(OrderSummary::orderId).containsExactly(sell);
+        assertThat(completed.get(0).filledQuantity()).isEqualTo(3L);
+        assertThat(completed.get(0).pendingQuantity()).isEqualTo(7L);
+        assertThat(completed.get(0).canceledQuantity()).isNull();
+    }
+
+    @Test
+    @DisplayName("전량 대기 중인 주문은 완료 목록에 포함되지 않는다")
+    void fullyPendingNotCompleted() {
+        limit(sellerPlayer, OrderSide.SELL, 11_000, 10);
+
+        assertThat(queryService.getOrders(SELLER_MEMBER, leagueId, OrderListType.COMPLETED, null))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("체결 완료·취소·만료된 주문은 완료 목록에만 포함된다")
+    void filledCanceledExpiredOnlyCompleted() {
+        final long filled = limit(sellerPlayer, OrderSide.SELL, 11_000, 2);
+        limit(buyerPlayer, OrderSide.BUY, 11_000, 2);
+        long canceled = limit(sellerPlayer, OrderSide.SELL, 12_000, 2);
+        limitOrderService.cancelOrder(leagueId, sellerPlayer, canceled);
+        long expired = limit(sellerPlayer, OrderSide.SELL, 13_000, 2);
+        entityManager.find(Order.class, expired).expire(LocalDateTime.of(2026, 11, 16, 9, 0));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(queryService.getOrders(SELLER_MEMBER, leagueId, OrderListType.PENDING, null))
+                .isEmpty();
+        assertThat(queryService.getOrders(SELLER_MEMBER, leagueId, OrderListType.COMPLETED, null))
+                .extracting(OrderSummary::orderId).containsExactly(expired, canceled, filled);
+    }
+
+    @Test
+    @DisplayName("거래일 변경으로 만료된 잔여 수량은 취소 수량에 합산한다")
+    void expiredCountsAsCanceled() {
+        long sell = limit(sellerPlayer, OrderSide.SELL, 11_000, 10);
+        limit(buyerPlayer, OrderSide.BUY, 11_000, 3);
+        entityManager.find(Order.class, sell).expire(LocalDateTime.of(2026, 11, 16, 9, 0));
+        entityManager.flush();
+        entityManager.clear();
+
+        OrderSummary summary = queryService.getOrders(SELLER_MEMBER, leagueId,
+                OrderListType.COMPLETED, null).get(0);
+
+        assertThat(summary.filledQuantity()).isEqualTo(3L);
+        assertThat(summary.canceledQuantity()).isEqualTo(7L);
+        assertThat(summary.pendingQuantity()).isNull();
+    }
+
+    @Test
+    @DisplayName("시장가 체결 없이 전량 취소된 주문은 완료 목록에 포함되고 체결 단가를 제공하지 않는다")
+    void listMarketNotFilled() {
+        long market = market(buyerPlayer, OrderSide.BUY, 10);
+
+        List<OrderSummary> list = queryService.getOrders(BUYER_MEMBER, leagueId,
+                OrderListType.COMPLETED, null);
+
+        assertThat(list).extracting(OrderSummary::orderId).containsExactly(market);
+        assertThat(list.get(0).type()).isEqualTo(OrderType.MARKET);
+        assertThat(list.get(0).price()).isNull();
+        assertThat(list.get(0).filledQuantity()).isNull();
+        assertThat(list.get(0).canceledQuantity()).isEqualTo(10L);
+        assertThat(list.get(0).executionPrice()).isNull();
+        assertThat(list.get(0).averagedPrice()).isFalse();
+    }
+
+    @Test
+    @DisplayName("체결 단가가 한 가지면 주당 체결 단가를, 둘 이상이면 원 미만 절사한 평균 체결 단가를 제공한다")
+    void executionPrice() {
+        final long single = limit(buyerPlayer, OrderSide.BUY, 10_000, 2);
+        limit(sellerPlayer, OrderSide.SELL, 10_000, 2);
+        limit(sellerPlayer, OrderSide.SELL, 10_000, 1);
+        limit(sellerPlayer, OrderSide.SELL, 10_100, 2);
+        long mixed = market(buyerPlayer, OrderSide.BUY, 3);
+
+        List<OrderSummary> list = queryService.getOrders(BUYER_MEMBER, leagueId,
+                OrderListType.COMPLETED, null);
+
+        assertThat(list).extracting(OrderSummary::orderId).containsExactly(mixed, single);
+        assertThat(list.get(0).executionPrice()).isEqualTo(10_066L);
+        assertThat(list.get(0).averagedPrice()).isTrue();
+        assertThat(list.get(1).executionPrice()).isEqualTo(10_000L);
+        assertThat(list.get(1).averagedPrice()).isFalse();
+    }
+
+    @Test
+    @DisplayName("특정 종목을 지정하면 그 종목 주문만 조회하고 리그에 없는 종목은 거절한다")
+    void stockFilter() {
+        long otherLister = entityManager.persistAndGetId(
+                Player.enter(leagueId, 4L, NOW.minusDays(1)), Long.class);
+        long otherStock = entityManager.persistAndGetId(Stock.list(leagueId, otherLister,
+                StockName.of("다른종목"), StockDescription.of("소개")), Long.class);
+        entityManager.persist(Holding.allocate(leagueId, sellerPlayer, otherStock, 100));
+        entityManager.flush();
+        entityManager.clear();
+        limit(sellerPlayer, OrderSide.SELL, 11_000, 1);
+        PlacedOrder other = limitOrderService.placeLimitOrder(new PlaceLimitOrder(
+                leagueId, sellerPlayer, otherStock, OrderSide.SELL, 11_000, 1), BASE_PRICE);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(queryService.getOrders(SELLER_MEMBER, leagueId, OrderListType.PENDING,
+                otherStock)).extracting(OrderSummary::orderId).containsExactly(other.orderId());
+        assertThat(queryService.getOrders(SELLER_MEMBER, leagueId, OrderListType.PENDING, null))
+                .hasSize(2);
+        assertThatThrownBy(() -> queryService.getOrders(SELLER_MEMBER, leagueId,
+                OrderListType.PENDING, 9_999L))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.STOCK_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("타인의 주문은 목록에 포함되지 않는다")
+    void othersOrdersExcluded() {
+        limit(sellerPlayer, OrderSide.SELL, 11_000, 10);
+
+        assertThat(queryService.getOrders(BUYER_MEMBER, leagueId, OrderListType.PENDING, null))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("리그에 입장하지 않은 회원은 주문 목록을 조회할 수 없다")
+    void listNotJoined() {
+        assertThatThrownBy(() -> queryService.getOrders(OUTSIDER_MEMBER, leagueId,
+                OrderListType.PENDING, null))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    @DisplayName("대기실에서는 시작 전 코드로, 종료된 리그에서는 종료 코드로 주문 목록 조회를 거절한다")
+    void listNotTradable() {
+        League waiting = entityManager.persistAndFlush(League.create(
+                LeagueName.of("대기실"), InviteCode.of("BBBBBBB"), NOW.minusDays(1)));
+        entityManager.persistAndFlush(Player.enter(waiting.getId(), SELLER_MEMBER, NOW));
+
+        assertThatThrownBy(() -> queryService.getOrders(SELLER_MEMBER, waiting.getId(),
+                OrderListType.PENDING, null))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode())
+                                .isEqualTo(ErrorCode.LEAGUE_NOT_TRADABLE));
+
+        setClock(league.getEndsAt());
+        assertThatThrownBy(() -> queryService.getOrders(SELLER_MEMBER, leagueId,
+                OrderListType.PENDING, null))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode())
+                                .isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED));
+    }
+
     private long limit(long playerId, OrderSide side, long price, long quantity) {
         PlacedOrder placed = limitOrderService.placeLimitOrder(new PlaceLimitOrder(
                 leagueId, playerId, stockId, side, price, quantity), BASE_PRICE);

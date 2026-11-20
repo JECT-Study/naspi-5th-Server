@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import kr.ject.naspi.order.domain.Execution;
 import kr.ject.naspi.order.domain.Order;
+import kr.ject.naspi.order.domain.OrderExecutionTotal;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.Trade;
 import kr.ject.naspi.order.domain.TradeRepository;
@@ -113,5 +114,40 @@ class TradeJpaRepositoryTest {
 
         assertThat(tradeRepository.findAllBySellOrderIdOrderByExecutedAtAscIdAsc(7L))
                 .containsExactly(early, late);
+    }
+
+    private void saveTrade(long sellOrderId, long buyOrderId, long price, long quantity) {
+        Order sell = order(10, 1L, OrderSide.SELL, price, quantity, 1);
+        ReflectionTestUtils.setField(sell, "id", sellOrderId);
+        Order buy = order(20, 1L, OrderSide.BUY, price, quantity, 1);
+        ReflectionTestUtils.setField(buy, "id", buyOrderId);
+        tradeRepository.save(Trade.record(new Execution(sell, buy, price, quantity), 1, NOW));
+    }
+
+    @Test
+    @DisplayName("매수 주문 ID 목록별로 체결 수량·금액 합계와 최저·최고 체결가를 한 번에 구한다")
+    void sumByBuyOrderIds() {
+        saveTrade(100L, 7L, 10_000, 1);
+        saveTrade(101L, 7L, 10_100, 2);
+        saveTrade(102L, 8L, 11_000, 5);
+        saveTrade(103L, 9L, 12_000, 4);
+        entityManager.flush();
+
+        assertThat(tradeRepository.sumByBuyOrderIds(List.of(7L, 8L)))
+                .containsExactlyInAnyOrder(
+                        new OrderExecutionTotal(7L, 3, 30_200, 10_000, 10_100),
+                        new OrderExecutionTotal(8L, 5, 55_000, 11_000, 11_000));
+    }
+
+    @Test
+    @DisplayName("매도 주문 ID 목록별 체결 합계를 구하고 체결 없는 주문은 결과에 없다")
+    void sumBySellOrderIds() {
+        saveTrade(7L, 100L, 10_000, 1);
+        saveTrade(7L, 101L, 10_100, 2);
+        saveTrade(9L, 102L, 12_000, 4);
+        entityManager.flush();
+
+        assertThat(tradeRepository.sumBySellOrderIds(List.of(7L, 8L)))
+                .containsExactly(new OrderExecutionTotal(7L, 3, 30_200, 10_000, 10_100));
     }
 }

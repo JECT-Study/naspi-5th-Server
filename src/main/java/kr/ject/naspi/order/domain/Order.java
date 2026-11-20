@@ -27,8 +27,10 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "orders",
-        indexes = @Index(name = "idx_orders_book",
-                columnList = "stock_id, side, status, price, id"))
+        indexes = {
+                @Index(name = "idx_orders_book",
+                        columnList = "stock_id, side, status, price, id"),
+                @Index(name = "idx_orders_player", columnList = "player_id, status, id")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order {

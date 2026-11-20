@@ -53,6 +53,16 @@ public enum OrderStatus {
     }
 
     /**
+     * 완료된 주문의 상태 목록. 정책상 완료된 주문은 수량의 일부 또는 전체가 체결·취소(만료 포함)된 주문이며,
+     * 전량 대기 중인 주문({@link #PENDING})은 제외한다. 부분 체결 후 잔여 수량이 대기 중인 주문도 포함한다.
+     *
+     * @return 체결 또는 취소된 수량이 있는 상태 목록
+     */
+    public static List<OrderStatus> completedStatuses() {
+        return Arrays.stream(values()).filter(status -> status != PENDING).toList();
+    }
+
+    /**
      * 주어진 상태로 전이할 수 있는지 확인한다.
      *
      * @param next 전이할 상태

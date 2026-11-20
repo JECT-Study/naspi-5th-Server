@@ -45,4 +45,25 @@ public interface OrderRepository {
      */
     List<Order> findAllByStockIdAndTypeAndStatusInOrderByIdAsc(Long stockId, OrderType type,
             List<OrderStatus> statuses);
+
+    /**
+     * 플레이어가 접수한 주문 중 주어진 상태의 주문을 접수 역순으로 조회한다.
+     *
+     * @param playerId 플레이어 ID
+     * @param statuses 조회할 주문 상태
+     * @return 주문 목록. 접수 역순(id 내림차순)
+     */
+    List<Order> findAllByPlayerIdAndStatusInOrderByIdDesc(Long playerId,
+            List<OrderStatus> statuses);
+
+    /**
+     * 플레이어가 접수한 주문 중 특정 종목의 주어진 상태 주문을 접수 역순으로 조회한다.
+     *
+     * @param playerId 플레이어 ID
+     * @param stockId 종목 ID
+     * @param statuses 조회할 주문 상태
+     * @return 주문 목록. 접수 역순(id 내림차순)
+     */
+    List<Order> findAllByPlayerIdAndStockIdAndStatusInOrderByIdDesc(Long playerId, Long stockId,
+            List<OrderStatus> statuses);
 }
