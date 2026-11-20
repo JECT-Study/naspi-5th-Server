@@ -7,6 +7,8 @@ import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureBody;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
 import kr.ject.naspi.contents.domain.DisclosureTitle;
+import kr.ject.naspi.contents.domain.News;
+import kr.ject.naspi.contents.domain.NewsRepository;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -21,18 +23,18 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 공시 작성·삭제.
  *
  * <p>정책 (docs/policies/v1/domain/contents.md "공시"): 상장자는 자기 종목에 공시를 작성할 수 있고 작성 횟수는
- * 제한하지 않는다. 제목 1~30자, 본문 1~300자, 이미지는 선택이며 JPEG·PNG로 최대 4개다. 작성을 마치면 공시 기반
- * AI 뉴스 생성을 요청한다 ({@link DisclosurePublished}). 공시는 진행 중인 리그에서만 작성할 수 있다
- * (docs/issues/v1/contents.md CNT-01 결정).
+ * 제한하지 않는다. 제목 1~30자, 본문 1~300자, 이미지는 선택이며 JPEG·PNG로 최대 4개다. 공시와 함께 생성 중(PENDING)인
+ * 공시 기반 AI 뉴스를 만든다. 공시는 진행 중인 리그에서만 작성할 수 있다 (docs/issues/v1/contents.md CNT-01 결정).
  *
  * <p>이미지 파일은 GCS 같은 외부 저장소에 올리므로, 그동안 DB 트랜잭션을 열어 두지 않는다. 검증 → 파일 업로드
- * (트랜잭션 밖) → 공시·이미지 메타데이터 저장과 이벤트 발행(한 트랜잭션) 순서로 처리하고, 저장이 실패하면 올린
- * 파일을 지운다. 그래서 이 서비스는 호출하는 쪽의 트랜잭션 안에서 부르면 안 된다.
+ * (트랜잭션 밖) → 공시·이미지 메타데이터·생성 중 뉴스 저장과 이벤트 발행(한 트랜잭션) 순서로 처리하고, 저장이
+ * 실패하면 올린 파일을 지운다. 그래서 이 서비스는 호출하는 쪽의 트랜잭션 안에서 부르면 안 된다.
  */
 @Service
 public class DisclosureService {
 
     private final DisclosureRepository disclosureRepository;
+    private final NewsRepository newsRepository;
     private final ImageService imageService;
     private final LeagueQueryService leagueQueryService;
     private final StockQueryService stockQueryService;
@@ -44,6 +46,7 @@ public class DisclosureService {
      * 공시 서비스를 만든다.
      *
      * @param disclosureRepository 공시 저장소
+     * @param newsRepository 뉴스 저장소
      * @param imageService 이미지 서비스
      * @param leagueQueryService 리그 상태·플레이어 조회
      * @param stockQueryService 종목 상장자 조회
@@ -52,11 +55,13 @@ public class DisclosureService {
      * @param clock 현재 시각
      */
     public DisclosureService(DisclosureRepository disclosureRepository,
+                             NewsRepository newsRepository,
                              ImageService imageService, LeagueQueryService leagueQueryService,
                              StockQueryService stockQueryService,
                              ApplicationEventPublisher eventPublisher,
                              PlatformTransactionManager transactionManager, Clock clock) {
         this.disclosureRepository = disclosureRepository;
+        this.newsRepository = newsRepository;
         this.imageService = imageService;
         this.leagueQueryService = leagueQueryService;
         this.stockQueryService = stockQueryService;
@@ -93,12 +98,11 @@ public class DisclosureService {
         List<StoredImage> stored = imageService.store(leagueId, images);
         try {
             return transactionTemplate.execute(status -> {
+                LocalDateTime now = LocalDateTime.now(clock);
                 Disclosure saved = disclosureRepository.save(Disclosure.publish(leagueId, stockId,
-                        playerId, disclosureTitle, disclosureBody, tradingDay.dayNumber(),
-                        LocalDateTime.now(clock)));
+                        playerId, disclosureTitle, disclosureBody, tradingDay.dayNumber(), now));
                 List<Long> imageIds = imageService.attach(leagueId, saved.getId(), stored);
-                // TODO: 이 이벤트를 받아 AI 뉴스를 생성하는 구독자는 아직 없다. AI 제공자(GLB-06)가 정해지면
-                //       CNT-05에서 구현한다. 그 전까지 공시는 저장되지만 뉴스는 생성되지 않는다.
+                newsRepository.save(News.requestFrom(saved, now));
                 eventPublisher.publishEvent(
                         new DisclosurePublished(saved.getId(), leagueId, stockId, playerId));
                 return new PublishedDisclosure(saved.getId(), stockId,

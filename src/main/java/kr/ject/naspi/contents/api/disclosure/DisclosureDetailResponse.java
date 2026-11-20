@@ -20,12 +20,14 @@ import kr.ject.naspi.contents.domain.DisclosureReactionType;
  * @param likeCount 좋아요(호재) 수
  * @param dislikeCount 싫어요(악재) 수
  * @param myReaction 내 반응. 없으면 null
+ * @param news 공시로 만든 AI 뉴스. 없으면 null
  */
 record DisclosureDetailResponse(long disclosureId, long stockId, String title, String body,
                                 int tradingDay, LocalDateTime createdAt, long authorPlayerId,
                                 boolean mine, List<DisclosureImageResponse> images,
                                 long likeCount, long dislikeCount,
-                                DisclosureReactionType myReaction) {
+                                DisclosureReactionType myReaction,
+                                DisclosureNewsResponse news) {
 
     static DisclosureDetailResponse from(DisclosureDetail detail) {
         return new DisclosureDetailResponse(detail.disclosureId(), detail.stockId(),
@@ -33,6 +35,7 @@ record DisclosureDetailResponse(long disclosureId, long stockId, String title, S
                 detail.authorPlayerId(), detail.mine(),
                 detail.images().stream().map(DisclosureImageResponse::from).toList(),
                 detail.reaction().likeCount(), detail.reaction().dislikeCount(),
-                detail.reaction().myReaction());
+                detail.reaction().myReaction(),
+                DisclosureNewsResponse.from(detail.news()));
     }
 }

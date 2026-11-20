@@ -16,9 +16,10 @@ import java.util.List;
  * @param mine 조회한 플레이어가 작성자인지 (삭제 버튼 표시용)
  * @param images 첨부 이미지의 서명 URL (첨부 순서)
  * @param reaction 반응 집계와 내 반응
+ * @param news 공시로 만든 AI 뉴스. 뉴스 행이 없으면 null
  */
 public record DisclosureDetail(long disclosureId, long stockId, String title, String body,
                                int tradingDay, LocalDateTime createdAt, long authorPlayerId,
                                boolean mine, List<ImageUrl> images,
-                               DisclosureReactionSummary reaction) {
+                               DisclosureReactionSummary reaction, DisclosureNews news) {
 }

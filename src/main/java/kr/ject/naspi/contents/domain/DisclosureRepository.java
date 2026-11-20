@@ -34,4 +34,15 @@ public interface DisclosureRepository {
      * @return 공시 목록 (ID 내림차순)
      */
     List<Disclosure> findPublishedByStock(long leagueId, long stockId, Long cursor, int limit);
+
+    /**
+     * 종목에서 기준 공시보다 먼저 작성된 공시들의 AI 요약을 오래된 순으로 찾는다. 삭제된 공시도 포함하고,
+     * 요약이 없는 공시는 제외한다.
+     *
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param disclosureId 기준 공시 ID. 이 공시는 포함하지 않는다
+     * @return AI 요약 목록 (작성 순)
+     */
+    List<String> findAiSummariesBefore(long leagueId, long stockId, long disclosureId);
 }

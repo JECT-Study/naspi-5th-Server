@@ -2,11 +2,14 @@ package kr.ject.naspi.league.application;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
@@ -95,6 +98,45 @@ public class LeagueQueryService {
         // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
         boolean startable = league.getStatus() == LeagueStatus.WAITING && League.canStart(players);
         return new LeaguePlayers(league.getId(), startable, tradingDayOf(league), result);
+    }
+
+    /**
+     * 회원이 입장한 대기실·진행 중·종료 리그 목록을 조회한다. 저장된 리그 상태를 그대로 응답하며, 저장 상태가
+     * 삭제·만료인 리그는 제외한다. 상장 전인 대기자가 입장한 대기실도 포함한다.
+     *
+     * @param memberId 조회하는 회원 ID
+     * @return 회원의 입장 일시 최신순(같으면 리그 ID 내림차순) 리그 목록. 입장한 리그가 없으면 빈 목록
+     */
+    public List<MyLeague> getMyLeagues(long memberId) {
+        List<Player> myPlayers = playerRepository.findAllByMemberIdAndLeagueStatusIn(memberId,
+                Set.of(LeagueStatus.WAITING, LeagueStatus.STARTED, LeagueStatus.ENDED));
+        if (myPlayers.isEmpty()) {
+            return List.of();
+        }
+        List<Long> leagueIds = myPlayers.stream().map(Player::getLeagueId).toList();
+        Map<Long, League> leagues = new HashMap<>();
+        leagueRepository.findAllByIdIn(leagueIds)
+                .forEach(league -> leagues.put(league.getId(), league));
+        Map<Long, List<Player>> playersByLeague = new HashMap<>();
+        playerRepository.findAllByLeagueIdIn(leagueIds).forEach(player -> playersByLeague
+                .computeIfAbsent(player.getLeagueId(), id -> new ArrayList<>()).add(player));
+
+        return myPlayers.stream()
+                .sorted(Comparator.comparing(Player::getJoinedAt).reversed()
+                        .thenComparing(Comparator.comparing(Player::getLeagueId).reversed()))
+                .map(player -> toMyLeague(leagues.get(player.getLeagueId()), player,
+                        playersByLeague.get(player.getLeagueId())))
+                .toList();
+    }
+
+    private MyLeague toMyLeague(League league, Player me, List<Player> players) {
+        boolean waiting = league.getStatus() == LeagueStatus.WAITING;
+        return new MyLeague(league.getId(), league.getName().getValue(), league.getStatus(),
+                players.size(), players.stream().filter(Player::isListed).count(),
+                league.isHost(me), me.isListed(), me.getJoinedAt(), league.getCreatedAt(),
+                waiting ? league.waitingRoomExpiresAt() : null, league.getStartedAt(),
+                league.getEndsAt(),
+                league.getStatus() == LeagueStatus.STARTED ? tradingDayOf(league) : null);
     }
 
     private String displayNameOf(Player player, Map<Long, String> names) {

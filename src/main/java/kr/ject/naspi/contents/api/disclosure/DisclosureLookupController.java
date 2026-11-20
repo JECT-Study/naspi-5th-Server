@@ -102,7 +102,7 @@ public class DisclosureLookupController {
     @Operation(
             summary = "공시 상세",
             description = """
-                    공시의 제목, 본문, 첨부 이미지 전체, 작성 정보, 반응을 조회한다. \
+                    공시의 제목, 본문, 첨부 이미지 전체, 작성 정보, 반응, AI 뉴스를 조회한다. \
                     삭제된 공시는 조회할 수 없다.
 
                     **요청**
@@ -112,6 +112,11 @@ public class DisclosureLookupController {
 
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 공시 상세.
                     - `images`: 첨부 순서대로 전체 이미지 (없으면 빈 배열).
+                    - `news`: 공시로 만든 AI 뉴스. `status`가 `PENDING`(생성 중), `PUBLISHED`(발행), \
+                    `SKIPPED`(기사로 쓸 내용이 없어 미생성), `FAILED`(생성 실패) 중 하나다. \
+                    `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재)는 \
+                    `PUBLISHED`일 때만 있고 나머지 상태에서는 `null`이다. \
+                    뉴스가 없는 공시는 `news`가 `null`이다.
                     """ + FIELDS + """
 
                     **실패 응답** (`code`는 3자리 문자열)

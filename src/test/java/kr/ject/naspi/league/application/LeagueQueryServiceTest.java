@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
 import kr.ject.naspi.league.domain.League;
+import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.application.StockListingService;
 import kr.ject.naspi.market.application.StockOpeningService;
@@ -25,6 +27,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
@@ -358,6 +361,183 @@ class LeagueQueryServiceTest {
                 .isNull();
     }
 
+    @Test
+    @DisplayName("회원이 입장한 대기실, 진행 중, 종료 리그를 저장된 상태 그대로 모두 조회한다")
+    void getMyLeaguesIncludesWaitingStartedEnded() {
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));
+        long me = member("나");
+        CreatedLeague ended = useCase.create(me, "종료", "종료종목", "소개");
+        ReflectionTestUtils.setField(entityManager.find(League.class, ended.leagueId()),
+                "status", LeagueStatus.ENDED);
+        CreatedLeague started = startedLeagueOf(me, "진행");
+        CreatedLeague waiting = useCase.create(me, "대기", "대기종목", "소개");
+        entityManager.flush();
+
+        assertThat(queryService.getMyLeagues(me))
+                .extracting(MyLeague::leagueId, MyLeague::status)
+                .containsExactlyInAnyOrder(
+                        tuple(waiting.leagueId(), LeagueStatus.WAITING),
+                        tuple(started.leagueId(), LeagueStatus.STARTED),
+                        tuple(ended.leagueId(), LeagueStatus.ENDED));
+    }
+
+    @Test
+    @DisplayName("상장 전인 대기자도 입장한 대기실이 목록에 보이고 상장 여부가 false다")
+    void getMyLeaguesIncludesWaitingPlayer() {
+        CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
+        long guest = member("대기자");
+        leagueService.join(guest, league.inviteCode());
+
+        assertThat(queryService.getMyLeagues(guest))
+                .singleElement()
+                .satisfies(found -> {
+                    assertThat(found.leagueId()).isEqualTo(league.leagueId());
+                    assertThat(found.listed()).isFalse();
+                    assertThat(found.host()).isFalse();
+                });
+    }
+
+    @Test
+    @DisplayName("생성 후 7일이 지났어도 만료 처리 전인 대기실은 저장된 상태(대기실)로 목록에 나온다")
+    void getMyLeaguesKeepsStoredStatusOfOldWaitingRoom() {
+        long me = member("나");
+        useCase.create(me, "리그", "나스피", "소개");
+
+        clock.advance(League.WAITING_ROOM_LIFETIME);
+
+        assertThat(queryService.getMyLeagues(me))
+                .extracting(MyLeague::status)
+                .containsExactly(LeagueStatus.WAITING);
+    }
+
+    @Test
+    @DisplayName("삭제된 대기실은 남아 있던 대기자의 목록에서도 제외한다")
+    void getMyLeaguesExcludesDeletedWaitingRoom() {
+        CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
+        long guest = member("대기자");
+        leagueService.join(guest, league.inviteCode());
+        ReflectionTestUtils.setField(entityManager.find(League.class, league.leagueId()),
+                "status", LeagueStatus.DELETED);
+        entityManager.flush();
+
+        assertThat(queryService.getMyLeagues(guest)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("나가거나 추방되어 플레이어 행이 없는 대기실은 목록에서 제외한다")
+    void getMyLeaguesExcludesLeftLeague() {
+        CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
+        long guest = member("손님");
+        JoinedLeague joined = leagueService.join(guest, league.inviteCode());
+        entityManager.remove(entityManager.find(Player.class, joined.playerId()));
+        entityManager.flush();
+
+        assertThat(queryService.getMyLeagues(guest)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("입장하지 않은 리그는 목록에 보이지 않는다")
+    void getMyLeaguesExcludesOthersLeague() {
+        useCase.create(member("방장"), "리그", "나스피", "소개");
+
+        assertThat(queryService.getMyLeagues(member("외부인"))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("입장 인원은 참여자와 대기자를 합친 수, 참여자 수는 상장을 마친 수다")
+    void getMyLeaguesCounts() {
+        CreatedLeague league = leagueWithParticipants(2);
+        long guest = member("대기자");
+        leagueService.join(guest, league.inviteCode());
+
+        assertThat(queryService.getMyLeagues(guest))
+                .singleElement()
+                .satisfies(found -> {
+                    assertThat(found.playerCount()).isEqualTo(3);
+                    assertThat(found.participantCount()).isEqualTo(2);
+                });
+    }
+
+    @Test
+    @DisplayName("방장인 리그만 방장으로 표시한다")
+    void getMyLeaguesHostFlag() {
+        long me = member("나");
+        CreatedLeague mine = useCase.create(me, "내 리그", "내종목", "소개");
+        CreatedLeague others = useCase.create(member("방장"), "남의 리그", "남종목", "소개");
+        leagueService.join(me, others.inviteCode());
+
+        assertThat(queryService.getMyLeagues(me))
+                .extracting(MyLeague::leagueId, MyLeague::host)
+                .containsExactlyInAnyOrder(
+                        tuple(mine.leagueId(), true), tuple(others.leagueId(), false));
+    }
+
+    @Test
+    @DisplayName("진행 중인 리그만 현재 거래일차를 함께 조회하고, 대기실은 만료 일시를 함께 조회한다")
+    void getMyLeaguesTradingDay() {
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));
+        long me = member("나");
+        CreatedLeague started = startedLeagueOf(me, "진행");
+        CreatedLeague waiting = useCase.create(me, "대기", "대기종목", "소개");
+
+        List<MyLeague> first = queryService.getMyLeagues(me);
+        assertThat(first).filteredOn(found -> found.leagueId() == started.leagueId())
+                .singleElement().satisfies(found -> {
+                    assertThat(found.tradingDay()).isEqualTo(new LeagueTradingDay(1, 7,
+                            LocalDateTime.of(2026, 11, 17, 9, 0),
+                            LocalDateTime.of(2026, 11, 16, 15, 0),
+                            LocalDateTime.of(2026, 11, 23, 9, 0)));
+                    assertThat(found.waitingRoomExpiresAt()).isNull();
+                });
+        assertThat(first).filteredOn(found -> found.leagueId() == waiting.leagueId())
+                .singleElement().satisfies(found -> {
+                    assertThat(found.tradingDay()).isNull();
+                    assertThat(found.waitingRoomExpiresAt())
+                            .isEqualTo(LocalDateTime.of(2026, 11, 23, 15, 0));
+                });
+
+        clock.setTo(LocalDateTime.of(2026, 11, 17, 9, 0));
+        assertThat(queryService.getMyLeagues(me))
+                .filteredOn(found -> found.leagueId() == started.leagueId())
+                .singleElement().extracting(found -> found.tradingDay().dayNumber())
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("리그 목록은 상태와 관계없이 내 입장 일시 최신순, 같으면 리그 ID 내림차순이다")
+    void getMyLeaguesOrder() {
+        long me = member("나");
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 10, 0));
+        final CreatedLeague first = useCase.create(me, "첫째", "첫째종목", "소개");
+        final CreatedLeague second = useCase.create(me, "둘째", "둘째종목", "소개");
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 11, 0));
+        CreatedLeague third = useCase.create(me, "셋째", "셋째종목", "소개");
+        ReflectionTestUtils.setField(entityManager.find(League.class, third.leagueId()),
+                "status", LeagueStatus.ENDED);
+        entityManager.flush();
+
+        assertThat(queryService.getMyLeagues(me)).extracting(MyLeague::leagueId)
+                .containsExactly(third.leagueId(), second.leagueId(), first.leagueId());
+    }
+
+    @Test
+    @DisplayName("입장한 리그가 없으면 빈 목록이다")
+    void getMyLeaguesEmpty() {
+        assertThat(queryService.getMyLeagues(member("나"))).isEmpty();
+    }
+
+    private CreatedLeague startedLeagueOf(long hostMemberId, String name) {
+        CreatedLeague league = useCase.create(hostMemberId, name, name + "종목", "소개");
+        for (int i = 0; i < 2; i++) {
+            long memberId = member("참여자");
+            JoinedLeague joined = leagueService.join(memberId, league.inviteCode());
+            stockListingService.list(league.leagueId(), memberId,
+                    "종목" + joined.playerId(), "소개");
+        }
+        leagueStartUseCase.start(hostMemberId, league.leagueId());
+        return league;
+    }
+
     private CreatedLeague leagueWithParticipants(int count) {
         CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         for (int i = 1; i < count; i++) {
@@ -368,6 +548,23 @@ class LeagueQueryServiceTest {
                     "종목" + joined.playerId(), "소개");
         }
         return league;
+    }
+
+    @Test
+    @DisplayName("탈퇴한 회원이 다시 가입하면 탈퇴 전에 참여한 리그는 목록에 나오지 않는다")
+    void getMyLeaguesExcludesLeaguesBeforeWithdrawal() {
+        CreatedLeague league = leagueWithParticipants(3);
+        long guestMember = member("손님");
+        leagueService.join(guestMember, league.inviteCode());
+        stockListingService.list(league.leagueId(), guestMember, "손님종목", "소개");
+        leagueStartUseCase.start(memberOf(league), league.leagueId());
+        leagueService.recordWithdrawal(guestMember);
+        entityManager.remove(entityManager.find(Member.class, guestMember));
+        entityManager.flush();
+
+        long rejoined = member("손님");
+
+        assertThat(queryService.getMyLeagues(rejoined)).isEmpty();
     }
 
     private long memberOf(CreatedLeague league) {
