@@ -16,12 +16,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.event.ApplicationEvents;
-import org.springframework.test.context.event.RecordApplicationEvents;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@RecordApplicationEvents
 @Import({MemberService.class, MemberAuthService.class, ClockConfig.class})
 class MemberServiceTest {
 
@@ -33,9 +30,6 @@ class MemberServiceTest {
 
     @Autowired
     private MemberRepository memberRepository;
-
-    @Autowired
-    private ApplicationEvents events;
 
     @Test
     @DisplayName("회원은 자신의 이름을 조회할 수 있다")
@@ -97,15 +91,13 @@ class MemberServiceTest {
     }
 
     @Test
-    @DisplayName("탈퇴하면 회원 정보가 즉시 삭제(hard delete)되고 탈퇴 이벤트가 발행된다")
+    @DisplayName("탈퇴하면 회원 정보가 즉시 삭제(hard delete)된다")
     void withdraw() {
         long memberId = join(1L, "홍길동");
 
         memberService.withdraw(memberId);
 
         assertThat(memberRepository.findById(memberId)).isEmpty();
-        assertThat(events.stream(MemberWithdrawn.class))
-                .containsExactly(new MemberWithdrawn(memberId));
     }
 
     @Test
@@ -120,12 +112,11 @@ class MemberServiceTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 회원은 탈퇴할 수 없고 탈퇴 이벤트도 발행되지 않는다")
+    @DisplayName("존재하지 않는 회원은 탈퇴할 수 없다")
     void withdrawUnknownMember() {
         assertThatThrownBy(() -> memberService.withdraw(999L))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.MEMBER_NOT_FOUND);
-        assertThat(events.stream(MemberWithdrawn.class)).isEmpty();
     }
 
     private long join(long kakaoId, String name) {

@@ -195,6 +195,27 @@ class LimitOrderServiceTest {
     }
 
     @Test
+    @DisplayName("상장자가 탈퇴해도 그 종목은 다른 참여자끼리 계속 매수·매도해 체결할 수 있다")
+    void tradeStockOfWithdrawnLister() {
+        Account lister = account(LISTER);
+        lister.discardForWithdrawal();
+        entityManager.flush();
+        entityManager.clear();
+
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 10_500, 5);
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 10_500, 5);
+
+        assertThat(sell.status()).isEqualTo(OrderStatus.PENDING);
+        assertThat(buy.status()).isEqualTo(OrderStatus.FILLED);
+        assertThat(entityManager.find(Order.class, sell.orderId()).getStatus())
+                .isEqualTo(OrderStatus.FILLED);
+        assertThat(holding(BUYER).getQuantity()).isEqualTo(5);
+        assertThat(holding(SELLER).getQuantity()).isEqualTo(95);
+        // 탈퇴한 상장자의 보유분은 그대로 남는다.
+        assertThat(holding(LISTER).getQuantity()).isEqualTo(3_000);
+    }
+
+    @Test
     @DisplayName("일부만 체결되면 부분 체결 상태로 미체결 잔량이 대기 주문으로 남는다")
     void partiallyFilledRests() {
         place(SELLER, OrderSide.SELL, 11_000, 3);

@@ -79,7 +79,7 @@
 - Jira: ND-59
 - 정책: [member.md#회원-탈퇴](../../policies/v1/domain/member.md#회원-탈퇴)
 - 선행: MBR-06, ORD-11
-- 진행: asset 쪽 구현 완료 (`AssetWithdrawalService.discardCash`/`discardCashOfMember`, `Account.withdrawn`, 탈퇴 계좌의 매수·매도 예약 거절). asset은 `MemberWithdrawn`을 직접 듣지 않는다. 완료 조건은 asset 모듈 기준으로 체크했고, order가 "주문 취소 → 예약 해제 → 현금 폐기"로 호출하는 연결은 [INT-01](integration.md#int-01-회원-탈퇴-시-order가-미체결-주문을-취소한-뒤-asset-현금-폐기를-호출한다)에서 한다
+- 진행: asset 쪽 구현 완료 (`AssetWithdrawalService.discardCash`/`discardCashOfMember`, `Account.withdrawn`, 탈퇴 계좌의 매수·매도 예약 거절). 완료 조건은 asset 모듈 기준으로 체크했다. 탈퇴 흐름 연결은 `MemberWithdrawalUseCase`가 order 주문 취소 뒤에 `discardCashOfMember`를 호출하는 것으로, [ORD-11](order.md#ord-11-회원이-탈퇴하면-참여-중인-모든-리그의-미체결-주문이-취소된다)에서 한다
 - 완료 조건
   - [x] 미체결 주문 취소(ORD-11) 이후 현금 폐기
   - [x] 보유 주식은 수량 유지, 이후 거래 불가 (발행주식 총수에 포함)
