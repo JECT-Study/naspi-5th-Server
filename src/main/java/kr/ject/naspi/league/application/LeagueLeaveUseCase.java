@@ -8,6 +8,7 @@ import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
+import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
 import kr.ject.naspi.market.application.StockListingService;
@@ -51,7 +52,29 @@ public class LeagueLeaveUseCase {
         League league = leagueRepository.findWithLockById(leagueId)
                 .filter(found -> !found.isUnavailable(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        return leaveLocked(league, memberId, now);
+    }
 
+    /**
+     * 탈퇴하는 회원을 소속된 모든 대기실에서 내보낸다. 나가기와 같이 상장한 종목은 삭제되고, 방장이면 방장이 위임된다.
+     * 만료·삭제된 대기실과 이미 시작된 리그는 건너뛴다.
+     *
+     * <p>정책 (docs/policies/v1/domain/member.md "회원 탈퇴" - 대기실 처리).
+     *
+     * @param memberId 탈퇴하는 회원 ID
+     */
+    @Transactional
+    public void leaveAllWaitingRooms(long memberId) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        playerRepository.findLeagueIdsByMemberIdAndLeagueStatus(memberId, LeagueStatus.WAITING)
+                .forEach(leagueId -> leagueRepository.findWithLockById(leagueId)
+                        // 잠그기 전에 시작·만료됐을 수 있으므로 잠근 뒤 다시 확인한다.
+                        .filter(league -> league.isOpenForInvitation(now))
+                        .ifPresent(league -> leaveLocked(league, memberId, now)));
+    }
+
+    private LeftLeague leaveLocked(League league, long memberId, LocalDateTime now) {
+        long leagueId = league.getId();
         List<Player> players = playerRepository.findAllByLeagueId(leagueId);
         Player leaver = players.stream()
                 .filter(player -> Objects.equals(player.getMemberId(), memberId))

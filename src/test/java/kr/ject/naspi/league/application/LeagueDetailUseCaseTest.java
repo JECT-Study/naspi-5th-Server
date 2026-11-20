@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
-import kr.ject.naspi.global.config.ClockConfig;
+import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueDetail.DetailPlayer;
 import kr.ject.naspi.league.application.LeagueDetail.PlayerStock;
 import kr.ject.naspi.market.application.StockListingService;
+import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
 import kr.ject.naspi.member.application.MemberService;
@@ -28,8 +29,9 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({LeagueDetailUseCase.class, LeagueQueryService.class, LeagueCreationUseCase.class,
         LeagueService.class, LeagueJoinLimit.class, InviteCodeIssuer.class,
         StockListingService.class, StockQueryService.class, LocalStockSnapshotCache.class,
-        MemberService.class,
-        ClockConfig.class})
+        MemberService.class, LeagueStartUseCase.class,
+        StockOpeningService.class, InitialAssetAllocationService.class,
+        MutableClock.Config.class})
 class LeagueDetailUseCaseTest {
 
     private long kakaoId = 1000L;
@@ -42,6 +44,12 @@ class LeagueDetailUseCaseTest {
 
     @Autowired
     private LeagueService leagueService;
+
+    @Autowired
+    private LeagueStartUseCase leagueStartUseCase;
+
+    @Autowired
+    private StockListingService stockListingService;
 
     @Autowired
     private TestEntityManager entityManager;
@@ -71,6 +79,32 @@ class LeagueDetailUseCaseTest {
         assertThat(guestPlayer.playerId()).isEqualTo(joined.playerId());
         assertThat(guestPlayer.listed()).isFalse();
         assertThat(guestPlayer.stock()).isNull();
+    }
+
+    @Test
+    @DisplayName("리그 상세에서도 진행 중인 리그의 탈퇴한 참여자는 '탈퇴한 사용자'로 표시되고 종목 정보는 유지된다")
+    void detailShowsWithdrawnUser() {
+        long host = member("방장");
+        CreatedLeague league = leagueCreationUseCase.create(host, "리그", "나스피", "소개");
+        long guest = 0;
+        JoinedLeague guestPlayer = null;
+        for (int i = 0; i < 2; i++) {
+            guest = member("손님");
+            guestPlayer = leagueService.join(guest, league.inviteCode());
+            stockListingService.list(league.leagueId(), guest, "종목" + i, "소개");
+        }
+        leagueStartUseCase.start(host, league.leagueId());
+        leagueService.recordWithdrawal(guest);
+        entityManager.remove(entityManager.find(Member.class, guest));
+        entityManager.flush();
+
+        LeagueDetail detail = detailUseCase.getDetail(host, league.leagueId());
+
+        final long withdrawnPlayerId = guestPlayer.playerId();
+        DetailPlayer withdrawn = detail.players().stream()
+                .filter(player -> player.playerId() == withdrawnPlayerId).findFirst().orElseThrow();
+        assertThat(withdrawn.name()).isEqualTo("탈퇴한 사용자");
+        assertThat(withdrawn.stock()).isNotNull();
     }
 
     @Test

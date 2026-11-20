@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import kr.ject.naspi.asset.application.InitialAssetAllocationService;
-import kr.ject.naspi.asset.domain.StockListing;
+import kr.ject.naspi.asset.application.ListedStock;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
@@ -15,6 +15,7 @@ import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.PlayerRepository;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
+import kr.ject.naspi.market.application.StockOpeningService;
 import kr.ject.naspi.market.application.StockQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ public class LeagueStartUseCase {
     private final TradingDayRepository tradingDayRepository;
     private final StockQueryService stockQueryService;
     private final InitialAssetAllocationService initialAssetAllocationService;
+    private final StockOpeningService stockOpeningService;
     private final Clock clock;
 
     /**
@@ -82,20 +84,18 @@ public class LeagueStartUseCase {
         league.start(players, now);
         tradingDayRepository.saveAll(TradingDay.of(leagueId, league.tradingSchedule()));
         // 모든 참여자가 같은 시장 상태에서 거래를 시작하도록 초기 자산을 배분한다.
-        initialAssetAllocationService.allocate(leagueId, stockListings(leagueId));
+        initialAssetAllocationService.allocate(leagueId, listedStocks(leagueId));
+        // 모든 종목이 시초가로 거래를 시작한다 (현재가 = 최초 기준가 = 시초가).
+        stockOpeningService.open(leagueId);
         return new StartedLeague(leagueId, league.getStartedAt(), league.getEndsAt());
     }
 
     /**
      * 초기 자산 배분 기준이 되는 리그의 상장 종목과 상장자.
-     *
-     * <p>TODO: asset의 도메인 타입({@link StockListing})을 직접 참조하는 임시 구현이다 (모듈 경계 규칙 위반).
-     *       asset이 리그 ID만 받는 배분 메서드를 제공하면 이 메서드를 지우고 그것을 호출한다.
-     *       그때 쓰이지 않게 된 {@link LeagueStarted}와 asset의 LeagueStartedListener도 함께 정리한다.
      */
-    private List<StockListing> stockListings(long leagueId) {
+    private List<ListedStock> listedStocks(long leagueId) {
         return stockQueryService.findAllByLeagueId(leagueId).stream()
-                .map(stock -> new StockListing(stock.stockId(), stock.listerPlayerId()))
+                .map(stock -> new ListedStock(stock.stockId(), stock.listerPlayerId()))
                 .toList();
     }
 }

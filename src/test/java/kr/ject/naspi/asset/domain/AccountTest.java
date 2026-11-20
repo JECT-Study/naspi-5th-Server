@@ -185,4 +185,102 @@ class AccountTest {
         assertThat(amount).isEqualTo(475_000);
         assertThat(account.getDeposit()).isEqualTo(1_475_000);
     }
+
+    @Test
+    @DisplayName("매수 주문이 일부 체결된 뒤 취소·만료되면 미체결 잔량 × 예약 기준 가격만 해제되어 예약 현금이 0이 된다")
+    void releaseRemainingAfterPartialFill() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_000, 10);
+        account.settleBuy(10_000, 9_500, 4);
+
+        long released = account.releaseForBuy(10_000, 6);
+
+        assertThat(released).isEqualTo(60_000);
+        assertThat(account.getReservedDeposit()).isZero();
+        assertThat(account.getDeposit()).isEqualTo(1_000_000 - 38_000);
+    }
+
+    @Test
+    @DisplayName("시장가 매수는 보호최고가로 예약하므로 낮은 가격 체결 후 잔량을 해제하면 예약금이 전액 해제된다")
+    void releaseRemainingAfterMarketBuyFill() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_500, 10);
+        account.settleBuy(10_500, 10_000, 7);
+
+        account.releaseForBuy(10_500, 3);
+
+        assertThat(account.getReservedDeposit()).isZero();
+        assertThat(account.getDeposit()).isEqualTo(1_000_000 - 70_000);
+    }
+
+    @Test
+    @DisplayName("탈퇴하면 참여자의 현금은 전액 폐기된다")
+    void discardForWithdrawal() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+
+        long discarded = account.discardForWithdrawal();
+
+        assertThat(discarded).isEqualTo(1_000_000);
+        assertThat(account.getDeposit()).isZero();
+        assertThat(account.isWithdrawn()).isTrue();
+    }
+
+    @Test
+    @DisplayName("현금이 0원이어도 탈퇴 처리된다")
+    void discardForWithdrawalWithZeroDeposit() {
+        Account account = Account.open(1L, 10L, 0);
+
+        assertThat(account.discardForWithdrawal()).isZero();
+        assertThat(account.isWithdrawn()).isTrue();
+    }
+
+    @Test
+    @DisplayName("미체결 주문에 묶인 현금이 남아 있으면 현금을 폐기하지 않는다 (미체결 주문 취소가 먼저)")
+    void rejectDiscardWithReservedDeposit() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.reserveForBuy(10_000, 1);
+
+        assertThatThrownBy(account::discardForWithdrawal)
+                .isInstanceOf(NaspiRuntimeException.class);
+        assertThat(account.getDeposit()).isEqualTo(1_000_000);
+        assertThat(account.isWithdrawn()).isFalse();
+    }
+
+    @Test
+    @DisplayName("이미 탈퇴 처리된 계좌는 다시 폐기해도 바뀌지 않는다")
+    void discardIsIdempotent() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.discardForWithdrawal();
+
+        assertThat(account.discardForWithdrawal()).isZero();
+        assertThat(account.getDeposit()).isZero();
+        assertThat(account.isWithdrawn()).isTrue();
+    }
+
+    @Test
+    @DisplayName("탈퇴한 참여자는 매수 주문을 넣을 수 없다")
+    void rejectBuyAfterWithdrawal() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.discardForWithdrawal();
+
+        assertThatThrownBy(() -> account.reserveForBuy(100, 1))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.WITHDRAWN_PLAYER);
+        assertThatThrownBy(account::ensureTradable)
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.WITHDRAWN_PLAYER);
+    }
+
+    @Test
+    @DisplayName("탈퇴한 참여자의 계좌로는 체결을 정산하지 않는다")
+    void rejectSettleAfterWithdrawal() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+        account.discardForWithdrawal();
+
+        assertThatThrownBy(() -> account.settleBuy(100, 100, 1))
+                .isInstanceOf(NaspiRuntimeException.class);
+        assertThatThrownBy(() -> account.settleSell(100, 1))
+                .isInstanceOf(NaspiRuntimeException.class);
+        assertThat(account.getDeposit()).isZero();
+    }
 }

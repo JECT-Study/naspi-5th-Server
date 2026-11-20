@@ -86,4 +86,22 @@ public interface PlayerRepository {
      */
     long countLeaguesByMemberIdAndStatusIn(Long memberId, Collection<LeagueStatus> statuses,
             LocalDateTime waitingCreatedAfter);
+
+    /**
+     * 회원이 입장한 리그 중 주어진 상태인 리그의 ID를 찾는다.
+     *
+     * @param memberId 회원 ID
+     * @param status 리그 상태
+     * @return 리그 ID 목록
+     */
+    List<Long> findLeagueIdsByMemberIdAndLeagueStatus(Long memberId, LeagueStatus status);
+
+    /**
+     * 회원이 입장한 플레이어 중 주어진 상태의 리그에 속한 것을 모두 찾는다.
+     *
+     * @param memberId 회원 ID
+     * @param leagueStatus 리그 상태
+     * @return 플레이어 목록
+     */
+    List<Player> findAllByMemberIdAndLeagueStatus(Long memberId, LeagueStatus leagueStatus);
 }

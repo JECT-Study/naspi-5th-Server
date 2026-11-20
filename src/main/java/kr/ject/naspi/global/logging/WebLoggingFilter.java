@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +37,9 @@ import tools.jackson.databind.json.JsonMapper;
  *   <li>Swagger UI·API 문서·H2 콘솔 요청은 로그를 남기지 않는다.</li>
  * </ul>
  *
- * <p>본문 길이 제한과 multipart(파일 업로드) 처리는 아직 하지 않는다.
+ * <p>multipart(파일 업로드) 요청은 본문을 미리 읽으면 파일 파트를 파싱할 수 없으므로 감싸지 않고 본문을 생략한다.
+ * 이미지 같은 바이너리 응답도 본문을 생략한다. 서명 URL처럼 그 자체가 접근 권한인 JSON 값({@code signedUrl})은
+ * 가려서 남긴다. 본문 길이 제한은 아직 하지 않는다.
  * 요청 본문을 미리 읽으므로 폼({@code application/x-www-form-urlencoded}) 요청의
  * {@code getParameter}로는 본문 값을 읽을 수 없다. 현재 API는 JSON만 받는다.
  *
@@ -49,6 +53,11 @@ public class WebLoggingFilter extends OncePerRequestFilter {
     private static final List<String> EXCLUDED_PATH_PREFIXES =
             List.of("/swagger-ui", "/v3/api-docs", "/h2-console");
 
+    /** 값을 로그에 남기지 않을 JSON 키. */
+    private static final Set<String> MASKED_KEYS = Set.of("signedUrl");
+
+    private static final String OMITTED = "(omitted)";
+
     private final JsonMapper jsonMapper;
 
     @Override
@@ -61,13 +70,20 @@ public class WebLoggingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain)
             throws ServletException, IOException {
-        CachedBodyRequest cachedRequest = new CachedBodyRequest(request);
-        log.info("[REQUEST] {} {} body: {}", request.getMethod(), request.getRequestURI(),
-                body(request.getContentType(), cachedRequest.body()));
+        HttpServletRequest loggedRequest = request;
+        if (isMultipart(request.getContentType())) {
+            log.info("[REQUEST] {} {} body: {}", request.getMethod(), request.getRequestURI(),
+                    OMITTED);
+        } else {
+            CachedBodyRequest cachedRequest = new CachedBodyRequest(request);
+            loggedRequest = cachedRequest;
+            log.info("[REQUEST] {} {} body: {}", request.getMethod(), request.getRequestURI(),
+                    body(request.getContentType(), cachedRequest.body()));
+        }
 
         ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
         try {
-            filterChain.doFilter(cachedRequest, wrappedResponse);
+            filterChain.doFilter(loggedRequest, wrappedResponse);
         } finally {
             log.info("[RESPONSE] {} {} {} body: {}",
                     request.getMethod(), request.getRequestURI(), wrappedResponse.getStatus(),
@@ -77,7 +93,14 @@ public class WebLoggingFilter extends OncePerRequestFilter {
         }
     }
 
+    private static boolean isMultipart(String contentType) {
+        return contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/");
+    }
+
     private String body(String contentType, byte[] content) {
+        if (contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            return OMITTED;
+        }
         String body = new String(content, StandardCharsets.UTF_8);
         if (body.isEmpty() || contentType == null || !contentType.contains("json")) {
             return body;
@@ -92,7 +115,8 @@ public class WebLoggingFilter extends OncePerRequestFilter {
     private static String format(JsonNode node) {
         if (node.isObject()) {
             return node.properties().stream()
-                    .map(entry -> entry.getKey() + ": " + format(entry.getValue()))
+                    .map(entry -> entry.getKey() + ": " + (MASKED_KEYS.contains(entry.getKey())
+                            ? "***" : format(entry.getValue())))
                     .collect(Collectors.joining(", ", "{", "}"));
         }
         if (node.isArray()) {

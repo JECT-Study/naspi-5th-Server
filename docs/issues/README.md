@@ -7,7 +7,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 | | Story | Task |
 |---|---|---|
 | 내용 | 사용자가 할 수 있는 일 (정책 기반) | 기술 작업 (CI/CD, 배포, 개발 도구, 공통 코드) |
-| 위치 | `<버전>/` (예: [v1/](v1/)) | 정책과 무관: [tasks/](tasks/) · v1 공통 코드: [v1/global.md](v1/global.md) |
+| 위치 | `<버전>/` (예: [v1/](v1/)) | 정책과 무관: [tasks/](tasks/) · v1 공통 코드: [v1/global.md](v1/global.md) · v1 모듈 간 연동: [v1/integration.md](v1/integration.md) |
 | 제목 | "회원은 ~할 수 있다" | "~ 구성", "~ 추가" |
 | 근거 | 정책서 섹션 링크 | 목적 한 줄 |
 | 완료 조건 | 정책 규칙 → 테스트로 검증 | 확인 방법(명령·경로)을 함께 적는다 |
@@ -15,6 +15,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 
 - `tasks/`는 정책 버전에 묶이지 않는다 (v2에서도 그대로 쓴다).
 - `v1/global.md`(GLB)는 v1 구현에 필요한 애플리케이션 공통 코드라 버전 폴더에 두지만, Jira 유형은 Task로 등록한다.
+- `v1/integration.md`(INT)는 모듈 스토리가 만든 API를 다른 모듈 흐름에 연결하는 작업이다. v1 스토리에 묶이므로 버전 폴더에 두고, Jira 유형은 Task로 등록한다.
 
 ## 규칙
 
@@ -69,6 +70,7 @@ Jira 등록 전 epic·story·task 초안. 등록 후에는 각 스토리의 `Jir
 | [자산] | [v1/asset.md](v1/asset.md) | 8 |
 | [주문] | [v1/order.md](v1/order.md) | 12 |
 | [콘텐츠] | [v1/contents.md](v1/contents.md) | 10 |
+| [연동] 모듈 간 연동 (Jira 유형: Task) | [v1/integration.md](v1/integration.md) | 7 |
 
 ## 권장 구현 순서
 

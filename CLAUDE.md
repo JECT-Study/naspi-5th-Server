@@ -17,9 +17,10 @@
 | 로깅 | Logback, Logstash JSON 포맷 | `development`, `production` 프로필에서만 JSON |
 | 관측성 | Spring Boot Actuator, Micrometer(Prometheus), Micrometer Tracing + OpenTelemetry(OTLP), datasource-micrometer | management 포트 9090 (`/actuator/health`, `/actuator/prometheus`), 메인 포트에 `/livez`·`/readyz`. Grafana Alloy 가 수집 |
 | 테스트 | JUnit 5, Spring Boot Test | |
+| 이미지 저장소 | Google Cloud Storage (`google-cloud-storage`, libraries-bom) | 비공개 버킷 + V4 서명 URL. 인증은 ADC (GKE: Workload Identity, 키 파일 없음). 로컬·테스트는 파일 시스템 |
 | 배포 | Jib → Docker Hub → k8s (GitOps manifest 레포) | GitHub Actions |
 
-미정: AI 제공자(뉴스 생성), 이미지 저장소, DB 마이그레이션 도구. 새 라이브러리 도입이나 위 스택 변경은 먼저 제안하고 승인받는다.
+미정: AI 제공자(뉴스 생성), DB 마이그레이션 도구. 새 라이브러리 도입이나 위 스택 변경은 먼저 제안하고 승인받는다.
 
 ## 명령어
 

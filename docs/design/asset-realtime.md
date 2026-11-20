@@ -77,7 +77,7 @@
 - 즉시 발행 리스너는 `@TransactionalEventListener(phase = AFTER_COMMIT)`로 둔다.
 - 커밋 전에 조회하면 반영 전의 값을 "즉시" 발행하게 된다.
 - 발행 실패가 원래 트랜잭션을 되돌리면 안 되므로, 발행 예외는 리스너 안에서 기록만 하고 삼킨다. 주기 보정이 없으므로 다음 변동이나 재접속 시 REST 조회(5.4)까지 이전 값이 남는다.
-- 참고: 초기 자산 배분(`LeagueStartedListener`)과 market의 현재가 DB 갱신은 반대로 같은 트랜잭션 안에서 동기로 처리해야 한다. 원자성이 필요한 처리와 화면 발행을 구분한다.
+- 참고: 초기 자산 배분(`LeagueStartUseCase`가 직접 호출하는 `InitialAssetAllocationService`)과 market의 현재가 DB 갱신은 반대로 같은 트랜잭션 안에서 동기로 처리해야 한다. 원자성이 필요한 처리와 화면 발행을 구분한다.
 
 ### 5.2. 즉시 발행도 현재가는 캐시 값을 쓴다
 

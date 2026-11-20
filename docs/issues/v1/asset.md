@@ -3,16 +3,16 @@
 > 정책: [docs/policies/v1/asset.md](../../policies/v1/domain/asset.md)
 
 ### AST-01 리그가 시작되면 모든 참여자에게 총 1억 원 상당의 주식과 현금이 배분된다
-- Jira: ND-11
+- Jira: ND-11, ND-81
 - 정책: [asset.md#초기-자산-배분](../../policies/v1/domain/asset.md#초기-자산-배분)
 - 선행: LEA-09, MKT-04
-- 내용: `LeagueStarted` 구독, 배분 완료 시 거래 개시 가능 상태로 전환
+- 내용: 리그 시작 UseCase(LEA-09)가 같은 트랜잭션에서 `InitialAssetAllocationService#allocate`를 직접 호출, 배분 완료 시 거래 개시 가능 상태로 전환 (`LeagueStarted` 이벤트는 ND-81에서 제거)
 - 완료 조건
   - [X] 종목당 5,000주: 상장자 2,500주, 나머지 2,500주를 다른 참여자에게 균등 배분, 잔여분은 상장자
   - [X] 초기 현금 = 1억 원 - 배분받은 전체 주식 수 × 10,000원
   - [X] 참여자 3~10명 전 구간 단위 테스트 (잔여 주식 발생 케이스 포함)
   - [X] 배분은 원자적으로 처리 (일부만 배분된 상태로 거래 개시 불가)
-  - [X] `LeagueStarted` 구독 구현 (이벤트 발행은 LEA-09)
+  - [X] 리그 시작 시 배분 호출 연결 (LEA-09 `LeagueStartUseCase`가 직접 호출)
   - [X] 초기 배분 주식의 매입 금액 = 배분 수량 × 10,000원
 
 ### AST-02 참여자는 자신의 현금, 보유 주식, 예약 자산, 총자산을 조회할 수 있다
@@ -71,6 +71,7 @@
 - Jira: ND-33
 - 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/domain/asset.md#주문-가능-자산-및-정산)
 - 선행: AST-03, AST-04
+- 진행: asset 해제 API(`AssetReservationService.releaseCashForBuy`/`releaseStockForSell`)는 order가 정한 미체결 잔량만큼 해제한다. 현재 운영 호출처는 자전거래 취소(`LimitOrderService`)뿐이고, 사용자 취소·만료·리그 종료·탈퇴 흐름의 호출은 ORD-07/09/10/11(order 담당)에서 붙인다.
 - 완료 조건
   - [x] 취소·만료 시 미체결 잔량에 해당하는 예약 현금·주식 해제
 
@@ -78,9 +79,10 @@
 - Jira: ND-59
 - 정책: [member.md#회원-탈퇴](../../policies/v1/domain/member.md#회원-탈퇴)
 - 선행: MBR-06, ORD-11
+- 진행: asset 쪽 구현 완료 (`AssetWithdrawalService.discardCash`/`discardCashOfMember`, `Account.withdrawn`, 탈퇴 계좌의 매수·매도 예약 거절). asset은 `MemberWithdrawn`을 직접 듣지 않는다. 완료 조건은 asset 모듈 기준으로 체크했고, order가 "주문 취소 → 예약 해제 → 현금 폐기"로 호출하는 연결은 [INT-01](integration.md#int-01-회원-탈퇴-시-order가-미체결-주문을-취소한-뒤-asset-현금-폐기를-호출한다)에서 한다
 - 완료 조건
-  - [ ] 미체결 주문 취소(ORD-11) 이후 현금 폐기
-  - [ ] 보유 주식은 수량 유지, 이후 거래 불가 (발행주식 총수에 포함)
+  - [x] 미체결 주문 취소(ORD-11) 이후 현금 폐기
+  - [x] 보유 주식은 수량 유지, 이후 거래 불가 (발행주식 총수에 포함)
 
 ### AST-08 시스템은 참여자별 총자산을 집계할 수 있다
 - Jira: ND-62
@@ -88,7 +90,8 @@
 - 선행: AST-01
 - 내용: 리그가 호출 (진행 중 순위, 리그 결과). 평가 가격은 호출하는 쪽이 종목별로 넘긴다
 - 완료 조건
-  - [ ] 총자산 = 현금 + Σ(보유 수량 × 평가 가격), 자사주 포함
-  - [ ] 평가 가격은 호출자가 지정 (진행 중: 현재가, 종료 시: 종료 평가 가격)
-  - [ ] 원 미만 절사
-  - [ ] 참여자별 현금, 종목별 보유 수량·평가액, 총자산을 함께 반환
+  - [x] 총자산 = 현금 + Σ(보유 수량 × 평가 가격), 자사주 포함
+  - [x] 평가 가격은 호출자가 지정 (진행 중: 현재가, 종료 시: 종료 평가 가격)
+  - [x] 원 미만 절사
+  - [x] 참여자별 현금, 종목별 보유 수량·평가액, 총자산을 함께 반환
+- 진행: asset 쪽 구현 완료 (`AssetQueryService.aggregateTotalAssets(leagueId, Map<종목 ID, 평가 가격(원)>)`, 반환 `PlayerTotalAsset`). 탈퇴자도 집계하고 `withdrawn`으로 표시하며 제외는 league가 한다. 평가 가격 누락은 `NaspiRuntimeException`. league가 market 평가 가격을 받아 이 API를 호출하는 연결은 [INT-05](integration.md), [INT-06](integration.md)에서 한다

@@ -115,6 +115,31 @@ class WebLoggingFilterTest {
         assertThat(messages()).isEmpty();
     }
 
+    @Test
+    @DisplayName("multipart 요청은 본문을 미리 읽지 않고 생략해서 남긴다")
+    void skipMultipartBody() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/images");
+        request.setContentType("multipart/form-data; boundary=x");
+        request.setContent(new byte[] {1, 2, 3});
+        AtomicReference<Object> passed = new AtomicReference<>();
+
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> passed.set(req));
+
+        assertThat(passed.get()).isSameAs(request);
+        assertThat(messages()).first().isEqualTo("[REQUEST] POST /api/images body: (omitted)");
+    }
+
+    @Test
+    @DisplayName("서명 URL은 접근 권한이므로 응답 로그에서 값을 가린다")
+    void maskSignedUrl() throws Exception {
+        filter.doFilter(new MockHttpServletRequest("GET", "/api/disclosures/1"),
+                new MockHttpServletResponse(), (req, res) -> writeJson(res,
+                        "{\"data\":{\"imageId\":1,\"signedUrl\":\"https://x?X-Goog-Signature=s\"}}"));
+
+        assertThat(messages()).last().isEqualTo(
+                "[RESPONSE] GET /api/disclosures/1 200 body: {data: {imageId: 1, signedUrl: ***}}");
+    }
+
     private List<String> messages() {
         return appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
     }

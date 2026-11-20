@@ -99,6 +99,59 @@ public class AssetQueryService {
                 .toList();
     }
 
+    /**
+     * 리그 전체 참여자의 총자산을 호출자가 지정한 평가 가격으로 집계한다 (AST-08). 진행 중 순위·리그 결과·
+     * 거래일별 집계처럼 리그가 호출한다. 현재가·종가·종료 평가 가격 중 무엇을 쓸지는 호출하는 쪽이 정한다.
+     *
+     * <p>{@code 총자산 = 현금 + Σ(각 종목 보유 수량 × 평가 가격)}이며 자사주를 포함한다. 평가 가격이 원 단위
+     * 정수라 원 미만이 생기지 않는다. 탈퇴한 참여자도 집계하고 {@link PlayerTotalAsset#withdrawn()}으로 표시한다.
+     * 보유 수량이 0인 종목의 가격은 없어도 되고, 맵에 남는 가격은 무시한다.
+     *
+     * @param leagueId 리그 ID
+     * @param evaluationPrices 종목 ID별 평가 가격 (1주당 원)
+     * @return 자산이 배분된 참여자의 총자산. 플레이어 ID 순. 자산이 배분되지 않은 리그는 빈 목록
+     * @throws NaspiRuntimeException 보유 종목의 평가 가격이 없거나 음수인 경우 (호출자 계약 위반)
+     */
+    @Transactional(readOnly = true)
+    public List<PlayerTotalAsset> aggregateTotalAssets(long leagueId,
+            Map<Long, Long> evaluationPrices) {
+        List<Account> accounts = accountRepository.findAllByLeagueId(leagueId);
+        if (accounts.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, List<Holding>> holdingsByPlayer = holdingRepository.findAllByLeagueId(leagueId)
+                .stream()
+                .collect(Collectors.groupingBy(Holding::getPlayerId));
+        Map<Long, LeagueStock> stocks = leagueStocks(leagueId);
+
+        return accounts.stream()
+                .sorted(Comparator.comparing(Account::getPlayerId))
+                .map(account -> toPlayerTotalAsset(account,
+                        holdingsByPlayer.getOrDefault(account.getPlayerId(), List.of()),
+                        evaluationPrices, treasuryStockId(account.getPlayerId(), stocks)))
+                .toList();
+    }
+
+    private static PlayerTotalAsset toPlayerTotalAsset(Account account, List<Holding> holdings,
+            Map<Long, Long> evaluationPrices, Long treasuryStockId) {
+        AssetValuation valuation;
+        try {
+            valuation = AssetValuation.evaluate(account, holdings, evaluationPrices,
+                    treasuryStockId);
+        } catch (IllegalArgumentException e) {
+            throw new NaspiRuntimeException("총자산을 집계할 수 없습니다: playerId="
+                    + account.getPlayerId() + ", " + e.getMessage(), e);
+        }
+        List<PlayerTotalAsset.HoldingTotal> holdingTotals = valuation.holdings().stream()
+                .map(holding -> new PlayerTotalAsset.HoldingTotal(holding.stockId(),
+                        holding.treasuryStock(), holding.quantity(), holding.evaluationPrice(),
+                        holding.valuation()))
+                .toList();
+        return new PlayerTotalAsset(valuation.playerId(), valuation.deposit(),
+                valuation.stockValuation(), valuation.totalAsset(), account.isWithdrawn(),
+                holdingTotals);
+    }
+
     private Map<Long, LeagueStock> leagueStocks(long leagueId) {
         return stockQueryService.findAllByLeagueId(leagueId).stream()
                 .collect(Collectors.toMap(LeagueStock::stockId, Function.identity()));

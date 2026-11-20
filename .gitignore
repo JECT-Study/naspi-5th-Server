@@ -40,3 +40,6 @@ out/
 ### macOS ###
 .DS_Store
 /.bkit/
+
+### Claude Code ###
+.claude/plans/

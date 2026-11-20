@@ -63,10 +63,8 @@ public class LeagueCreationUseCase {
         league.assignHost(host.getId());
 
         // market에 방장의 종목 상장 요청
-        // TODO: market에 플레이어 ID로 종목만 상장하는 서비스가 생기면 그것으로 바꾼다.
-        //       StockListingService.list는 회원 ID를 받지만 지금은 그 값을 플레이어 ID로 그대로 쓰므로
-        //       방장 플레이어 ID를 넘긴다.
-        stockListingService.list(league.getId(), host.getId(), stockName, stockDescription);
+        stockListingService.listHostStock(
+                league.getId(), host.getId(), stockName, stockDescription);
 
         // 상장을 마친 방장은 참여자
         host.completeListing(now);
