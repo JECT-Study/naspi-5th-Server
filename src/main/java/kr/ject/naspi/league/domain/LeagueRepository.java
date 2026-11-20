@@ -1,6 +1,7 @@
 package kr.ject.naspi.league.domain;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -77,4 +78,12 @@ public interface LeagueRepository {
      */
     List<League> findAllWithLockByStatusAndCreatedAtLessThanEqual(LeagueStatus status,
             LocalDateTime createdAt);
+
+    /**
+     * 리그 ID 목록으로 리그를 모두 찾는다.
+     *
+     * @param ids 리그 ID 목록
+     * @return 리그 목록
+     */
+    List<League> findAllByIdIn(Collection<Long> ids);
 }
