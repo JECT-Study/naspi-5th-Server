@@ -1,9 +1,6 @@
 package kr.ject.naspi.order.application;
 
 import java.time.LocalDateTime;
-import kr.ject.naspi.asset.application.AssetReservationService;
-import kr.ject.naspi.asset.application.AssetSettlementService;
-import kr.ject.naspi.asset.application.TradeSettlement;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -11,19 +8,14 @@ import kr.ject.naspi.league.application.LeagueTradingService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.PriceLimit;
 import kr.ject.naspi.order.domain.CancelReason;
-import kr.ject.naspi.order.domain.Execution;
 import kr.ject.naspi.order.domain.MatchResult;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderBook;
 import kr.ject.naspi.order.domain.OrderMatcher;
 import kr.ject.naspi.order.domain.OrderRepository;
-import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
 import kr.ject.naspi.order.domain.OrderType;
-import kr.ject.naspi.order.domain.Trade;
-import kr.ject.naspi.order.domain.TradeRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,11 +43,8 @@ public class LimitOrderService {
     private final LeagueTradingService leagueTradingService;
     private final LeagueQueryService leagueQueryService;
     private final StockQueryService stockQueryService;
-    private final AssetReservationService assetReservationService;
-    private final AssetSettlementService assetSettlementService;
+    private final OrderExecutionSupport support;
     private final OrderRepository orderRepository;
-    private final TradeRepository tradeRepository;
-    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 지정가 주문을 접수하고 바로 매칭한다.
@@ -85,20 +74,16 @@ public class LimitOrderService {
         if (!PriceLimit.of(basePrice).contains(command.price())) {
             throw new NaspiBizException(ErrorCode.ORDER_PRICE_OUT_OF_LIMIT);
         }
-        reserveAsset(order);
+        support.reserve(order, command.price());
 
         OrderBook book = OrderBook.of(command.stockId(),
                 orderRepository.findAllByStockIdAndTypeAndStatusInOrderByIdAsc(
                         command.stockId(), OrderType.LIMIT, OrderStatus.openStatuses()));
         orderRepository.save(order);
         MatchResult result = OrderMatcher.match(book, order, command.price());
-        for (Execution execution : result.executions()) {
-            settle(execution, now);
-        }
-        if (order.getStatus() == OrderStatus.CANCELED) {
-            // 자전거래로 취소된 신규 주문의 미체결 잔여 수량에 묶인 예약을 푼다.
-            releaseAsset(order);
-        }
+        support.settleAll(result, now);
+        // 자전거래로 취소된 신규 주문의 미체결 잔여 수량에 묶인 예약을 푼다.
+        support.releaseRemaining(order);
         return PlacedOrder.from(order);
     }
 
@@ -123,49 +108,12 @@ public class LimitOrderService {
                 .filter(o -> o.getLeagueId() == leagueId && o.getPlayerId() == playerId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.ORDER_NOT_FOUND));
         order.cancel(CancelReason.USER_REQUESTED, now);
-        releaseAsset(order);
+        support.releaseRemaining(order);
         return CanceledOrder.from(order);
     }
 
     private void validateStockInLeague(PlaceLimitOrder command) {
         // 리그에 없는 종목이면 STOCK_NOT_FOUND. 매수는 asset 예약이 종목을 확인하지 않아 먼저 확인한다.
         stockQueryService.isListedBy(command.leagueId(), command.stockId(), command.playerId());
-    }
-
-    private void reserveAsset(Order order) {
-        if (order.getSide() == OrderSide.BUY) {
-            assetReservationService.reserveCashForBuy(order.getLeagueId(), order.getPlayerId(),
-                    order.getPrice(), order.getQuantity());
-            order.recordReservedPrice(order.getPrice());
-        } else {
-            assetReservationService.reserveStockForSell(order.getLeagueId(), order.getPlayerId(),
-                    order.getStockId(), order.getQuantity());
-        }
-    }
-
-    /** 취소된 주문의 미체결 잔여 수량에 묶인 예약을 푼다. */
-    private void releaseAsset(Order order) {
-        if (order.getRemainingQuantity() == 0) {
-            return;
-        }
-        if (order.getSide() == OrderSide.BUY) {
-            assetReservationService.releaseCashForBuy(order.getLeagueId(), order.getPlayerId(),
-                    order.getReservedPrice(), order.getRemainingQuantity());
-        } else {
-            assetReservationService.releaseStockForSell(order.getLeagueId(), order.getPlayerId(),
-                    order.getStockId(), order.getRemainingQuantity());
-        }
-    }
-
-    private void settle(Execution execution, LocalDateTime executedAt) {
-        Order buy = execution.buyOrder();
-        Order sell = execution.sellOrder();
-        assetSettlementService.settle(new TradeSettlement(buy.getLeagueId(), buy.getStockId(),
-                buy.getPlayerId(), sell.getPlayerId(), buy.getReservedPrice(),
-                execution.price(), execution.quantity()));
-        // 체결 기록은 정산과 같은 트랜잭션에서 남긴다. 거래일은 접수 시점의 거래일이다.
-        tradeRepository.save(Trade.record(execution, execution.incomingOrder().getTradingDay(),
-                executedAt));
-        eventPublisher.publishEvent(TradeExecuted.from(execution, executedAt));
     }
 }

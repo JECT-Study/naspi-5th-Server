@@ -60,8 +60,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({LimitOrderService.class, LeagueTradingService.class, LeagueQueryService.class,
-        StockQueryService.class, LocalStockSnapshotCache.class, AssetReservationService.class,
+@Import({LimitOrderService.class, OrderExecutionSupport.class,
+        LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
+        LocalStockSnapshotCache.class, AssetReservationService.class,
         AssetSettlementService.class, LimitOrderConcurrencyTest.FixedClockConfig.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class LimitOrderConcurrencyTest {

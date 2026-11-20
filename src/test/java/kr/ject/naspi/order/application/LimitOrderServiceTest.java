@@ -54,8 +54,9 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @ActiveProfiles("test")
 @DataJpaTest
 @RecordApplicationEvents
-@Import({LimitOrderService.class, LeagueTradingService.class, LeagueQueryService.class,
-        StockQueryService.class, LocalStockSnapshotCache.class, AssetReservationService.class,
+@Import({LimitOrderService.class, OrderExecutionSupport.class,
+        LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
+        LocalStockSnapshotCache.class, AssetReservationService.class,
         AssetSettlementService.class, LimitOrderServiceTest.FixedClockConfig.class})
 class LimitOrderServiceTest {
 
