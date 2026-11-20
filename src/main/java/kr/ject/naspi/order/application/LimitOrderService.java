@@ -19,6 +19,8 @@ import kr.ject.naspi.order.domain.OrderRepository;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
 import kr.ject.naspi.order.domain.OrderType;
+import kr.ject.naspi.order.domain.Trade;
+import kr.ject.naspi.order.domain.TradeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -33,7 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>리그 거래 락 (거래 가능 상태가 아니면 거절)</li>
  *   <li>당일 상·하한가 범위 확인</li>
  *   <li>자산 예약 (매수는 현금, 매도는 주식. 실패하면 거절)</li>
- *   <li>호가창 조회 → 주문 저장 → 매칭 → 체결마다 정산과 {@link TradeExecuted} 발행</li>
+ *   <li>호가창 조회 → 주문 저장 → 매칭 → 체결마다 정산, 체결 기록 저장, {@link TradeExecuted} 발행</li>
  * </ol>
  * 미체결 잔여 수량은 대기 주문으로 남는다. 시간 우선순위가 주문 {@code id} 순서이므로 주문 저장은 반드시
  * 리그 락을 잡은 뒤에 한다.
@@ -51,6 +53,7 @@ public class LimitOrderService {
     private final AssetReservationService assetReservationService;
     private final AssetSettlementService assetSettlementService;
     private final OrderRepository orderRepository;
+    private final TradeRepository tradeRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -158,6 +161,9 @@ public class LimitOrderService {
         assetSettlementService.settle(new TradeSettlement(buy.getLeagueId(), buy.getStockId(),
                 buy.getPlayerId(), sell.getPlayerId(), buy.getReservedPrice(),
                 execution.price(), execution.quantity()));
+        // 체결 기록은 정산과 같은 트랜잭션에서 남긴다. 거래일은 접수 시점의 거래일이다.
+        tradeRepository.save(Trade.record(execution, execution.incomingOrder().getTradingDay(),
+                executedAt));
         eventPublisher.publishEvent(TradeExecuted.from(execution, executedAt));
     }
 }

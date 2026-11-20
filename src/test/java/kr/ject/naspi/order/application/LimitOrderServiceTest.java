@@ -31,6 +31,7 @@ import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
+import kr.ject.naspi.order.domain.Trade;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -223,6 +224,39 @@ class LimitOrderServiceTest {
                 .setParameter("l", ended.getId())
                 .setParameter("p", ENDED_LEAGUE_BUYER).getSingleResult();
         assertThat(endedAccount.getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("체결되면 정산과 같은 트랜잭션에서 체결 기록을 남긴다")
+    void recordsTradeOnExecution() {
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 10);
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 12_000, 4);
+
+        List<Trade> trades = entityManager.getEntityManager()
+                .createQuery("select t from Trade t where t.leagueId = :l", Trade.class)
+                .setParameter("l", leagueId).getResultList();
+        assertThat(trades).hasSize(1);
+        Trade trade = trades.get(0);
+        assertThat(trade.getSellOrderId()).isEqualTo(sell.orderId());
+        assertThat(trade.getBuyOrderId()).isEqualTo(buy.orderId());
+        assertThat(trade.getBuyerPlayerId()).isEqualTo(BUYER);
+        assertThat(trade.getSellerPlayerId()).isEqualTo(SELLER);
+        assertThat(trade.getStockId()).isEqualTo(stockId);
+        assertThat(trade.getTradingDay()).isEqualTo(TRADING_DAY);
+        assertThat(trade.getPrice()).isEqualTo(11_000);
+        assertThat(trade.getQuantity()).isEqualTo(4);
+        assertThat(trade.getAmount()).isEqualTo(44_000);
+        assertThat(trade.getExecutedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("체결 없이 대기만 하는 주문은 체결 기록을 남기지 않는다")
+    void noTradeWithoutExecution() {
+        place(BUYER, OrderSide.BUY, 9_000, 10);
+
+        Long count = entityManager.getEntityManager()
+                .createQuery("select count(t) from Trade t", Long.class).getSingleResult();
+        assertThat(count).isZero();
     }
 
     @Test
