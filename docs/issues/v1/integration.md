@@ -35,9 +35,9 @@
 - Jira:
 - 목적: AST-06(ND-33)의 "취소·만료 시 미체결 잔량 해제"를 만료(ORD-09)와 리그 종료 일괄 취소(ORD-10) 흐름에 연결한다 (asset ↔ order 연동). 사용자 취소(ORD-07)는 `feature/ND-39,ND-40,ND-72`에서 이미 연결 중이라 제외한다
 - 내용: `Order.expire()` / `Order.cancel()`로 상태를 바꾼 직후 미체결 잔량을 `releaseCashForBuy(예약 기준 가격, 잔량)` / `releaseStockForSell(잔량)`로 해제한다. 상태 전환이 거절된 주문(이미 체결 완료·취소·만료)은 해제하지 않아 이중 해제가 없다
-- 선행: AST-06, ORD-09 (LEA-11 `TradingDayChanged` 필요), ORD-10
+- 선행: AST-06, ORD-09 (LEA-11 `TradingDayChangeUseCase` 필요), ORD-10
 - 결정 필요 (order 담당과 정할 것)
-  - 00:00~09:00에 시작한 리그 1일차 주문의 만료 시점: "다음 오전 9시" 문구대로 / 거래일 전환 시점
+  - (결정됨, LEA-11) 00:00~09:00에 시작한 리그 1일차 주문은 다음 거래일 시작(익일 09:00)에 만료한다. 당일 09:00에는 전환이 없다. 정책 "다음 오전 9시"는 "다음 거래일 시작"으로 해석한다
   - 7일차 09:00 만료와 리그 종료 취소가 겹칠 때 주문 상태 `EXPIRED` / `CANCELED`
   - 리그 종료 처리 중 락: `lockForTrading`은 거래 불가 리그에서 `LEAGUE_NOT_TRADABLE`을 던진다
 - 완료 조건 (확인 방법)
@@ -68,7 +68,7 @@
 ### INT-06 거래일 종료 시 종가로 asset 총자산 집계를 호출한다
 - Jira:
 - 목적: AST-08의 집계 API를 LEA-18 거래일별 자산 집계에 연결한다
-- 내용: `TradingDayChanged`(LEA-11) 처리 중 league UseCase가 market 종가(MKT-06)를 받아 `aggregateTotalAssets`에 넘긴다
+- 내용: 거래일 전환 UseCase(LEA-11) 처리 중 league UseCase가 market 종가(MKT-06)를 받아 `aggregateTotalAssets`에 넘긴다
 - 선행: AST-08, MKT-06, LEA-11, LEA-18
 - 완료 조건 (확인 방법)
   - [ ] `grep -rn "aggregateTotalAssets" src/main/java/kr/ject/naspi/league` 결과 있음

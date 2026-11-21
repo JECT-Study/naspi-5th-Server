@@ -110,19 +110,20 @@
 ### LEA-11 진행 중인 리그는 매일 09:00 KST에 다음 거래일로 전환된다
 - Jira: ND-84
 - 정책: [market.md#시장](../../policies/v1/domain/market.md#시장)
-- 선행: LEA-10, GLB-04
-- 내용: 매일 09:00 KST에 진행 중인 리그마다 `TradingDayChanged` 이벤트 발행
+- 선행: LEA-10
+- 내용: 매일 09:00 KST에 진행 중인 리그마다 `TradingDayChangeUseCase`가 리그 락 안에서 전환을 처리하고, 같은 트랜잭션에서 market(MKT-06)·order(ORD-09) application을 직접 호출한다
+- 결정: 거래일 N+1로 전환할 때 거래일 N을 마감하고 `trading_day.closed_at`에 기록한다. 기동 직후와 매일 09:00에 놓친 전환을 일차 순서대로 보정한다. 전환은 2~7일차 시작 6회이며, 종료 시각의 7일차 종가 확정은 LEA-12가 맡는다. 00:00~09:00에 시작한 리그는 당일 09:00에 전환이 없다. 09:00 직후 처리 전 주문은 MKT-06·ORD-09가 거래일 필터로 처리한다
 - 완료 조건
-  - [ ] 구독: MKT-06(종가 확정·기준가 적용), ORD-09(미체결 만료)
-  - [ ] 서버 재시작·중복 실행 시에도 한 번만 처리
+  - [ ] 후속 호출: MKT-06(종가 확정·기준가 적용), ORD-09(미체결 만료) — 각 스토리에서 `TradingDayChangeUseCase`에 연결
+  - [x] 서버 재시작·중복 실행 시에도 한 번만 처리 — `./gradlew test --tests "kr.ject.naspi.league.application.TradingDayChange*"`
 
 ### LEA-12 리그는 종료 시각에 자동으로 종료되고, 이후에는 결과 페이지만 열린다
 - Jira: ND-85
 - 정책: [league.md#리그-시작-및-운영](../../policies/v1/domain/league.md#리그-시작-및-운영)
 - 선행: LEA-10
-- 내용: 종료 시각에 주문 접수·체결 종료, `LeagueEnded` 이벤트 발행
+- 내용: 종료 시각에 주문 접수·체결 종료, 리그 종료 UseCase가 하위 모듈을 직접 호출
 - 완료 조건
-  - [ ] 구독: ORD-10(미체결 전체 취소) → LEA-13(결과 산정)
+  - [ ] 리그 종료 UseCase가 ORD-10(미체결 전체 취소) → LEA-13(결과 산정)을 직접 호출. 종료 시각의 7일차 종가 확정 포함
   - [ ] 종료 후 결과 페이지 외 리그 API 접근 차단
 
 ## 결과

@@ -8,6 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import lombok.AccessLevel;
@@ -46,6 +48,13 @@ public class TradingDay {
     @Column(name = "ends_at", nullable = false)
     private LocalDateTime endsAt;
 
+    /**
+     * 마감 일시. 다음 거래일로 전환하며 이 거래일의 종가를 확정하고 미체결 주문을 만료한 시각이다.
+     * 마감 전에는 비어 있다. 마지막 거래일의 마감은 리그 종료 처리가 맡는다.
+     */
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
     private TradingDay(long leagueId, TradingSchedule.Period period) {
         this.leagueId = leagueId;
         this.dayNumber = period.dayNumber();
@@ -64,5 +73,59 @@ public class TradingDay {
         return schedule.periods().stream()
                 .map(period -> new TradingDay(leagueId, period))
                 .toList();
+    }
+
+    /**
+     * 마감할 차례인 거래일을 일차 순서대로 고른다. 이미 마감한 거래일은 건너뛰고, 종료 시각이 지난 거래일을
+     * 앞 일차부터 이어서 고르며 건너뛰지 않는다. 마지막 거래일은 리그 종료 처리가 마감하므로 고르지 않는다.
+     *
+     * <p>정책 (docs/policies/v1/domain/market.md "시장"): 매일 오전 9시 KST에 거래일이 바뀌며 직전 거래일이
+     * 마감된다. 서버가 내려가 있던 동안 놓친 전환도 이 순서대로 보정한다.
+     *
+     * @param tradingDays 한 리그의 거래일
+     * @param now 현재 일시
+     * @return 마감할 거래일 (일차 순)
+     */
+    public static List<TradingDay> pendingClosures(List<TradingDay> tradingDays,
+            LocalDateTime now) {
+        List<TradingDay> pending = new ArrayList<>();
+        for (TradingDay day : tradingDays.stream()
+                .sorted(Comparator.comparingInt(TradingDay::getDayNumber)).toList()) {
+            if (day.isLast() || !day.endedAt(now)) {
+                break;
+            }
+            if (!day.isClosed()) {
+                pending.add(day);
+            }
+        }
+        return pending;
+    }
+
+    /**
+     * 거래일을 마감했다고 기록한다.
+     *
+     * @param now 마감 일시
+     * @throws IllegalStateException 이미 마감했거나, 아직 끝나지 않았거나, 마지막 거래일인 경우
+     */
+    public void close(LocalDateTime now) {
+        Objects.requireNonNull(now, "now");
+        if (closedAt != null || isLast() || !endedAt(now)) {
+            throw new IllegalStateException("거래일을 마감할 수 없습니다. leagueId=" + leagueId
+                    + ", dayNumber=" + dayNumber + ", closedAt=" + closedAt);
+        }
+        this.closedAt = now;
+    }
+
+    public boolean isClosed() {
+        return closedAt != null;
+    }
+
+    /** 마지막(7일차) 거래일인지. */
+    public boolean isLast() {
+        return dayNumber == TradingSchedule.TRADING_DAYS;
+    }
+
+    private boolean endedAt(LocalDateTime now) {
+        return !now.isBefore(endsAt);
     }
 }

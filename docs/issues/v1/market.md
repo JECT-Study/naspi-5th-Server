@@ -45,7 +45,7 @@
 - 결정: 리그 시작 UseCase(LEA-09)가 초기 자산 배분과 같은 트랜잭션에서 `StockOpeningService#open`을 호출해 `stock.current_price`를 시초가로 정한다. 최초 거래일 기준가는 시초가와 같으므로 따로 저장하지 않고, 거래일별 기준가 저장은 MKT-06에서 한다
 
 ### MKT-05 체결이 발생하면 종목의 현재가와 거래량이 갱신된다
-- Jira:
+- Jira: ND-98
 - 정책: [market.md#시장](../../policies/v1/domain/market.md#시장)
 - 선행: ORD-03, GLB-04
 - 내용: `TradeExecuted` 구독
@@ -55,7 +55,7 @@
   - [X] VWAP 계산용 체결 기록 저장 (ND-74, [ORD-03](order.md#ord-03-접수된-주문은-가격시간-우선-원칙에-따라-상대-주문과-체결된다)에서 구현. 종목별·거래일별 합계와 종료 시각 역순 500주 조회 포함)
 
 ### MKT-06 거래일이 바뀌면 종목의 종가가 확정되고 새 기준가와 가격 범위가 적용된다
-- Jira:
+- Jira: ND-99
 - 정책: [market.md#시장](../../policies/v1/domain/market.md#시장), [#가격제한폭](../../policies/v1/domain/market.md#가격제한폭)
 - 선행: LEA-11, MKT-05
 - 완료 조건
