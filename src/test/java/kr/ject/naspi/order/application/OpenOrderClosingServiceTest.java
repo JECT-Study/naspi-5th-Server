@@ -12,6 +12,8 @@ import kr.ject.naspi.asset.application.AssetWithdrawalService;
 import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.config.ClockConfig;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
@@ -408,6 +410,128 @@ class OpenOrderClosingServiceTest {
 
         assertThatThrownBy(() -> noTransaction.executeWithoutResult(
                 status -> service.cancelAllOfMember(MEMBER)))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    // ---- 리그 종료 주문 취소 (ORD-10) ----
+
+    private static final LocalDateTime ENDED_AT = LocalDateTime.of(2026, 11, 22, 9, 0);
+
+    private Order startedBuyOnDay(Started started, long playerId, long quantity, int day) {
+        Order order = Order.limit(started.leagueId(), playerId, started.stockId(), OrderSide.BUY,
+                9_000, quantity, day, ORDERED_AT);
+        reservationService.reserveCashForBuy(started.leagueId(), playerId, 9_000, quantity);
+        order.recordReservedPrice(9_000);
+        return entityManager.persistAndFlush(order);
+    }
+
+    @Test
+    @DisplayName("리그가 종료되면 리그의 모든 지정가 미체결 주문(대기·부분 체결)이 취소되고 사유는 리그 종료로 기록된다")
+    void cancelsAllOpenLimitOrdersOfLeague() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        List<Order> orders = List.of(
+                startedBuyOnDay(a, a.withdrawer(), 10, 1), startedBuyOnDay(a, a.other(), 10, 7),
+                partiallyFilledBuy(a, a.withdrawer(), 10, 3));
+
+        int count = service.cancelAllOfLeague(a.leagueId(), ENDED_AT);
+
+        assertThat(count).isEqualTo(3);
+        for (Order order : orders) {
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+            assertThat(order.getCancelReason()).isEqualTo(CancelReason.LEAGUE_ENDED);
+            assertThat(order.getCanceledAt()).isEqualTo(ENDED_AT);
+        }
+    }
+
+    @Test
+    @DisplayName("리그 종료 취소로 미체결 잔여 수량에 예약된 현금과 주식이 해제되어 참여자의 예약이 0이 된다")
+    void leagueEndReleasesReservation() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        startedBuy(a, a.withdrawer(), 10);
+        startedSell(a, a.other(), 10);
+
+        service.cancelAllOfLeague(a.leagueId(), ENDED_AT);
+
+        assertThat(startedAccount(a, a.withdrawer()).getReservedDeposit()).isZero();
+        assertThat(startedAccount(a, a.withdrawer()).getDeposit()).isEqualTo(1_000_000);
+        assertThat(startedHolding(a, a.other()).getReservedQuantity()).isZero();
+        assertThat(startedHolding(a, a.other()).getQuantity()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("부분 체결된 주문을 리그 종료로 취소하면 체결된 부분은 유지되고 잔여 수량만 취소 수량이 된다")
+    void leagueEndKeepsFilledPart() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        Order order = partiallyFilledBuy(a, a.withdrawer(), 10, 3);
+
+        service.cancelAllOfLeague(a.leagueId(), ENDED_AT);
+
+        assertThat(order.filledQuantity()).isEqualTo(3);
+        assertThat(order.canceledQuantity()).isEqualTo(7);
+        assertThat(startedAccount(a, a.withdrawer()).getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("리그 종료 취소는 체결 완료·취소·만료된 주문과 다른 리그의 주문을 건드리지 않는다")
+    void leagueEndSkipsClosedAndOtherLeagueOrders() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        Order filled = startedBuy(a, a.withdrawer(), 10);
+        filled.fill(10);
+        reservationService.releaseCashForBuy(a.leagueId(), a.withdrawer(), 9_000, 10);
+        Order userCanceled = startedBuy(a, a.withdrawer(), 10);
+        userCanceled.cancel(CancelReason.USER_REQUESTED, ORDERED_AT);
+        reservationService.releaseCashForBuy(a.leagueId(), a.withdrawer(), 9_000, 10);
+        Order expired = startedBuy(a, a.withdrawer(), 10);
+        expired.expire(EXPIRED_AT);
+        reservationService.releaseCashForBuy(a.leagueId(), a.withdrawer(), 9_000, 10);
+        Started b = startedLeague("CCCCCCC", ORDERED_AT);
+        Order otherLeague = startedBuy(b, b.withdrawer(), 10);
+
+        int count = service.cancelAllOfLeague(a.leagueId(), ENDED_AT);
+
+        assertThat(count).isZero();
+        assertThat(filled.getStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(userCanceled.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(expired.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        assertThat(otherLeague.getStatus()).isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("종료 시각이 지났지만 아직 시작 상태인 리그도 거래 가능 확인 없이 미체결 주문이 취소된다")
+    void leagueEndCancelsPastEndsAt() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT.minusDays(10));
+        Order order = startedBuy(a, a.withdrawer(), 10);
+
+        int count = service.cancelAllOfLeague(a.leagueId(), ENDED_AT);
+
+        assertThat(count).isEqualTo(1);
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.LEAGUE_ENDED);
+    }
+
+    @Test
+    @DisplayName("미체결 주문이 없는 리그는 아무것도 취소하지 않는다")
+    void leagueEndWithoutOpenOrders() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+
+        assertThat(service.cancelAllOfLeague(a.leagueId(), ENDED_AT)).isZero();
+    }
+
+    @Test
+    @DisplayName("없는 리그는 종료 취소를 할 수 없다")
+    void leagueEndRejectsMissingLeague() {
+        assertThatThrownBy(() -> service.cancelAllOfLeague(leagueId + 1_000, ENDED_AT))
+                .isInstanceOfSatisfying(NaspiBizException.class, e ->
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("리그 종료 취소는 리그 종료 트랜잭션 안에서만 실행된다")
+    void leagueEndCancelRequiresTransaction() {
+        TransactionTemplate noTransaction = new TransactionTemplate(transactionManager);
+        noTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
+
+        assertThatThrownBy(() -> noTransaction.executeWithoutResult(
+                status -> service.cancelAllOfLeague(leagueId, ENDED_AT)))
                 .isInstanceOf(IllegalTransactionStateException.class);
     }
 

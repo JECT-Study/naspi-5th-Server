@@ -17,14 +17,13 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 미체결 주문의 일괄 종료 (거래일 만료 ORD-09, 회원 탈퇴 취소 ORD-11). 리그 종료(ORD-10)의 일괄 취소도 같은
- * 클래스에 공개 메서드를 더해 {@link #closeAll}을 재사용한다.
+ * 미체결 주문의 일괄 종료 (거래일 만료 ORD-09, 회원 탈퇴 취소 ORD-11, 리그 종료 취소 ORD-10).
  *
  * <p>리그 락 책임은 메서드마다 다르다. {@link #expireTradingDay}는 호출자가 리그 락을 잡은 트랜잭션에서
  * 호출해야 한다 ({@code MANDATORY}는 트랜잭션 존재만 확인하고 리그 락 보유는 확인하지 못한다. 리그 락 없이
- * 호출하면 접수·취소·체결과 직렬화되지 않아 예약이 두 번 해제될 수 있다). {@link #cancelAllOfMember}는
- * 메서드가 리그별로 {@code LeagueTradingService#lockForClosing}으로 직접 락을 잡는다 (리그 종료 취소 ND-43도
- * {@code lockForClosing}을 쓸 예정). 락 순서는 리그 락 → asset 락이다. 주문 행 락은 쓰지 않는다.
+ * 호출하면 접수·취소·체결과 직렬화되지 않아 예약이 두 번 해제될 수 있다). {@link #cancelAllOfMember}·
+ * {@link #cancelAllOfLeague}는 메서드가 직접 {@code LeagueTradingService#lockForClosing}으로 락을 잡는다.
+ * 락 순서는 리그 락 → asset 락이다. 주문 행 락은 쓰지 않는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -84,6 +83,31 @@ public class OpenOrderClosingService {
             canceled += closeAll(orders, CancelReason.MEMBER_WITHDRAWN, canceledAt);
         }
         return canceled;
+    }
+
+    /**
+     * 리그의 지정가 미체결 주문(대기·부분 체결)을 거래일 구분 없이 모두 리그 종료 사유로 취소하고 미체결 잔여
+     * 수량의 예약 자산을 해제한다. 이미 체결된 부분은 유지된다.
+     *
+     * <p>{@code lockForClosing}으로 리그 락을 잡은 뒤 주문을 읽는다. 종료 시각 도달 여부는 확인하지 않는다
+     * (호출 시점은 리그 종료 UseCase의 책임이다). 호출자는 밀린 거래일 전환을 먼저 끝낸 뒤 호출해야 한다.
+     * {@code MANDATORY}인 이유는 리그 락이 리그 종료 트랜잭션 커밋까지 유지되어야 이후의 결과 산정이 예약 0
+     * 상태를 보기 때문이다. 별도 트랜잭션으로 먼저 커밋하면 락이 풀려 종료 처리와 직렬화되지 않는다.
+     *
+     * <p>시장가 주문은 접수 트랜잭션에서 잔량이 바로 취소되어 열린 상태로 남지 않으므로 대상이 아니다
+     * ({@link #expireTradingDay}와 같다). 모든 유형을 대상으로 하는 {@link #cancelAllOfMember}와 유형 기준이
+     * 다르다.
+     *
+     * @param leagueId 리그 ID
+     * @param endedAt 취소 시각 (호출자가 넘기는 리그 종료 시각)
+     * @return 취소한 주문 수
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelAllOfLeague(long leagueId, LocalDateTime endedAt) {
+        leagueTradingService.lockForClosing(leagueId);
+        List<Order> orders = orderRepository.findAllByLeagueIdAndTypeAndStatusInOrderByIdAsc(
+                leagueId, OrderType.LIMIT, OrderStatus.openStatuses());
+        return closeAll(orders, CancelReason.LEAGUE_ENDED, endedAt);
     }
 
     private int closeAll(List<Order> orders, CancelReason reason, LocalDateTime closedAt) {

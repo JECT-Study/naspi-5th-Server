@@ -72,10 +72,10 @@ public record OrderDetailResponse(
                     - `SELF_TRADE_PREVENTED`: 내 주문 간 체결 방지
                     - `TRADING_DAY_EXPIRED`: 거래일 변경으로 만료
                     - `MEMBER_WITHDRAWN`: 회원 탈퇴
-                    (`LEAGUE_ENDED`는 ORD-10에서 추가)""",
+                    - `LEAGUE_ENDED`: 리그 종료""",
                     allowableValues = {"USER_REQUESTED", "MARKET_PARTIALLY_FILLED",
                             "MARKET_NOT_FILLED", "SELF_TRADE_PREVENTED", "TRADING_DAY_EXPIRED",
-                            "MEMBER_WITHDRAWN"})
+                            "MEMBER_WITHDRAWN", "LEAGUE_ENDED"})
             String reason) {
     }
 

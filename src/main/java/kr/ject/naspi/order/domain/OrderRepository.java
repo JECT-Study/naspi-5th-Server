@@ -29,7 +29,7 @@ public interface OrderRepository {
      *
      * <p>같은 리그의 주문 처리는 리그 거래 락으로 이미 직렬화되지만, 주문 상태 전환과 예약 해제가 한 번만
      * 일어나도록 주문 행도 잠근다. 락 순서는 리그 락 → 주문 락 → asset 락이다. 주문 상태를 바꾸는 모든
-     * 경로가 리그 락 안에 있어 이 행 락은 중복 방어다. 제거 여부는 ND-43 확정 후 판단한다.
+     * 경로가 리그 락 안에 있어 이 행 락은 리그 락과 중복된 방어로 유지하기로 확정했다.
      *
      * @param id 주문 ID
      * @return 주문. 없으면 비어 있다
@@ -59,6 +59,17 @@ public interface OrderRepository {
      */
     List<Order> findAllByLeagueIdAndTypeAndStatusInAndTradingDayLessThanEqualOrderByIdAsc(
             Long leagueId, OrderType type, List<OrderStatus> statuses, int tradingDay);
+
+    /**
+     * 리그 종료 취소 대상 주문을 접수 순서로 조회한다. 거래일 조건 없이 리그의 주어진 유형·상태 주문 전부다.
+     *
+     * @param leagueId 리그 ID
+     * @param type 주문 유형 (지정가)
+     * @param statuses 열린 상태 (대기, 부분 체결)
+     * @return 주문 목록. 접수 순서(id 오름차순)
+     */
+    List<Order> findAllByLeagueIdAndTypeAndStatusInOrderByIdAsc(Long leagueId, OrderType type,
+            List<OrderStatus> statuses);
 
     /**
      * 플레이어가 접수한 주문 중 주어진 상태의 주문을 접수 역순으로 조회한다.

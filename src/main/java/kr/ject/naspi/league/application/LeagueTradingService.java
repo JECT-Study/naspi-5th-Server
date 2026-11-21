@@ -13,8 +13,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 리그 단위 거래 직렬화. order가 주문을 접수·취소·만료할 때 가장 먼저 호출한다. 회원 탈퇴 주문 취소는
- * 거래 가능 판정 없이 잠그는 {@link #lockForClosing}을 호출한다.
+ * 리그 단위 거래 직렬화. order가 주문을 접수·취소·만료할 때 가장 먼저 호출한다. 회원 탈퇴 주문 취소와
+ * 리그 종료 주문 취소는 거래 가능 판정 없이 잠그는 {@link #lockForClosing}을 호출한다.
  *
  * <p>리그 행에 비관적 쓰기 락을 걸어 같은 리그의 주문 처리를 한 번에 하나씩 진행한다. 여러 서버가
  * 떠 있어도 DB 락이므로 동작한다. 락은 호출한 트랜잭션이 끝날 때 풀리고, 호출한 쪽은 락을 잡은 뒤에
