@@ -29,9 +29,11 @@ import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
+import kr.ject.naspi.market.domain.StockDailyPrice;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
@@ -75,7 +77,6 @@ class LimitOrderConcurrencyTest {
     private static final long BUYER = 30L;
     private static final List<Long> PLAYERS = List.of(LISTER, SELLER, BUYER);
     private static final long INITIAL_DEPOSIT = 1_000_000;
-    private static final long BASE_PRICE = 10_000;
     private static final int REQUESTS = 10;
 
     @TestConfiguration
@@ -120,6 +121,7 @@ class LimitOrderConcurrencyTest {
                     .toList();
             league.start(players, NOW);
             leagueId = league.getId();
+            TradingDay.of(leagueId, league.tradingSchedule()).forEach(entityManager::persist);
 
             Stock stock = Stock.list(leagueId, LISTER, StockName.of("종목"),
                     StockDescription.of("소개"));
@@ -127,6 +129,7 @@ class LimitOrderConcurrencyTest {
             entityManager.persist(stock);
             entityManager.flush();
             stockId = stock.getId();
+            entityManager.persist(StockDailyPrice.open(leagueId, stockId, 1, 10_000));
             for (long player : PLAYERS) {
                 entityManager.persist(Account.open(leagueId, player, INITIAL_DEPOSIT));
                 entityManager.persist(Holding.allocate(leagueId, player, stockId,
@@ -145,6 +148,7 @@ class LimitOrderConcurrencyTest {
             entityManager.createQuery("delete from StockDailyPrice").executeUpdate();
             entityManager.createQuery("delete from Trade").executeUpdate();
             entityManager.createQuery("delete from Player").executeUpdate();
+            entityManager.createQuery("delete from TradingDay").executeUpdate();
             entityManager.createQuery("delete from League").executeUpdate();
         });
     }
@@ -236,7 +240,7 @@ class LimitOrderConcurrencyTest {
     /** 주문을 접수하고 주문 ID를 돌려준다. */
     private long place(long playerId, OrderSide side, long price, long quantity) {
         return service.placeLimitOrder(new PlaceLimitOrder(leagueId, playerId, stockId, side,
-                price, quantity), BASE_PRICE).orderId();
+                price, quantity)).orderId();
     }
 
     /**

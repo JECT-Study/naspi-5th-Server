@@ -112,9 +112,9 @@
 - 정책: [market.md#시장](../../policies/v1/domain/market.md#시장)
 - 선행: LEA-10
 - 내용: 매일 09:00 KST에 진행 중인 리그마다 `TradingDayChangeUseCase`가 리그 락 안에서 전환을 처리하고, 같은 트랜잭션에서 market(MKT-06)·order(ORD-09) application을 직접 호출한다
-- 결정: 거래일 N+1로 전환할 때 거래일 N을 마감하고 `trading_day.closed_at`에 기록한다. 기동 직후와 매일 09:00에 놓친 전환을 일차 순서대로 보정한다. 전환은 2~7일차 시작 6회이며, 종료 시각의 7일차 종가 확정은 LEA-12가 맡는다. 00:00~09:00에 시작한 리그는 당일 09:00에 전환이 없다. 09:00 직후 처리 전 주문은 MKT-06·ORD-09가 거래일 필터로 처리한다
+- 결정: 거래일 N+1로 전환할 때 거래일 N을 마감하고 `trading_day.closed_at`에 기록한다. 기동 직후와 매일 09:00에 놓친 전환을 일차 순서대로 보정한다. 전환은 2~7일차 시작 6회이며, 종료 시각의 7일차 종가 확정은 LEA-12가 맡는다. 00:00~09:00에 시작한 리그는 당일 09:00에 전환이 없다. 09:00 이후 전환 처리 전에는 주문 접수를 거절한다(`LeagueTradingService#requireTradingDayOpened`, `213`, MKT-06)
 - 완료 조건
-  - [ ] 후속 호출: MKT-06(종가 확정·기준가 적용), ORD-09(미체결 만료) — 각 스토리에서 `TradingDayChangeUseCase`에 연결
+  - [ ] 후속 호출: MKT-06(종가 확정·기준가 적용), ORD-09(미체결 만료) — 각 스토리에서 `TradingDayChangeUseCase`에 연결. MKT-06 연결 완료(ND-99)
   - [x] 서버 재시작·중복 실행 시에도 한 번만 처리 — `./gradlew test --tests "kr.ject.naspi.league.application.TradingDayChange*"`
 
 ### LEA-12 리그는 종료 시각에 자동으로 종료되고, 이후에는 결과 페이지만 열린다

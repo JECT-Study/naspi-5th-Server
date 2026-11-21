@@ -18,9 +18,11 @@ import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
+import kr.ject.naspi.market.domain.StockDailyPrice;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
@@ -52,7 +54,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class OrderQueryServiceTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 15, 10, 0);
-    private static final long BASE_PRICE = 10_000;
     private static final long LISTER_MEMBER = 1L;
     private static final long SELLER_MEMBER = 2L;
     private static final long BUYER_MEMBER = 3L;
@@ -105,6 +106,7 @@ class OrderQueryServiceTest {
                 StockDescription.of("소개"));
         stock.open();
         stockId = entityManager.persistAndGetId(stock, Long.class);
+        entityManager.persist(StockDailyPrice.open(leagueId, stockId, 1, 10_000));
         for (long player : players) {
             entityManager.persist(Account.open(leagueId, player, 1_000_000));
             entityManager.persist(Holding.allocate(leagueId, player, stockId,
@@ -421,12 +423,13 @@ class OrderQueryServiceTest {
                 StockDescription.of("소개"));
         otherListed.open();
         long otherStock = entityManager.persistAndGetId(otherListed, Long.class);
+        entityManager.persist(StockDailyPrice.open(leagueId, otherStock, 1, 10_000));
         entityManager.persist(Holding.allocate(leagueId, sellerPlayer, otherStock, 100));
         entityManager.flush();
         entityManager.clear();
         limit(sellerPlayer, OrderSide.SELL, 11_000, 1);
         PlacedOrder other = limitOrderService.placeLimitOrder(new PlaceLimitOrder(
-                leagueId, sellerPlayer, otherStock, OrderSide.SELL, 11_000, 1), BASE_PRICE);
+                leagueId, sellerPlayer, otherStock, OrderSide.SELL, 11_000, 1));
         entityManager.flush();
         entityManager.clear();
 
@@ -481,7 +484,7 @@ class OrderQueryServiceTest {
 
     private long limit(long playerId, OrderSide side, long price, long quantity) {
         PlacedOrder placed = limitOrderService.placeLimitOrder(new PlaceLimitOrder(
-                leagueId, playerId, stockId, side, price, quantity), BASE_PRICE);
+                leagueId, playerId, stockId, side, price, quantity));
         entityManager.flush();
         entityManager.clear();
         return placed.orderId();
@@ -489,7 +492,7 @@ class OrderQueryServiceTest {
 
     private long market(long playerId, OrderSide side, long quantity) {
         PlacedOrder placed = marketOrderService.placeMarketOrder(new PlaceMarketOrder(
-                leagueId, playerId, stockId, side, quantity), BASE_PRICE);
+                leagueId, playerId, stockId, side, quantity));
         entityManager.flush();
         entityManager.clear();
         return placed.orderId();
@@ -517,6 +520,7 @@ class OrderQueryServiceTest {
                 })
                 .toList();
         created.start(players, startedAt);
+        TradingDay.of(created.getId(), created.tradingSchedule()).forEach(entityManager::persist);
         return entityManager.persistAndFlush(created);
     }
 }

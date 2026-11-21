@@ -1,6 +1,7 @@
 package kr.ject.naspi.league.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -12,6 +13,12 @@ import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
+import kr.ject.naspi.market.application.StockExecutionService;
+import kr.ject.naspi.market.application.StockTradingDayService;
+import kr.ject.naspi.market.domain.Stock;
+import kr.ject.naspi.market.domain.StockDailyPrice;
+import kr.ject.naspi.market.domain.StockDescription;
+import kr.ject.naspi.market.domain.StockName;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +30,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@Import(TradingDayChangeUseCase.class)
+@Import({TradingDayChangeUseCase.class, StockTradingDayService.class,
+        StockExecutionService.class})
 class TradingDayChangeUseCaseTest {
 
     /** 시작 후 1일차: 2026-11-15 10:00 시작, 2일차는 11-16 09:00. */
@@ -32,6 +40,9 @@ class TradingDayChangeUseCaseTest {
 
     @Autowired
     private TradingDayChangeUseCase useCase;
+
+    @Autowired
+    private StockExecutionService executionService;
 
     @Autowired
     private TradingDayRepository tradingDayRepository;
@@ -95,6 +106,69 @@ class TradingDayChangeUseCaseTest {
         assertThat(useCase.change(waiting.getId(), DAY2.plusDays(3))).isZero();
         assertThat(useCase.change(expired.getId(), DAY2.plusDays(3))).isZero();
         assertThat(useCase.change(999_999L, DAY2)).isZero();
+    }
+
+    @Test
+    @DisplayName("09:00 거래일 전환에서 종목 종가가 확정되고 새 기준가가 적용된다")
+    void closesStockPricesOnChange() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        executionService.applyExecution(league.getId(), stockId, 1, 11_000, 3);
+
+        useCase.change(league.getId(), DAY2);
+
+        assertThat(dayPrice(stockId, 1).getClosePrice()).isEqualTo(11_000);
+        assertThat(dayPrice(stockId, 2).getBasePrice()).isEqualTo(11_000);
+        assertThat(dayPrice(stockId, 2).getUpperLimitPrice()).isEqualTo(14_300);
+    }
+
+    @Test
+    @DisplayName("놓친 전환을 보정하면 체결 없던 거래일의 종가는 직전 종가와 같다")
+    void catchUpChainsClosePrices() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        executionService.applyExecution(league.getId(), stockId, 1, 11_000, 3);
+
+        useCase.change(league.getId(), DAY2.plusDays(2).plusSeconds(1));
+
+        assertThat(dayPrice(stockId, 1).getClosePrice()).isEqualTo(11_000);
+        assertThat(dayPrice(stockId, 2).getClosePrice()).isEqualTo(11_000);
+        assertThat(dayPrice(stockId, 3).getClosePrice()).isEqualTo(11_000);
+        assertThat(dayPrice(stockId, 4).getBasePrice()).isEqualTo(11_000);
+    }
+
+    @Test
+    @DisplayName("종목 시세 전환이 실패하면 거래일 마감도 롤백된다")
+    void rollbackOnMarketFailure() {
+        League league = startedLeague();
+        Stock stock = Stock.list(league.getId(), 10L, StockName.of("가나다"),
+                StockDescription.of("소개"));
+        stock.open();
+        entityManager.persistAndFlush(stock);
+
+        assertThatThrownBy(() -> useCase.change(league.getId(), DAY2))
+                .isInstanceOf(IllegalStateException.class);
+
+        // 서비스 트랜잭션이 테스트 트랜잭션에 참여하므로 메모리 상태로 롤백 대상(마감 기록 전)을 확인한다
+        assertThat(closedDayNumbers(league)).isEmpty();
+    }
+
+    private long stockWithFirstDay(League league) {
+        Stock stock = Stock.list(league.getId(), 10L, StockName.of("가나다"),
+                StockDescription.of("소개"));
+        stock.open();
+        long stockId = entityManager.persistAndGetId(stock, Long.class);
+        entityManager.persist(StockDailyPrice.open(league.getId(), stockId, 1, 10_000));
+        entityManager.flush();
+        return stockId;
+    }
+
+    private StockDailyPrice dayPrice(long stockId, int tradingDay) {
+        entityManager.flush();
+        return entityManager.getEntityManager().createQuery(
+                        "select d from StockDailyPrice d where d.stockId = :s "
+                                + "and d.tradingDay = :t", StockDailyPrice.class)
+                .setParameter("s", stockId).setParameter("t", tradingDay).getSingleResult();
     }
 
     private List<Integer> closedDayNumbers(League league) {

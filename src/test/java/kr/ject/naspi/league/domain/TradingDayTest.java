@@ -15,6 +15,18 @@ class TradingDayTest {
     private static final LocalDateTime DAY2 = LocalDateTime.of(2026, 11, 16, 9, 0);
 
     @Test
+    @DisplayName("직전 거래일이 끝났는데 마감되지 않았으면 전환 대기 상태다")
+    void awaitsChangeAt() {
+        List<TradingDay> days = days(STARTED_AT);
+
+        assertThat(days.get(0).awaitsChangeAt(DAY2.minusNanos(1))).isFalse();
+        assertThat(days.get(0).awaitsChangeAt(DAY2)).isTrue();
+        assertThat(days.get(6).awaitsChangeAt(DAY2.plusDays(10))).isFalse();
+        days.get(0).close(DAY2);
+        assertThat(days.get(0).awaitsChangeAt(DAY2.plusSeconds(1))).isFalse();
+    }
+
+    @Test
     @DisplayName("매일 09:00 KST에 직전 거래일이 마감 대상이 된다 (08:59:59는 아직 아니다)")
     void closableAtNine() {
         List<TradingDay> days = days(STARTED_AT);

@@ -116,6 +116,17 @@ public class TradingDay {
         this.closedAt = now;
     }
 
+    /**
+     * 이 거래일의 다음 거래일 전환을 기다리는 상태인지. 이 거래일이 끝났는데(종료 시각 이후) 아직 마감하지
+     * 않았고 마지막 거래일이 아니면, 09:00 전환 처리 전이다.
+     *
+     * @param now 현재 일시
+     * @return 전환 대기 중이면 {@code true}
+     */
+    public boolean awaitsChangeAt(LocalDateTime now) {
+        return !isLast() && !isClosed() && endedAt(now);
+    }
+
     public boolean isClosed() {
         return closedAt != null;
     }

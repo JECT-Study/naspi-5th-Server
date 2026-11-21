@@ -5,6 +5,7 @@ import java.util.List;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.market.domain.Stock;
+import kr.ject.naspi.market.domain.StockDailyPriceRepository;
 import kr.ject.naspi.market.domain.StockRepository;
 import kr.ject.naspi.market.domain.StockSnapshot;
 import kr.ject.naspi.market.domain.StockSnapshotCache;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StockQueryService {
 
     private final StockRepository stockRepository;
+    private final StockDailyPriceRepository dailyPriceRepository;
     private final StockSnapshotCache cache;
 
     /**
@@ -60,6 +62,26 @@ public class StockQueryService {
                 .filter(stock -> stock.getLeagueId() == leagueId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.STOCK_NOT_FOUND))
                 .isListedBy(playerId);
+    }
+
+    /**
+     * 종목의 거래일 기준가와 상·하한가를 조회한다. 거래 로직에서 쓰므로 캐시가 아니라 DB에서 읽는다. 주문 접수는
+     * 거래일 전환 완료를 확인한 뒤 호출하므로 시세 행이 항상 있다.
+     *
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param tradingDay 거래일 번호
+     * @return 거래일 기준가와 상·하한가
+     * @throws IllegalStateException 그 거래일의 시세 행이 없는 경우
+     */
+    @Transactional(readOnly = true)
+    public DailyPriceLimit getDailyPriceLimit(long leagueId, long stockId, int tradingDay) {
+        return dailyPriceRepository.findByStockIdAndTradingDay(stockId, tradingDay)
+                .filter(price -> price.getLeagueId() == leagueId)
+                .map(price -> new DailyPriceLimit(price.getBasePrice(),
+                        price.getLowerLimitPrice(), price.getUpperLimitPrice()))
+                .orElseThrow(() -> new IllegalStateException(
+                        "거래일 시세가 없습니다: stockId=" + stockId + ", tradingDay=" + tradingDay));
     }
 
     private static LeagueStock toLeagueStock(StockSnapshot stock) {

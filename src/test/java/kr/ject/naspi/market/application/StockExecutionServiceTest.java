@@ -35,7 +35,7 @@ class StockExecutionServiceTest {
 
     @Test
     @DisplayName("체결이 발생하면 종목의 현재가와 그 거래일 거래량이 갱신된다")
-    void updatesPriceAndCreatesDailyVolume() {
+    void updatesPriceAndDailyVolume() {
         long stockId = openedStock();
 
         service.applyExecution(LEAGUE_ID, stockId, 1, 10_500, 3);
@@ -71,6 +71,7 @@ class StockExecutionServiceTest {
     void separatesTradingDays() {
         long stockId = openedStock();
 
+        entityManager.persist(StockDailyPrice.open(LEAGUE_ID, stockId, 2, 10_500));
         service.applyExecution(LEAGUE_ID, stockId, 1, 10_500, 5);
         service.applyExecution(LEAGUE_ID, stockId, 2, 10_600, 2);
         entityManager.flush();
@@ -103,6 +104,15 @@ class StockExecutionServiceTest {
     }
 
     @Test
+    @DisplayName("시세 행이 없는 거래일에는 체결을 반영할 수 없다")
+    void rejectsMissingRow() {
+        long stockId = openedStock();
+
+        assertThatThrownBy(() -> service.applyExecution(LEAGUE_ID, stockId, 2, 10_500, 3))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @DisplayName("체결 트랜잭션 밖에서는 체결을 반영할 수 없다")
     void requiresTransaction() {
@@ -113,7 +123,10 @@ class StockExecutionServiceTest {
     private long openedStock() {
         Stock stock = newStock();
         stock.open();
-        return entityManager.persistAndGetId(stock, Long.class);
+        long stockId = entityManager.persistAndGetId(stock, Long.class);
+        entityManager.persist(StockDailyPrice.open(LEAGUE_ID, stockId, 1, 10_000));
+        entityManager.flush();
+        return stockId;
     }
 
     private Stock newStock() {

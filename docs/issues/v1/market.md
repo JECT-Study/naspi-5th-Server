@@ -34,7 +34,7 @@
   - [x] 상·하한가 범위 밖 주문은 접수 거절 (접수는 ORD-02)
   - [x] 경계값 단위 테스트
   - [x] 결과는 100원 단위 정수, 같은 기준가는 항상 같은 결과, 경계 가격은 범위 안 (`PriceLimit.of(기준가)`, `contains`, `clamp`)
-- 비고: 계산만 구현했다 (`market/domain/PriceLimit`). 입력인 거래일별 기준가는 MKT-06에서 제공하며 아직 저장·조회가 없다. ORD-02(범위 밖 거절)와 ORD-05(보호 가격 보정)가 이 결과를 사용한다. 09:00:00 이후 접수 주문부터 새 거래일 범위를 적용하는 것은 거래일 계산(league)이 있어야 가능하다
+- 비고: 계산만 구현했다 (`market/domain/PriceLimit`). 거래일별 기준가·상·하한가는 MKT-06에서 `stock_daily_price`에 저장하고 `StockQueryService#getDailyPriceLimit`로 조회한다. ORD-02(범위 밖 거절)와 ORD-05(보호 가격 보정)가 이 결과를 사용한다.
 
 ### MKT-04 리그가 시작되면 모든 종목이 시초가 10,000원으로 거래를 시작한다
 - Jira: ND-92
@@ -42,7 +42,7 @@
 - 선행: LEA-09, MKT-03
 - 완료 조건
   - [x] 리그 시작 시 모든 종목 시초가 10,000원, 최초 기준가 = 시초가
-- 결정: 리그 시작 UseCase(LEA-09)가 초기 자산 배분과 같은 트랜잭션에서 `StockOpeningService#open`을 호출해 `stock.current_price`를 시초가로 정한다. 최초 거래일 기준가는 시초가와 같으므로 따로 저장하지 않고, 거래일별 기준가 저장은 MKT-06에서 한다
+- 결정: 리그 시작 UseCase(LEA-09)가 초기 자산 배분과 같은 트랜잭션에서 `StockOpeningService#open`을 호출해 `stock.current_price`를 시초가로 정한다. `StockOpeningService#open`이 1일차 `stock_daily_price` 행(기준가 = 시초가)을 함께 만든다 (MKT-06)
 
 ### MKT-05 체결이 발생하면 종목의 현재가와 거래량이 갱신된다
 - Jira: ND-98
@@ -55,7 +55,7 @@
   - [X] VWAP 계산용 체결 기록 저장 (ND-74, [ORD-03](order.md#ord-03-접수된-주문은-가격시간-우선-원칙에-따라-상대-주문과-체결된다)에서 구현. 종목별·거래일별 합계와 종료 시각 역순 500주 조회 포함)
 - 결정: 이벤트(`TradeExecuted`)를 구독하지 않고 order가 상위 모듈인 market을 직접 호출한다 (정책서 README). 호출은 `MANDATORY` 전파라 리그 락을 잡은 체결 트랜잭션 밖에서는 실패한다
   - 거래량은 market `stock_daily_price.volume`에 체결마다 누적한다 (체결 기록과 같은 트랜잭션·같은 거래일 번호로 쓰므로 `volume`은 같은 거래일 `trade` 수량 합계와 같다). 체결 기록 합계 조회(ORD-03)는 VWAP용으로 남는다
-  - 거래일은 거래일 번호(`trading_day` int, `trade`·`orders`와 같은 방식)로 두고, `(stock_id, trading_day)` 행은 그 거래일의 첫 체결 때 만든다. 체결 없는 거래일은 행이 없으며 거래량 0으로 본다
+  - 거래일은 거래일 번호(`trading_day` int, `trade`·`orders`와 같은 방식)로 두고, `(stock_id, trading_day)` 행은 리그 시작(1일차)과 거래일 전환(다음 거래일)에서 만들고, 체결은 있는 행에 합산한다 (MKT-06에서 변경)
   - 거래가 열리지 않은 종목(`current_price`가 null)에 체결이 반영되려 하면 `IllegalStateException`으로 체결 전체를 롤백한다 (리그 시작 전 거래는 이미 막혀 있어 정상 흐름에서는 발생하지 않는 불변식 위반)
 
 ### MKT-06 거래일이 바뀌면 종목의 종가가 확정되고 새 기준가와 가격 범위가 적용된다
@@ -63,9 +63,10 @@
 - 정책: [market.md#시장](../../policies/v1/domain/market.md#시장), [#가격제한폭](../../policies/v1/domain/market.md#가격제한폭)
 - 선행: LEA-11, MKT-05
 - 완료 조건
-  - [ ] 종가 = 마지막 체결가, 거래량 0이면 기준가
-  - [ ] 새 기준가 = 직전 종가, 새 상·하한가 적용, 거래량 초기화
-  - [ ] 거래일 전환과 체결의 순서 보장 (09:00 이전 체결은 이전 거래일)
+  - [x] 종가 = 마지막 체결가, 거래량 0이면 기준가
+  - [x] 새 기준가 = 직전 종가, 새 상·하한가 적용, 거래량 초기화
+  - [x] 거래일 전환과 체결의 순서 보장 (09:00 이전 체결은 이전 거래일)
+- 결정: 종가는 전환 시점 `stock.current_price`이고 거래량이 0이면 기준가다. 행은 리그 시작·전환 시 만든다(`StockTradingDayService#changeTradingDay`, 거래일 번호는 league가 넘긴다). 09:00 이후 전환 처리 전 주문 접수는 `213`으로 거절한다(`LeagueTradingService#requireTradingDayOpened`), 취소는 허용한다. 기준가 100~300원이면 가격제한폭 금액이 0이라 상·하한가 = 기준가가 되며 정책 계산식 그대로 구현했다. ND-99와 ND-42(ORD-09)는 같은 배포로 묶는다
 - 비고 (MKT-05에서 전달): 체결 시 거래일별 마지막 체결가는 따로 기록하지 않는다. 리그 락 아래에서 전환하면 종가 = 전환 시점의 `stock.current_price`다 (거래량 0인 거래일도 `current_price`가 직전 종가 = 기준가와 같다). 거래량은 `stock_daily_price` 행이 거래일마다 새로 생기므로 0부터 시작한다. 같은 행에 기준가·상·하한가·종가 컬럼을 추가한다
 
 ### MKT-07 리그가 종료되면 종목별 종료 평가 가격이 VWAP로 산정된다

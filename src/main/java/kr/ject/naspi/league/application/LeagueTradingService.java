@@ -6,6 +6,7 @@ import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
+import kr.ject.naspi.league.domain.TradingDayRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -18,12 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
  * 떠 있어도 DB 락이므로 동작한다. 락은 호출한 트랜잭션이 끝날 때 풀리고, 호출한 쪽은 락을 잡은 뒤에
  * 호가창을 조회하고 주문을 저장해야 주문 {@code id} 순서가 처리 순서와 같아진다. 락 순서는 리그 락,
  * asset 락(예약·정산) 순이다 (docs/issues/v1/order.md ORD-03).
+ * 주문 접수는 락 → 거래일 확인({@link #requireTradingDayOpened}) 순으로 호출한다.
  */
 @Service
 @RequiredArgsConstructor
 public class LeagueTradingService {
 
     private final LeagueRepository leagueRepository;
+    private final TradingDayRepository tradingDayRepository;
     private final Clock clock;
 
     /**
@@ -45,5 +48,34 @@ public class LeagueTradingService {
         LocalDateTime now = LocalDateTime.now(clock);
         league.requireTradable(now);
         return now;
+    }
+
+    /**
+     * 판정 시각의 거래일 번호를 정하고, 그 거래일로 전환이 끝났는지 확인한다. 09:00:00 이후 전환 처리 전에는
+     * 새 거래일 시세(기준가·상·하한가)가 없고 직전 거래일 종가도 확정되지 않았으므로 주문 접수를 거절한다.
+     * {@link #lockForTrading} 뒤 같은 트랜잭션에서 호출해야 전환 커밋을 볼 수 있다.
+     *
+     * @param leagueId 리그 ID
+     * @param at {@link #lockForTrading}이 돌려준 판정 시각
+     * @return 1~7 사이의 거래일 번호
+     * @throws NaspiBizException 거래일 전환 처리 전인 경우({@link ErrorCode#TRADING_DAY_CHANGE_PENDING})
+     * @throws IllegalStateException 직전 거래일 행이 없는 경우 (리그 시작이 7일치를 저장하므로 불변식 위반)
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int requireTradingDayOpened(long leagueId, LocalDateTime at) {
+        League league = leagueRepository.findById(leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        int dayNumber = league.tradingSchedule().dayNumberAt(at);
+        if (dayNumber == 1) {
+            return dayNumber;
+        }
+        boolean pending = tradingDayRepository.findByLeagueIdAndDayNumber(leagueId, dayNumber - 1)
+                .orElseThrow(() -> new IllegalStateException("거래일이 없습니다: leagueId="
+                        + leagueId + ", dayNumber=" + (dayNumber - 1)))
+                .awaitsChangeAt(at);
+        if (pending) {
+            throw new NaspiBizException(ErrorCode.TRADING_DAY_CHANGE_PENDING);
+        }
+        return dayNumber;
     }
 }

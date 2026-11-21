@@ -20,6 +20,7 @@ import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
+import kr.ject.naspi.market.application.StockTradingDayService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** 여러 서버가 같은 전환을 동시에 실행해도 리그 락으로 직렬화되어 한 번만 처리되는지 검증한다 (LEA-11). */
 @ActiveProfiles("test")
 @DataJpaTest
-@Import(TradingDayChangeUseCase.class)
+@Import({TradingDayChangeUseCase.class, StockTradingDayService.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class TradingDayChangeConcurrencyTest {
 
