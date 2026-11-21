@@ -71,9 +71,11 @@ public record OrderDetailResponse(
                     - `MARKET_NOT_FILLED`: 체결 가능 수량 없음
                     - `SELF_TRADE_PREVENTED`: 내 주문 간 체결 방지
                     - `TRADING_DAY_EXPIRED`: 거래일 변경으로 만료
-                    (`LEAGUE_ENDED`, `MEMBER_WITHDRAWN`은 ORD-10/11에서 추가)""",
+                    - `MEMBER_WITHDRAWN`: 회원 탈퇴
+                    (`LEAGUE_ENDED`는 ORD-10에서 추가)""",
                     allowableValues = {"USER_REQUESTED", "MARKET_PARTIALLY_FILLED",
-                            "MARKET_NOT_FILLED", "SELF_TRADE_PREVENTED", "TRADING_DAY_EXPIRED"})
+                            "MARKET_NOT_FILLED", "SELF_TRADE_PREVENTED", "TRADING_DAY_EXPIRED",
+                            "MEMBER_WITHDRAWN"})
             String reason) {
     }
 

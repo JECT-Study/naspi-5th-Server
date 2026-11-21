@@ -13,7 +13,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 리그 단위 거래 직렬화. order가 주문을 접수·취소·만료할 때 가장 먼저 호출한다.
+ * 리그 단위 거래 직렬화. order가 주문을 접수·취소·만료할 때 가장 먼저 호출한다. 회원 탈퇴 주문 취소는
+ * 거래 가능 판정 없이 잠그는 {@link #lockForClosing}을 호출한다.
  *
  * <p>리그 행에 비관적 쓰기 락을 걸어 같은 리그의 주문 처리를 한 번에 하나씩 진행한다. 여러 서버가
  * 떠 있어도 DB 락이므로 동작한다. 락은 호출한 트랜잭션이 끝날 때 풀리고, 호출한 쪽은 락을 잡은 뒤에
@@ -48,6 +49,23 @@ public class LeagueTradingService {
         LocalDateTime now = LocalDateTime.now(clock);
         league.requireTradable(now);
         return now;
+    }
+
+    /**
+     * 거래 가능 판정 없이 리그에 락만 건다. 접수·취소·체결·만료와 같은 리그 락으로 직렬화한다. 종료 시각이
+     * 지났지만 상태가 아직 시작인 리그도 잠글 수 있어야 하는 일괄 취소(회원 탈퇴 ORD-11, 리그 종료 ORD-10)에서 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @return 락을 잡은 뒤의 시각. 호출한 쪽이 취소 시각으로 쓴다
+     * @throws NaspiBizException 리그가 없는 경우({@link ErrorCode#LEAGUE_NOT_FOUND})
+     * @throws org.springframework.transaction.IllegalTransactionStateException 진행 중인 트랜잭션이
+     *     없는 경우 (락이 바로 풀려 직렬화가 되지 않는다)
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LocalDateTime lockForClosing(long leagueId) {
+        leagueRepository.findWithLockById(leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        return LocalDateTime.now(clock);
     }
 
     /**

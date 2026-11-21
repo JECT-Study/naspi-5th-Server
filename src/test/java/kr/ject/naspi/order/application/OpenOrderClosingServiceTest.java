@@ -5,13 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.LongStream;
 import kr.ject.naspi.asset.application.AssetReservationService;
+import kr.ject.naspi.asset.application.AssetWithdrawalService;
 import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.config.ClockConfig;
+import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
+import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
@@ -44,9 +49,9 @@ class OpenOrderClosingServiceTest {
 
     private static final LocalDateTime ORDERED_AT = LocalDateTime.of(2026, 11, 15, 10, 0);
     private static final LocalDateTime EXPIRED_AT = LocalDateTime.of(2026, 11, 16, 9, 0);
-    private static final long LISTER = 1L;
-    private static final long SELLER = 20L;
-    private static final long BUYER = 30L;
+    private static final long LISTER = 9_001L;
+    private static final long SELLER = 9_020L;
+    private static final long BUYER = 9_030L;
 
     @TestConfiguration
     static class FixedClockConfig {
@@ -65,6 +70,9 @@ class OpenOrderClosingServiceTest {
 
     @Autowired
     private AssetReservationService reservationService;
+
+    @Autowired
+    private AssetWithdrawalService withdrawalService;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -194,6 +202,212 @@ class OpenOrderClosingServiceTest {
 
         assertThatThrownBy(() -> noTransaction.executeWithoutResult(
                 status -> service.expireTradingDay(leagueId, 1, EXPIRED_AT)))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    // ---- 회원 탈퇴 주문 취소 (ORD-11) ----
+
+    /** 시작된 리그의 탈퇴 회원 플레이어·다른 플레이어·종목. 플레이어마다 현금 100만원, 탈퇴자 보유 100주. */
+    private record Started(long leagueId, long stockId, long withdrawer, long other, long lister) {
+    }
+
+    private static final long MEMBER = 500L;
+
+    private Started startedLeague(String code, LocalDateTime startedAt) {
+        League league = entityManager.persistAndFlush(League.create(
+                LeagueName.of("리그" + code), InviteCode.of(code), startedAt.minusDays(1)));
+        long id = league.getId();
+        List<Player> players = LongStream.rangeClosed(0, League.MIN_PARTICIPANTS_TO_START - 1)
+                .mapToObj(i -> {
+                    Player player = Player.enter(id, i == 0 ? MEMBER : 600L + i,
+                            startedAt.minusDays(1));
+                    player.completeListing(startedAt.minusDays(1));
+                    return entityManager.persist(player);
+                })
+                .toList();
+        entityManager.flush();
+        league.start(players, startedAt);
+        entityManager.flush();
+        long withdrawer = players.get(0).getId();
+        long other = players.get(1).getId();
+        long lister = players.get(2).getId();
+        Stock stock = Stock.list(id, lister, StockName.of("종목"), StockDescription.of("소개"));
+        stock.open();
+        long stockId = entityManager.persistAndGetId(stock, Long.class);
+        for (long player : new long[] {withdrawer, other, lister}) {
+            entityManager.persist(Account.open(id, player, 1_000_000));
+            entityManager.persist(Holding.allocate(id, player, stockId,
+                    player == lister ? 3_000 : 100));
+        }
+        entityManager.flush();
+        return new Started(id, stockId, withdrawer, other, lister);
+    }
+
+    private Order startedBuy(Started started, long playerId, long quantity) {
+        Order order = Order.limit(started.leagueId(), playerId, started.stockId(), OrderSide.BUY,
+                9_000, quantity, 1, ORDERED_AT);
+        reservationService.reserveCashForBuy(started.leagueId(), playerId, 9_000, quantity);
+        order.recordReservedPrice(9_000);
+        return entityManager.persistAndFlush(order);
+    }
+
+    private Order startedSell(Started started, long playerId, long quantity) {
+        Order order = Order.limit(started.leagueId(), playerId, started.stockId(), OrderSide.SELL,
+                9_000, quantity, 1, ORDERED_AT);
+        reservationService.reserveStockForSell(started.leagueId(), playerId, started.stockId(),
+                quantity);
+        return entityManager.persistAndFlush(order);
+    }
+
+    private Order partiallyFilledBuy(Started started, long playerId, long quantity, long filled) {
+        Order order = startedBuy(started, playerId, quantity);
+        order.fill(filled);
+        reservationService.releaseCashForBuy(started.leagueId(), playerId, 9_000, filled);
+        return order;
+    }
+
+    private Account startedAccount(Started started, long playerId) {
+        return entityManager.getEntityManager().createQuery(
+                        "select a from Account a where a.leagueId = :l and a.playerId = :p",
+                        Account.class)
+                .setParameter("l", started.leagueId()).setParameter("p", playerId)
+                .getSingleResult();
+    }
+
+    private Holding startedHolding(Started started, long playerId) {
+        return entityManager.getEntityManager().createQuery(
+                        "select h from Holding h where h.leagueId = :l and h.playerId = :p",
+                        Holding.class)
+                .setParameter("l", started.leagueId()).setParameter("p", playerId)
+                .getSingleResult();
+    }
+
+    @Test
+    @DisplayName("회원이 탈퇴하면 참여 중인 모든 리그의 미체결 주문(대기·부분 체결)이 취소되고 사유는 회원 탈퇴로 기록된다")
+    void cancelsAllOpenOrdersOfMember() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        Started b = startedLeague("CCCCCCC", ORDERED_AT);
+        List<Order> orders = List.of(
+                startedBuy(a, a.withdrawer(), 10), partiallyFilledBuy(a, a.withdrawer(), 10, 3),
+                startedBuy(b, b.withdrawer(), 10), partiallyFilledBuy(b, b.withdrawer(), 10, 3));
+
+        int count = service.cancelAllOfMember(MEMBER);
+
+        assertThat(count).isEqualTo(4);
+        for (Order order : orders) {
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+            assertThat(order.getCancelReason()).isEqualTo(CancelReason.MEMBER_WITHDRAWN);
+            assertThat(order.getCanceledAt()).isEqualTo(ORDERED_AT);
+        }
+    }
+
+    @Test
+    @DisplayName("탈퇴 취소로 미체결 잔여 수량에 예약된 현금과 주식이 해제되어 예약이 0이 된다")
+    void withdrawalReleasesReservation() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        startedBuy(a, a.withdrawer(), 10);
+        startedSell(a, a.withdrawer(), 10);
+        assertThat(startedAccount(a, a.withdrawer()).getReservedDeposit()).isEqualTo(90_000);
+        assertThat(startedHolding(a, a.withdrawer()).getReservedQuantity()).isEqualTo(10);
+
+        service.cancelAllOfMember(MEMBER);
+
+        assertThat(startedAccount(a, a.withdrawer()).getReservedDeposit()).isZero();
+        assertThat(startedHolding(a, a.withdrawer()).getReservedQuantity()).isZero();
+        assertThat(startedHolding(a, a.withdrawer()).getQuantity()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("탈퇴 주문 취소 뒤에는 예약이 남지 않아 현금 폐기가 거절되지 않는다")
+    void cashDiscardSucceedsAfterWithdrawalCancel() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        startedBuy(a, a.withdrawer(), 10);
+        startedSell(a, a.withdrawer(), 10);
+        // 대조: 취소 없이 폐기하면 예약이 남아 거절된다 (그래서 순서는 취소 → 폐기)
+        assertThatThrownBy(() -> withdrawalService.discardCashOfMember(MEMBER))
+                .isInstanceOf(NaspiRuntimeException.class);
+
+        service.cancelAllOfMember(MEMBER);
+        withdrawalService.discardCashOfMember(MEMBER);
+
+        assertThat(startedAccount(a, a.withdrawer()).getDeposit()).isZero();
+        assertThat(startedAccount(a, a.withdrawer()).getReservedDeposit()).isZero();
+        assertThat(startedHolding(a, a.withdrawer()).getQuantity()).isEqualTo(100);
+        assertThat(startedHolding(a, a.withdrawer()).getReservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("부분 체결된 주문을 탈퇴로 취소하면 체결된 부분은 유지되고 잔여 수량만 취소 수량이 된다")
+    void withdrawalKeepsFilledPart() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        Order order = partiallyFilledBuy(a, a.withdrawer(), 10, 3);
+
+        service.cancelAllOfMember(MEMBER);
+
+        assertThat(order.filledQuantity()).isEqualTo(3);
+        assertThat(order.canceledQuantity()).isEqualTo(7);
+        assertThat(startedAccount(a, a.withdrawer()).getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("탈퇴 회원의 종료된 주문과 다른 회원의 주문은 취소하지 않는다")
+    void withdrawalSkipsOthers() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT);
+        Order filled = startedBuy(a, a.withdrawer(), 10);
+        filled.fill(10);
+        reservationService.releaseCashForBuy(a.leagueId(), a.withdrawer(), 9_000, 10);
+        Order userCanceled = startedBuy(a, a.withdrawer(), 10);
+        userCanceled.cancel(CancelReason.USER_REQUESTED, ORDERED_AT);
+        reservationService.releaseCashForBuy(a.leagueId(), a.withdrawer(), 9_000, 10);
+        Order expired = startedBuy(a, a.withdrawer(), 10);
+        expired.expire(EXPIRED_AT);
+        reservationService.releaseCashForBuy(a.leagueId(), a.withdrawer(), 9_000, 10);
+        Order others = startedBuy(a, a.other(), 10);
+
+        int count = service.cancelAllOfMember(MEMBER);
+
+        assertThat(count).isZero();
+        assertThat(filled.getStatus()).isEqualTo(OrderStatus.FILLED);
+        assertThat(userCanceled.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(expired.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        assertThat(others.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(startedAccount(a, a.other()).getReservedDeposit()).isEqualTo(90_000);
+    }
+
+    @Test
+    @DisplayName("종료 시각이 지난 리그의 미체결 주문도 거래 가능 확인 없이 탈퇴로 취소된다")
+    void withdrawalCancelsInLeaguePastEndsAt() {
+        Started a = startedLeague("BBBBBBB", ORDERED_AT.minusDays(10));
+        Order order = startedBuy(a, a.withdrawer(), 10);
+
+        int count = service.cancelAllOfMember(MEMBER);
+
+        assertThat(count).isEqualTo(1);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.MEMBER_WITHDRAWN);
+        assertThat(startedAccount(a, a.withdrawer()).getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("진행 중인 리그나 미체결 주문이 없으면 아무것도 취소하지 않는다")
+    void withdrawalWithoutOrders() {
+        // 대기실만 있는 회원
+        entityManager.persistAndFlush(Player.enter(leagueId, 700L, ORDERED_AT));
+        assertThat(service.cancelAllOfMember(700L)).isZero();
+
+        // 진행 중 리그에 참여했지만 미체결 주문이 없는 회원
+        startedLeague("BBBBBBB", ORDERED_AT);
+        assertThat(service.cancelAllOfMember(MEMBER)).isZero();
+    }
+
+    @Test
+    @DisplayName("탈퇴 주문 취소는 탈퇴 트랜잭션 안에서만 실행된다")
+    void withdrawalCancelRequiresTransaction() {
+        TransactionTemplate noTransaction = new TransactionTemplate(transactionManager);
+        noTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
+
+        assertThatThrownBy(() -> noTransaction.executeWithoutResult(
+                status -> service.cancelAllOfMember(MEMBER)))
                 .isInstanceOf(IllegalTransactionStateException.class);
     }
 

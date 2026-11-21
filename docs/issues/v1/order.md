@@ -125,7 +125,7 @@
 - 진행: `OpenOrderClosingService#expireTradingDay`(마감 거래일 이하 지정가 대기·부분 체결 주문을 `TRADING_DAY_EXPIRED`로 만료, 만료 일시는 새 거래일 시작 시각 09:00:00)와 공통 종료 로직 `OrderExecutionSupport#closeRemaining`(사유만 다른 취소·만료 + 잔여 예약 해제)을 구현했고 `TradingDayChangeUseCase`가 market 호출 다음에 호출한다. 호출자가 리그 락을 잡은 트랜잭션에서 호출해야 하며(`Propagation.MANDATORY`는 트랜잭션 존재만 확인), 만료 대상 조회에 리그 기준 인덱스는 두지 않았다(운영 지표를 보고 추가).
 - 위험: 만료 중 예약 해제 오류 등으로 전환이 롤백되면 그 리그는 다음 날 09:00 또는 서버 재기동 때까지 재시도되지 않고, 그동안 방식 A 때문에 신규 주문이 `213`으로 거절된다(LEA-11 market 실패와 같은 성질). 현행 유지하며 로그 경보 후 수동 조치한다. 재시도 주기 단축은 별도 Task 후보.
 - 비고 (asset 구현 시 전달받은 주의사항): 해제 중 데이터 오류가 나면 트랜잭션 전체가 롤백되므로, 만료 일괄 처리는 리그 단위 한 트랜잭션으로 처리한다 (리그 락 안에서 끝내 순서를 보장하고, 오류 시 그 리그의 전환이 함께 롤백되어 다음 실행에서 보정된다).
-- 확인 결과 (ORD-10, ORD-11 포함): 접수·체결, 사용자 취소, 거래일 만료는 모두 같은 리그 락 안에서 실행되어 직렬화된다. `TradingDayExpirationConcurrencyTest`(취소와 전환을 10라운드 동시 실행)가 예약 이중 해제·음수 예약 없이 통과하고, `OrderJpaRepository.findWithLockById`의 `@Lock`을 임시로 뺀 대조 실험(5회 반복)에서도 통과했다. 즉 `LimitOrderService.cancelOrder`의 주문 행 락은 리그 락과 겹치는 방어적 중복이다. 행 락은 유지하고, ORD-10·ORD-11(ND-43·ND-44)이 리그 락을 잡지 않는 경로를 만들 경우의 락 정책(리그 락을 잡을지, 일괄 조회를 `FOR UPDATE`로 잠글지)과 함께 그때 유지·제거를 결정한다. 일괄 종료 공통 로직은 `OpenOrderClosingService#closeAll`·`OrderExecutionSupport#closeRemaining`를 재사용한다. `OpenOrderClosingService`는 리그 락을 직접 잡지 않으므로(`MANDATORY`는 리그 락 보유를 확인하지 못한다) ND-43·ND-44가 호출 경로의 락을 정해야 한다.
+- 확인 결과 (ORD-10, ORD-11 포함): 접수·체결, 사용자 취소, 거래일 만료는 모두 같은 리그 락 안에서 실행되어 직렬화된다. `TradingDayExpirationConcurrencyTest`(취소와 전환을 10라운드 동시 실행)가 예약 이중 해제·음수 예약 없이 통과하고, `OrderJpaRepository.findWithLockById`의 `@Lock`을 임시로 뺀 대조 실험(5회 반복)에서도 통과했다. 즉 `LimitOrderService.cancelOrder`의 주문 행 락은 리그 락과 겹치는 방어적 중복이다. 행 락은 유지하고, ORD-10·ORD-11(ND-43·ND-44)이 리그 락을 잡지 않는 경로를 만들 경우의 락 정책(리그 락을 잡을지, 일괄 조회를 `FOR UPDATE`로 잠글지)과 함께 그때 유지·제거를 결정한다. 일괄 종료 공통 로직은 `OpenOrderClosingService#closeAll`·`OrderExecutionSupport#closeRemaining`를 재사용한다. `OpenOrderClosingService`는 리그 락을 직접 잡지 않으므로(`MANDATORY`는 리그 락 보유를 확인하지 못한다) ND-43·ND-44가 호출 경로의 락을 정해야 한다. ND-44 결론: 탈퇴 취소는 `cancelAllOfMember`가 리그별 `lockForClosing`으로 리그 락을 직접 잡고 주문 행 락은 쓰지 않는다 ([ORD-11](#ord-11-회원이-탈퇴하면-참여-중인-모든-리그의-미체결-주문이-취소된다) 결정 참고).
 
 ### ORD-10 리그가 종료되면 주문 접수가 막히고 모든 미체결 주문이 취소된다
 - Jira: ND-43
@@ -142,10 +142,12 @@
 - 선행: MBR-06, ORD-07
 - 내용: `MemberWithdrawalUseCase`가 회원 삭제 전 같은 트랜잭션에서 order의 탈퇴 회원 주문 취소를 호출하고, 이어서 asset 현금 폐기(`AssetWithdrawalService.discardCashOfMember`, AST-07)를 호출한다. 주문 취소는 사용자 취소(ORD-07, `LimitOrderService#cancelOrder`)처럼 미체결 잔량의 예약 해제를 포함하므로 따로 해제하지 않는다
 - 완료 조건
-  - [ ] 탈퇴 회원이 참여 중인 모든 리그의 미체결 주문(대기·부분 체결)이 취소되고, 미체결 잔량에 묶인 예약 현금·예약 주식이 해제된다
+  - [x] 탈퇴 회원이 참여 중인 모든 리그의 미체결 주문(대기·부분 체결)이 취소되고, 미체결 잔량에 묶인 예약 현금·예약 주식이 해제된다 (order 메서드 기준)
   - [ ] `MemberWithdrawalUseCase`가 주문 취소 → 현금 폐기 순서로 호출한다 (예약이 남아 있으면 현금 폐기가 거절되므로 순서가 바뀌면 안 된다)
-  - [ ] 탈퇴하면 진행 중 리그의 예약 현금·예약 주식이 0, 예수금이 0, 보유 수량은 그대로다
-- 확인 필요: 이 처리가 리그 락을 잡지 않고 주문 상태를 바꾸는 경로가 되는지에 따라 주문 행 락의 필요성을 동시성 테스트로 확인한다 ([ORD-09](#ord-09-지정가-주문의-미체결-잔량은-다음-거래일-0900에-자동으로-만료된다) 확인 필요 참고).
+  - [ ] 탈퇴하면 진행 중 리그의 예약 현금·예약 주식이 0, 예수금이 0, 보유 수량은 그대로다 (order·asset 호출 순서는 `OpenOrderClosingServiceTest#cashDiscardSucceedsAfterWithdrawalCancel`로 검증됨, 탈퇴 흐름 연결 후 체크)
+  - 테스트: `./gradlew test --tests "kr.ject.naspi.order.application.OpenOrderClosing*" --tests "kr.ject.naspi.order.application.MemberWithdrawalOrderConcurrencyTest" --tests "kr.ject.naspi.league.application.LeagueTradingServiceTest"`
+- 진행: order 메서드 `OpenOrderClosingService#cancelAllOfMember`(리그별 `LeagueTradingService#lockForClosing` → 플레이어 열린 주문 `MEMBER_WITHDRAWN` 취소·잔여 예약 해제, `MANDATORY`) 완료. 완료 조건 2·3은 미완이다. `MemberWithdrawalUseCase` 연결(주문 취소 → `discardCashOfMember` 순서)이 남았고 TODO(ORD-11, ND-44) 주석이 그대로 있다.
+- 결정: 탈퇴 경로는 리그 락을 직접 잡는다. `cancelAllOfMember`가 참여 중인(`STARTED`) 리그마다 leagueId 오름차순으로 `lockForClosing`(거래 가능 판정 없이 리그 락만, 종료 시각이 지난 리그도 처리)을 호출한 뒤 주문을 읽고, 주문 행 락·`FOR UPDATE` 일괄 조회는 쓰지 않는다. 리그 락은 탈퇴 트랜잭션 커밋까지 유지되어 현금 폐기 전에 새 주문이 끼어들지 못한다. `LimitOrderService#cancelOrder`의 주문 행 락은 중복 방어로 유지하고 제거 여부는 ND-43 확정 후 판단한다. 취소 대상은 열린 상태의 모든 유형, 실시간 발행은 하지 않는다.
 
 ### ORD-12 참여자는 종목의 호가창을 조회할 수 있다
 - Jira: ND-45

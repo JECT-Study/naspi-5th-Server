@@ -2,7 +2,9 @@ package kr.ject.naspi.order.application;
 
 import kr.ject.naspi.asset.application.AssetReservationService;
 import kr.ject.naspi.asset.application.AssetSettlementService;
+import kr.ject.naspi.asset.application.AssetWithdrawalService;
 import kr.ject.naspi.league.application.LeagueQueryService;
+import kr.ject.naspi.league.application.LeagueTradingService;
 import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
@@ -17,6 +19,7 @@ import org.springframework.context.annotation.Import;
 @TestConfiguration
 @Import({OpenOrderClosingService.class, OrderExecutionSupport.class,
         AssetReservationService.class, AssetSettlementService.class, StockExecutionService.class,
-        StockQueryService.class, LocalStockSnapshotCache.class, LeagueQueryService.class})
+        StockQueryService.class, LocalStockSnapshotCache.class, LeagueQueryService.class,
+        LeagueTradingService.class, AssetWithdrawalService.class})
 public class OrderClosingTestConfig {
 }

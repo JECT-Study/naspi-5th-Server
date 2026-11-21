@@ -104,6 +104,35 @@ class LeagueTradingServiceTest {
     }
 
     @Test
+    @DisplayName("탈퇴 주문 취소용 리그 락은 종료 시각이 지난 리그도 거래 가능 판정 없이 잠근다")
+    void lockForClosingIgnoresTradableCheck() {
+        League league = startedLeague();
+
+        clock.setTo(league.getEndsAt());
+        assertThat(service.lockForClosing(league.getId())).isEqualTo(league.getEndsAt());
+
+        clock.setTo(league.getEndsAt().minusSeconds(1));
+        assertThat(service.lockForClosing(league.getId()))
+                .isEqualTo(league.getEndsAt().minusSeconds(1));
+    }
+
+    @Test
+    @DisplayName("없는 리그는 잠글 수 없다")
+    void lockForClosingRejectsMissingLeague() {
+        assertThatThrownBy(() -> service.lockForClosing(999_999L))
+                .isInstanceOfSatisfying(NaspiBizException.class, e ->
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("리그 락은 트랜잭션 안에서만 잡는다")
+    void lockForClosingRequiresTransaction() {
+        assertThatThrownBy(() -> service.lockForClosing(1L))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    @Test
     @DisplayName("1일차 주문은 전환 확인 없이 접수된다")
     void firstDayNeedsNoChange() {
         League league = startedLeague();

@@ -1,7 +1,11 @@
 package kr.ject.naspi.order.application;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
+import kr.ject.naspi.league.application.LeagueQueryService;
+import kr.ject.naspi.league.application.LeagueTradingService;
+import kr.ject.naspi.league.application.MemberPlayer;
 import kr.ject.naspi.order.domain.CancelReason;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderRepository;
@@ -13,13 +17,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 미체결 주문의 일괄 종료 (거래일 만료 ORD-09). 리그 종료(ORD-10)·회원 탈퇴(ORD-11)의 일괄 취소도 같은
+ * 미체결 주문의 일괄 종료 (거래일 만료 ORD-09, 회원 탈퇴 취소 ORD-11). 리그 종료(ORD-10)의 일괄 취소도 같은
  * 클래스에 공개 메서드를 더해 {@link #closeAll}을 재사용한다.
  *
- * <p>호출자는 리그 락을 잡은 트랜잭션에서 호출해야 한다. {@code MANDATORY}는 트랜잭션 존재만 확인하고
- * 리그 락 보유는 확인하지 못한다. 리그 락 없이 호출하면 접수·취소·체결과 직렬화되지 않아 예약이 두 번
- * 해제될 수 있다. 락 순서는 리그 락 → asset 락이다. 리그 락 없이 부르는 경로(예: 회원 탈퇴)의 락 정책은
- * ND-43·ND-44가 정해야 한다.
+ * <p>리그 락 책임은 메서드마다 다르다. {@link #expireTradingDay}는 호출자가 리그 락을 잡은 트랜잭션에서
+ * 호출해야 한다 ({@code MANDATORY}는 트랜잭션 존재만 확인하고 리그 락 보유는 확인하지 못한다. 리그 락 없이
+ * 호출하면 접수·취소·체결과 직렬화되지 않아 예약이 두 번 해제될 수 있다). {@link #cancelAllOfMember}는
+ * 메서드가 리그별로 {@code LeagueTradingService#lockForClosing}으로 직접 락을 잡는다 (리그 종료 취소 ND-43도
+ * {@code lockForClosing}을 쓸 예정). 락 순서는 리그 락 → asset 락이다. 주문 행 락은 쓰지 않는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -27,6 +32,8 @@ public class OpenOrderClosingService {
 
     private final OrderRepository orderRepository;
     private final OrderExecutionSupport support;
+    private final LeagueQueryService leagueQueryService;
+    private final LeagueTradingService leagueTradingService;
 
     /**
      * 마감하는 거래일 이하에 접수한 지정가 미체결 주문(대기·부분 체결)을 만료시키고 미체결 잔여 수량의 예약
@@ -47,6 +54,36 @@ public class OpenOrderClosingService {
                 .findAllByLeagueIdAndTypeAndStatusInAndTradingDayLessThanEqualOrderByIdAsc(
                         leagueId, OrderType.LIMIT, OrderStatus.openStatuses(), dayNumber);
         return closeAll(orders, CancelReason.TRADING_DAY_EXPIRED, expiredAt);
+    }
+
+    /**
+     * 회원이 참여 중인(진행 중인) 모든 리그의 미체결 주문(대기·부분 체결)을 회원 탈퇴 사유로 취소하고 미체결 잔여
+     * 수량의 예약 자산을 해제한다. 이미 체결된 부분은 유지된다. 회원·플레이어 매핑이 남아 있는 탈퇴 트랜잭션에서
+     * 현금 폐기 전에 호출한다 (예약이 남아 있으면 폐기가 거절된다).
+     *
+     * <p>리그마다 leagueId 오름차순으로 리그 락을 잡고(서로 다른 회원의 탈퇴가 같은 순서로 잠가 교착을 막는다),
+     * 락을 잡은 뒤 주문을 읽는다. 종료 시각이 지났지만 아직 시작 상태인 리그도 거래 가능 판정 없이 처리한다.
+     * {@code MANDATORY}인 이유는 리그 락이 탈퇴 트랜잭션 커밋까지 유지되어야 하기 때문이다. 그래야 취소 뒤 현금
+     * 폐기 전에 같은 플레이어의 새 주문이 끼어들지 못한다. 별도 트랜잭션으로 먼저 커밋하면 그 사이 새 주문이
+     * 예약을 만들어 폐기가 거절될 수 있다.
+     *
+     * @param memberId 탈퇴하는 회원 ID
+     * @return 취소한 주문 수
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelAllOfMember(long memberId) {
+        List<MemberPlayer> players = leagueQueryService.findStartedPlayersOfMember(memberId)
+                .stream()
+                .sorted(Comparator.comparingLong(MemberPlayer::leagueId))
+                .toList();
+        int canceled = 0;
+        for (MemberPlayer player : players) {
+            LocalDateTime canceledAt = leagueTradingService.lockForClosing(player.leagueId());
+            List<Order> orders = orderRepository.findAllByPlayerIdAndStatusInOrderByIdDesc(
+                    player.playerId(), OrderStatus.openStatuses());
+            canceled += closeAll(orders, CancelReason.MEMBER_WITHDRAWN, canceledAt);
+        }
+        return canceled;
     }
 
     private int closeAll(List<Order> orders, CancelReason reason, LocalDateTime closedAt) {

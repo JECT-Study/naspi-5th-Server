@@ -102,6 +102,7 @@ public class LimitOrderService {
     public CanceledOrder cancelOrder(long leagueId, long playerId, long orderId) {
         // 락 대기 뒤의 거래 가능 판정 시각을 취소 시각으로 쓴다 (접수 경로와 같은 이유)
         LocalDateTime now = leagueTradingService.lockForTrading(leagueId);
+        // 주문 행 락은 리그 락과 겹치는 중복 방어다. 제거 여부는 ND-43 확정 후 판단한다.
         // 주문은 리그 락을 잡은 뒤에 읽으므로 직전에 커밋된 체결·취소가 반영된 상태를 본다. 그 사이 체결 완료되었거나
         // 이미 취소된 주문이면 상태 전환이 거절되어 예약이 두 번 해제되지 않는다.
         Order order = orderRepository.findWithLockById(orderId)
