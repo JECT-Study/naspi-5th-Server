@@ -28,7 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>리그 거래 락 (거래 가능 상태가 아니면 거절)</li>
  *   <li>당일 상·하한가 범위 확인</li>
  *   <li>자산 예약 (매수는 현금, 매도는 주식. 실패하면 거절)</li>
- *   <li>호가창 조회 → 주문 저장 → 매칭 → 체결마다 정산, 체결 기록 저장, {@link TradeExecuted} 발행</li>
+ *   <li>호가창 조회 → 주문 저장 → 매칭 → 체결마다 정산, 체결 기록 저장, 종목 현재가·거래량 갱신,
+ *       {@link TradeExecuted} 발행</li>
  * </ol>
  * 미체결 잔여 수량은 대기 주문으로 남는다. 시간 우선순위가 주문 {@code id} 순서이므로 주문 저장은 반드시
  * 리그 락을 잡은 뒤에 한다.

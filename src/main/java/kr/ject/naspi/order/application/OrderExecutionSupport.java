@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import kr.ject.naspi.asset.application.AssetReservationService;
 import kr.ject.naspi.asset.application.AssetSettlementService;
 import kr.ject.naspi.asset.application.TradeSettlement;
+import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.order.domain.Execution;
 import kr.ject.naspi.order.domain.MatchResult;
 import kr.ject.naspi.order.domain.Order;
@@ -26,6 +27,7 @@ class OrderExecutionSupport {
 
     private final AssetReservationService assetReservationService;
     private final AssetSettlementService assetSettlementService;
+    private final StockExecutionService stockExecutionService;
     private final TradeRepository tradeRepository;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -48,7 +50,8 @@ class OrderExecutionSupport {
     }
 
     /**
-     * 매칭 결과의 체결마다 정산하고 체결 기록을 저장하며 {@link TradeExecuted}를 발행한다.
+     * 매칭 결과의 체결마다 정산하고 체결 기록을 저장하며 종목 현재가·거래량을 갱신하고
+     * {@link TradeExecuted}를 발행한다.
      *
      * @param result 매칭 결과
      * @param executedAt 체결 시각
@@ -84,9 +87,11 @@ class OrderExecutionSupport {
         assetSettlementService.settle(new TradeSettlement(buy.getLeagueId(), buy.getStockId(),
                 buy.getPlayerId(), sell.getPlayerId(), buy.getReservedPrice(),
                 execution.price(), execution.quantity()));
-        // 체결 기록은 정산과 같은 트랜잭션에서 남긴다. 거래일은 접수 시점의 거래일이다.
-        tradeRepository.save(Trade.record(execution, execution.incomingOrder().getTradingDay(),
-                executedAt));
+        // 체결 기록과 거래량은 정산과 같은 트랜잭션에서 같은 거래일로 남긴다. 거래일은 접수 시점의 거래일이다.
+        int tradingDay = execution.incomingOrder().getTradingDay();
+        tradeRepository.save(Trade.record(execution, tradingDay, executedAt));
+        stockExecutionService.applyExecution(buy.getLeagueId(), buy.getStockId(), tradingDay,
+                execution.price(), execution.quantity());
         eventPublisher.publishEvent(TradeExecuted.from(execution, executedAt));
     }
 }

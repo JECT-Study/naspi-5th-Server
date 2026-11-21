@@ -29,6 +29,7 @@ import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
@@ -38,6 +39,7 @@ import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
+import kr.ject.naspi.order.domain.Trade;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -62,7 +64,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DataJpaTest
 @Import({LimitOrderService.class, OrderExecutionSupport.class,
         LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
-        LocalStockSnapshotCache.class, AssetReservationService.class,
+        StockExecutionService.class, LocalStockSnapshotCache.class, AssetReservationService.class,
         AssetSettlementService.class, LimitOrderConcurrencyTest.FixedClockConfig.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class LimitOrderConcurrencyTest {
@@ -121,6 +123,7 @@ class LimitOrderConcurrencyTest {
 
             Stock stock = Stock.list(leagueId, LISTER, StockName.of("종목"),
                     StockDescription.of("소개"));
+            stock.open();
             entityManager.persist(stock);
             entityManager.flush();
             stockId = stock.getId();
@@ -139,6 +142,8 @@ class LimitOrderConcurrencyTest {
             entityManager.createQuery("delete from Account").executeUpdate();
             entityManager.createQuery("delete from Holding").executeUpdate();
             entityManager.createQuery("delete from Stock").executeUpdate();
+            entityManager.createQuery("delete from StockDailyPrice").executeUpdate();
+            entityManager.createQuery("delete from Trade").executeUpdate();
             entityManager.createQuery("delete from Player").executeUpdate();
             entityManager.createQuery("delete from League").executeUpdate();
         });
@@ -225,6 +230,7 @@ class LimitOrderConcurrencyTest {
 
         assertReservationsMatchOpenOrders();
         assertTotalsPreserved();
+        assertVolumeAndPriceMatchTrades();
     }
 
     /** 주문을 접수하고 주문 ID를 돌려준다. */
@@ -289,6 +295,23 @@ class LimitOrderConcurrencyTest {
         long quantity = PLAYERS.stream().mapToLong(p -> holding(p).getQuantity()).sum();
         assertThat(deposit).isEqualTo(INITIAL_DEPOSIT * PLAYERS.size());
         assertThat(quantity).isEqualTo(3_000 + 1_000);
+    }
+
+    /** 거래량은 체결 기록의 수량 합계와 같고, 현재가는 마지막 체결(ID가 가장 큰 체결 기록)의 가격이다. */
+    private void assertVolumeAndPriceMatchTrades() {
+        List<Trade> trades = tx.execute(status -> entityManager.createQuery(
+                        "select t from Trade t where t.stockId = :s order by t.id", Trade.class)
+                .setParameter("s", stockId).getResultList());
+        assertThat(trades).as("혼합 시나리오에서 체결이 발생한다").isNotEmpty();
+        long tradeQuantity = trades.stream().mapToLong(Trade::getQuantity).sum();
+        Long volume = tx.execute(status -> entityManager.createQuery(
+                        "select sum(d.volume) from StockDailyPrice d where d.stockId = :s",
+                        Long.class)
+                .setParameter("s", stockId).getSingleResult());
+        Long currentPrice = tx.execute(status ->
+                entityManager.find(Stock.class, stockId).getCurrentPrice());
+        assertThat(volume).isEqualTo(tradeQuantity);
+        assertThat(currentPrice).isEqualTo(trades.get(trades.size() - 1).getPrice());
     }
 
     private List<Order> orders() {

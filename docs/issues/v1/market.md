@@ -47,12 +47,16 @@
 ### MKT-05 체결이 발생하면 종목의 현재가와 거래량이 갱신된다
 - Jira: ND-98
 - 정책: [market.md#시장](../../policies/v1/domain/market.md#시장)
-- 선행: ORD-03, GLB-04
-- 내용: `TradeExecuted` 구독
+- 선행: ORD-03, MKT-04
+- 내용: 체결 1건마다 order 체결 흐름(`OrderExecutionSupport`)이 정산·체결 기록과 같은 트랜잭션에서 market `StockExecutionService#applyExecution`을 직접 호출해 `stock.current_price`와 `stock_daily_price.volume`을 갱신한다
 - 완료 조건
-  - [ ] 현재가 = 최신 체결가 갱신
-  - [ ] 거래일 거래량 = 체결 수량 합계 (체결 1건당 1회 합산)
+  - [x] 현재가 = 최신 체결가 갱신
+  - [x] 거래일 거래량 = 체결 수량 합계 (체결 1건당 1회 합산)
   - [X] VWAP 계산용 체결 기록 저장 (ND-74, [ORD-03](order.md#ord-03-접수된-주문은-가격시간-우선-원칙에-따라-상대-주문과-체결된다)에서 구현. 종목별·거래일별 합계와 종료 시각 역순 500주 조회 포함)
+- 결정: 이벤트(`TradeExecuted`)를 구독하지 않고 order가 상위 모듈인 market을 직접 호출한다 (정책서 README). 호출은 `MANDATORY` 전파라 리그 락을 잡은 체결 트랜잭션 밖에서는 실패한다
+  - 거래량은 market `stock_daily_price.volume`에 체결마다 누적한다 (체결 기록과 같은 트랜잭션·같은 거래일 번호로 쓰므로 `volume`은 같은 거래일 `trade` 수량 합계와 같다). 체결 기록 합계 조회(ORD-03)는 VWAP용으로 남는다
+  - 거래일은 거래일 번호(`trading_day` int, `trade`·`orders`와 같은 방식)로 두고, `(stock_id, trading_day)` 행은 그 거래일의 첫 체결 때 만든다. 체결 없는 거래일은 행이 없으며 거래량 0으로 본다
+  - 거래가 열리지 않은 종목(`current_price`가 null)에 체결이 반영되려 하면 `IllegalStateException`으로 체결 전체를 롤백한다 (리그 시작 전 거래는 이미 막혀 있어 정상 흐름에서는 발생하지 않는 불변식 위반)
 
 ### MKT-06 거래일이 바뀌면 종목의 종가가 확정되고 새 기준가와 가격 범위가 적용된다
 - Jira: ND-99
@@ -62,6 +66,7 @@
   - [ ] 종가 = 마지막 체결가, 거래량 0이면 기준가
   - [ ] 새 기준가 = 직전 종가, 새 상·하한가 적용, 거래량 초기화
   - [ ] 거래일 전환과 체결의 순서 보장 (09:00 이전 체결은 이전 거래일)
+- 비고 (MKT-05에서 전달): 체결 시 거래일별 마지막 체결가는 따로 기록하지 않는다. 리그 락 아래에서 전환하면 종가 = 전환 시점의 `stock.current_price`다 (거래량 0인 거래일도 `current_price`가 직전 종가 = 기준가와 같다). 거래량은 `stock_daily_price` 행이 거래일마다 새로 생기므로 0부터 시작한다. 같은 행에 기준가·상·하한가·종가 컬럼을 추가한다
 
 ### MKT-07 리그가 종료되면 종목별 종료 평가 가격이 VWAP로 산정된다
 - Jira:

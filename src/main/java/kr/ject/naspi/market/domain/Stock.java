@@ -45,10 +45,10 @@ public class Stock {
     private StockDescription description;
 
     /**
-     * 현재가 (1주당 원). 상장 시점에는 비어 있고, 리그가 시작되면 시초가가 된다 ({@link #open()}).
+     * 현재가 (1주당 원). 상장 시점에는 비어 있고, 리그 시작 시 시초가({@link #open()}), 이후 체결마다
+     * 최신 체결가({@link #applyTrade(long)})가 된다.
      *
-     * <p>TODO: 체결 시 최신 체결가로 갱신은 MKT-05에서 구현한다.
-     * 발행량·발행가는 정책상 고정값이라 저장하지 않고 상수로 계산한다 (InitialAllocation).
+     * <p>발행량·발행가는 정책상 고정값이라 저장하지 않고 상수로 계산한다 (InitialAllocation).
      */
     @Column(name = "current_price")
     private Long currentPrice;
@@ -108,6 +108,26 @@ public class Stock {
             throw new IllegalStateException("이미 거래가 열린 종목입니다: stockId=" + id);
         }
         this.currentPrice = OPENING_PRICE;
+    }
+
+    /**
+     * 체결이 발생하면 현재가를 최신 체결가로 바꾼다.
+     *
+     * <p>정책 (docs/policies/v1/domain/market.md "시장"): 현재가는 최신 체결가다. 호가 단위와 가격제한폭은
+     * 주문 접수에서 이미 검증되었으므로 다시 확인하지 않는다.
+     *
+     * @param price 체결가 (1주당 원)
+     * @throws IllegalStateException 거래가 열리지 않은 종목인 경우
+     * @throws IllegalArgumentException 체결가가 0 이하인 경우
+     */
+    public void applyTrade(long price) {
+        if (currentPrice == null) {
+            throw new IllegalStateException("거래가 열리지 않은 종목입니다: stockId=" + id);
+        }
+        if (price <= 0) {
+            throw new IllegalArgumentException("체결가는 0보다 커야 합니다: " + price);
+        }
+        this.currentPrice = price;
     }
 
     /**

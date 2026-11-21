@@ -22,6 +22,7 @@ import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
@@ -33,6 +34,8 @@ import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
 import kr.ject.naspi.order.domain.Trade;
+import kr.ject.naspi.order.domain.TradeRepository;
+import kr.ject.naspi.order.domain.TradeTotal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,7 +59,7 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @RecordApplicationEvents
 @Import({LimitOrderService.class, OrderExecutionSupport.class,
         LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
-        LocalStockSnapshotCache.class, AssetReservationService.class,
+        StockExecutionService.class, LocalStockSnapshotCache.class, AssetReservationService.class,
         AssetSettlementService.class, LimitOrderServiceTest.FixedClockConfig.class})
 class LimitOrderServiceTest {
 
@@ -121,6 +124,9 @@ class LimitOrderServiceTest {
     @Autowired
     private ApplicationEvents events;
 
+    @Autowired
+    private TradeRepository tradeRepository;
+
     private long leagueId;
     private long stockId;
 
@@ -128,9 +134,10 @@ class LimitOrderServiceTest {
     void setUp() {
         setClock(NOW);
         leagueId = startedLeague().getId();
-        stockId = entityManager.persistAndGetId(
-                Stock.list(leagueId, LISTER, StockName.of("종목"), StockDescription.of("소개")),
-                Long.class);
+        Stock stock = Stock.list(leagueId, LISTER, StockName.of("종목"),
+                StockDescription.of("소개"));
+        stock.open();
+        stockId = entityManager.persistAndGetId(stock, Long.class);
         for (long player : new long[] {LISTER, SELLER, BUYER}) {
             entityManager.persist(Account.open(leagueId, player, 1_000_000));
             entityManager.persist(Holding.allocate(leagueId, player, stockId,
@@ -540,6 +547,79 @@ class LimitOrderServiceTest {
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_TRADABLE);
     }
 
+    @Test
+    @DisplayName("지정가 체결 시 종목 현재가는 체결가, 거래일 거래량은 체결 수량만큼 늘어난다")
+    void tradeUpdatesCurrentPriceAndVolume() {
+        place(SELLER, OrderSide.SELL, 10_500, 3);
+        place(BUYER, OrderSide.BUY, 10_500, 5);
+
+        assertThat(currentPrice()).isEqualTo(10_500);
+        assertThat(volume(TRADING_DAY)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("한 주문이 여러 가격에 체결되면 마지막 체결가가 현재가가 되고 거래량은 모든 체결 수량의 합이다")
+    void multipleFillsLeaveLastPrice() {
+        place(SELLER, OrderSide.SELL, 10_100, 2);
+        place(SELLER, OrderSide.SELL, 10_200, 2);
+        place(BUYER, OrderSide.BUY, 10_200, 4);
+
+        assertThat(currentPrice()).isEqualTo(10_200);
+        assertThat(volume(TRADING_DAY)).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("체결이 없으면 현재가와 거래량은 바뀌지 않는다")
+    void noTradeKeepsPrice() {
+        place(BUYER, OrderSide.BUY, 9_000, 10);
+        place(SELLER, OrderSide.SELL, 11_000, 10);
+
+        assertThat(currentPrice()).isEqualTo(10_000);
+        assertThat(dailyPriceCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("거래량은 같은 거래일 체결 기록의 수량 합계와 같다")
+    void volumeMatchesTradeTotal() {
+        place(SELLER, OrderSide.SELL, 10_100, 3);
+        place(SELLER, OrderSide.SELL, 10_300, 4);
+        place(BUYER, OrderSide.BUY, 10_300, 5);
+        place(BUYER, OrderSide.BUY, 10_300, 1);
+        place(BUYER, OrderSide.BUY, 10_000, 2);
+
+        TradeTotal total = tradeRepository.sumByStockIdAndTradingDay(stockId, TRADING_DAY);
+        assertThat(total.quantity()).isEqualTo(6);
+        assertThat(volume(TRADING_DAY)).isEqualTo(total.quantity());
+    }
+
+    @Test
+    @DisplayName("자전거래로 취소된 잔량은 거래량에 들어가지 않고 체결된 수량만 합산된다")
+    void selfTradeCanceledNoVolume() {
+        place(LISTER, OrderSide.SELL, 10_400, 1);
+        place(SELLER, OrderSide.SELL, 10_500, 2);
+
+        PlacedOrder buy = place(SELLER, OrderSide.BUY, 10_500, 5);
+
+        assertThat(buy.status()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(buy.remainingQuantity()).isEqualTo(4);
+        assertThat(currentPrice()).isEqualTo(10_400);
+        assertThat(volume(TRADING_DAY)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("09:00 이후 접수된 주문의 체결은 새 거래일 거래량에 합산된다")
+    void volumeUsesOrderTradingDay() {
+        setClock(LocalDateTime.of(2026, 11, 16, 8, 59, 59));
+        place(SELLER, OrderSide.SELL, 10_000, 2);
+        place(BUYER, OrderSide.BUY, 10_000, 2);
+        setClock(LocalDateTime.of(2026, 11, 16, 9, 0, 0));
+        place(SELLER, OrderSide.SELL, 10_000, 3);
+        place(BUYER, OrderSide.BUY, 10_000, 3);
+
+        assertThat(volume(1)).isEqualTo(2);
+        assertThat(volume(2)).isEqualTo(3);
+    }
+
     private CanceledOrder cancel(long playerId, long orderId) {
         CanceledOrder canceled = service.cancelOrder(leagueId, playerId, orderId);
         entityManager.flush();
@@ -553,6 +633,22 @@ class LimitOrderServiceTest {
         entityManager.flush();
         entityManager.clear();
         return placed;
+    }
+
+    private long currentPrice() {
+        return entityManager.find(Stock.class, stockId).getCurrentPrice();
+    }
+
+    private long volume(int tradingDay) {
+        return entityManager.getEntityManager().createQuery(
+                        "select d.volume from StockDailyPrice d "
+                                + "where d.stockId = :s and d.tradingDay = :d", Long.class)
+                .setParameter("s", stockId).setParameter("d", tradingDay).getSingleResult();
+    }
+
+    private long dailyPriceCount() {
+        return entityManager.getEntityManager().createQuery(
+                "select count(d) from StockDailyPrice d", Long.class).getSingleResult();
     }
 
     private Account account(long playerId) {

@@ -325,7 +325,7 @@ class AssetQueryServiceTest {
         return entityManager.persistAndGetId(stock, Long.class);
     }
 
-    /** 현재가 갱신(MKT-04, MKT-05) 구현 전이라 DB 값을 직접 바꾼다. */
+    /** 테스트 준비용으로 DB 값을 직접 바꾼다. */
     private void setCurrentPrice(long stockId, long price) {
         entityManager.flush();
         entityManager.getEntityManager()

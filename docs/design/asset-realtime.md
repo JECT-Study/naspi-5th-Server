@@ -2,7 +2,7 @@
 
 > 대상 스토리: [AST-02](../issues/v1/asset.md#ast-02-참여자는-자신의-현금-보유-주식-예약-자산-총자산을-조회할-수-있다) (ND-10)
 > 정책: [asset.md#자산-조회](../policies/v1/domain/asset.md#자산-조회)
-> 상태: 설계 확정 (2026-11-12 개정: 현재가 캐시, 변경된 리그만 주기 발행), 구현 대기 (league `Player`, market 현재가(MKT-04·05), order 체결 이벤트(ORD-03) 필요)
+> 상태: 설계 확정 (2026-11-12 개정: 현재가 캐시, 변경된 리그만 주기 발행), 구현 중 (market 현재가 갱신(MKT-04·05)과 order 체결(ORD-03)은 구현됨. 캐시 변경 이벤트 구독 발행과 `TradeExecuted` 즉시 발행 리스너는 아래 구현 순서 3·4 대기)
 
 ## 1. 조회 경로
 
@@ -49,7 +49,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 원본 | DB `stock.current_price`. 체결 트랜잭션 안에서 market이 `TradeExecuted`를 동기 구독해 갱신한다 |
+| 원본 | DB `stock.current_price`. 체결 트랜잭션 안에서 order가 market application(`StockExecutionService`)을 직접 호출해 갱신한다 |
 | 캐시 갱신 | 1초마다(`naspi.market.current-price.refresh-interval`, 기본 1s) 진행 중(`STARTED`) 리그의 `stock`을 한 쿼리로 읽어 캐시를 덮어쓴다. **캐시에 쓰는 곳은 이 갱신 하나뿐이다** (`CurrentPriceRefreshService`, 전용 스레드 하나로 실행하는 `CurrentPriceRefreshScheduler`) |
 | 변경 감지 | 덮어쓸 때 이전 값과 비교해 현재가가 바뀐 종목이 있는 리그 ID를 모아 `CurrentPricesChanged`로 알린다 (websocket이 구독해 2장의 주기 발행을 한다). 새로 캐시에 들어온 리그(리그 시작, 서버 재시작 직후)도 바뀐 것으로 본다. 이름·소개만 바뀐 경우는 알리지 않는다 |
 | 캐시에 없을 때 | 대기실·종료 리그나 첫 갱신 전에는 `StockQueryService.findAllByLeagueId`가 DB에서 읽는다. 종료된 리그는 다음 갱신에서 캐시에서 빠진다 |
@@ -118,7 +118,7 @@ Redis로 옮기면 네트워크 실패로 캐시 갱신이 빠질 수 있다. �
 ## 6. 구현 순서
 
 1. ~~`memberId` + `leagueId` → `playerId` 조회 연결 (REST 컨트롤러, `AssetTopicAuthorizer`)~~ (구현 완료: `LeagueQueryService.findPlayerId`, `MyAssetQueryService`, `GET /api/leagues/{leagueId}/assets/me`. 응답의 `playerId`로 구독)
-2. ~~현재가 캐시 구현: 1초 갱신, 없을 때 DB 조회, 현재가 변경 리그 이벤트~~ (구현 완료. DB `current_price` 갱신은 MKT-04·05에서)
+2. ~~현재가 캐시 구현: 1초 갱신, 없을 때 DB 조회, 현재가 변경 리그 이벤트~~ (구현 완료. DB `current_price`는 리그 시작 시 시초가(MKT-04), 체결마다 최신 체결가(MKT-05)로 갱신된다)
 3. `AssetTopic`을 주기 더미 발행에서 현재가 변경 리그 이벤트 구독으로 바꾸고 `AssetQueryService` 호출로 교체. `AssetResponse`에 `asOf` 추가, 프론트와 무시 규칙 합의
 4. order 체결(ORD-03)의 `TradeExecuted` 확정 후 매수자·매도자 즉시 발행 리스너 추가
 5. 주문 접수·취소, 미체결 만료, 리그 종료 이벤트가 생기면 즉시 발행 리스너 추가

@@ -31,4 +31,40 @@ class StockTest {
 
         assertThatThrownBy(stock::open).isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    @DisplayName("현재가는 최신 체결가로 갱신된다")
+    void applyTradeUpdatesCurrentPrice() {
+        Stock stock = newStock();
+        stock.open();
+
+        stock.applyTrade(10_500L);
+        assertThat(stock.getCurrentPrice()).isEqualTo(10_500L);
+
+        stock.applyTrade(9_800L);
+        assertThat(stock.getCurrentPrice()).isEqualTo(9_800L);
+    }
+
+    @Test
+    @DisplayName("거래가 열리지 않은 종목에는 체결가를 반영할 수 없다")
+    void applyTradeRejectsUnopenedStock() {
+        Stock stock = newStock();
+
+        assertThatThrownBy(() -> stock.applyTrade(10_000L))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(stock.getCurrentPrice()).isNull();
+    }
+
+    @Test
+    @DisplayName("체결가는 0보다 커야 한다")
+    void applyTradeRejectsNonPositivePrice() {
+        Stock stock = newStock();
+        stock.open();
+
+        assertThatThrownBy(() -> stock.applyTrade(0L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> stock.applyTrade(-100L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(stock.getCurrentPrice()).isEqualTo(10_000L);
+    }
 }

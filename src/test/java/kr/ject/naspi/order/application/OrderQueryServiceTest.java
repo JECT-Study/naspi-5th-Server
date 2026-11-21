@@ -18,6 +18,7 @@ import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
@@ -45,8 +46,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @DataJpaTest
 @Import({OrderQueryService.class, LimitOrderService.class, MarketOrderService.class,
         OrderExecutionSupport.class, LeagueTradingService.class, LeagueQueryService.class,
-        StockQueryService.class, LocalStockSnapshotCache.class, AssetReservationService.class,
-        AssetSettlementService.class, OrderQueryServiceTest.ClockConfig.class})
+        StockQueryService.class, StockExecutionService.class, LocalStockSnapshotCache.class,
+        AssetReservationService.class, AssetSettlementService.class,
+        OrderQueryServiceTest.ClockConfig.class})
 class OrderQueryServiceTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 15, 10, 0);
@@ -99,8 +101,10 @@ class OrderQueryServiceTest {
         listerPlayer = players.get(0);
         sellerPlayer = players.get(1);
         buyerPlayer = players.get(2);
-        stockId = entityManager.persistAndGetId(Stock.list(leagueId, listerPlayer,
-                StockName.of("종목"), StockDescription.of("소개")), Long.class);
+        Stock stock = Stock.list(leagueId, listerPlayer, StockName.of("종목"),
+                StockDescription.of("소개"));
+        stock.open();
+        stockId = entityManager.persistAndGetId(stock, Long.class);
         for (long player : players) {
             entityManager.persist(Account.open(leagueId, player, 1_000_000));
             entityManager.persist(Holding.allocate(leagueId, player, stockId,
@@ -413,8 +417,10 @@ class OrderQueryServiceTest {
     void stockFilter() {
         long otherLister = entityManager.persistAndGetId(
                 Player.enter(leagueId, 4L, NOW.minusDays(1)), Long.class);
-        long otherStock = entityManager.persistAndGetId(Stock.list(leagueId, otherLister,
-                StockName.of("다른종목"), StockDescription.of("소개")), Long.class);
+        Stock otherListed = Stock.list(leagueId, otherLister, StockName.of("다른종목"),
+                StockDescription.of("소개"));
+        otherListed.open();
+        long otherStock = entityManager.persistAndGetId(otherListed, Long.class);
         entityManager.persist(Holding.allocate(leagueId, sellerPlayer, otherStock, 100));
         entityManager.flush();
         entityManager.clear();

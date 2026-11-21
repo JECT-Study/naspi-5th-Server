@@ -22,6 +22,7 @@ import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
@@ -57,7 +58,7 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @RecordApplicationEvents
 @Import({MarketOrderService.class, LimitOrderService.class, OrderExecutionSupport.class,
         LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
-        LocalStockSnapshotCache.class, AssetReservationService.class,
+        StockExecutionService.class, LocalStockSnapshotCache.class, AssetReservationService.class,
         AssetSettlementService.class, MarketOrderServiceTest.FixedClockConfig.class})
 class MarketOrderServiceTest {
 
@@ -132,9 +133,10 @@ class MarketOrderServiceTest {
     void setUp() {
         ((SettableClock) clock).set(NOW);
         leagueId = startedLeague("AAAAAAA", NOW).getId();
-        stockId = entityManager.persistAndGetId(
-                Stock.list(leagueId, LISTER, StockName.of("종목"), StockDescription.of("소개")),
-                Long.class);
+        Stock stock = Stock.list(leagueId, LISTER, StockName.of("종목"),
+                StockDescription.of("소개"));
+        stock.open();
+        stockId = entityManager.persistAndGetId(stock, Long.class);
         for (long player : new long[] {LISTER, SELLER, BUYER}) {
             entityManager.persist(Account.open(leagueId, player, CASH));
             entityManager.persist(Holding.allocate(leagueId, player, stockId,
@@ -381,6 +383,38 @@ class MarketOrderServiceTest {
         assertThat(trades).extracting(Trade::getPrice).containsExactly(10_000L, 10_500L);
         assertThat(trades).extracting(Trade::getTradingDay).containsOnly(1);
         assertThat(events.stream(TradeExecuted.class).count()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("시장가 체결 시에도 현재가는 마지막 체결가, 거래량은 체결 수량의 합이 된다")
+    void marketTradeUpdatesCurrentPriceAndVolume() {
+        ask(10_000, 3);
+        ask(10_500, 2);
+
+        market(BUYER, OrderSide.BUY, 5);
+
+        assertThat(currentPrice()).isEqualTo(10_500);
+        assertThat(volume()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("시장가 주문이 체결되지 않으면 현재가와 거래량은 바뀌지 않는다")
+    void noOppositeQuoteKeepsPrice() {
+        market(BUYER, OrderSide.BUY, 5);
+
+        assertThat(currentPrice()).isEqualTo(10_000);
+        assertThat(entityManager.getEntityManager().createQuery(
+                "select count(d) from StockDailyPrice d", Long.class).getSingleResult()).isZero();
+    }
+
+    private long currentPrice() {
+        return entityManager.find(Stock.class, stockId).getCurrentPrice();
+    }
+
+    private long volume() {
+        return entityManager.getEntityManager().createQuery(
+                        "select d.volume from StockDailyPrice d where d.stockId = :s", Long.class)
+                .setParameter("s", stockId).getSingleResult();
     }
 
     private PlacedOrder market(long playerId, OrderSide side, long quantity) {

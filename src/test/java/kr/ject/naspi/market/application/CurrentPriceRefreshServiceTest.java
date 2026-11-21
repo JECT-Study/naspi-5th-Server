@@ -92,6 +92,26 @@ class CurrentPriceRefreshServiceTest {
     }
 
     @Test
+    @DisplayName("체결로 바뀐 현재가는 다음 캐시 갱신에서 반영되고 그 리그가 변경으로 알려진다")
+    void reflectsTradeAfterCommit() {
+        long leagueId = league("AAAAAAA", LeagueStatus.STARTED);
+        final long stockId = stock(leagueId, 10L, "가나다", 10_000L);
+        service.refresh();
+        events.clear();
+
+        Stock stock = entityManager.find(Stock.class, stockId);
+        stock.applyTrade(10_500L);
+        entityManager.flush();
+
+        assertThat(service.refresh()).containsExactly(leagueId);
+        assertThat(cache.findByLeagueId(leagueId).orElseThrow())
+                .extracting(StockSnapshot::currentPrice)
+                .containsExactly(10_500L);
+        assertThat(events.stream(CurrentPricesChanged.class))
+                .containsExactly(new CurrentPricesChanged(Set.of(leagueId)));
+    }
+
+    @Test
     @DisplayName("종료된 리그는 다음 갱신에서 캐시에서 빠진다")
     void evictsEndedLeagues() {
         long leagueId = league("AAAAAAA", LeagueStatus.STARTED);
