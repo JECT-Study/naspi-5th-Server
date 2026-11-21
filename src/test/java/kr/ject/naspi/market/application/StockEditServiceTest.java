@@ -116,7 +116,7 @@ class StockEditServiceTest {
     @Test
     @DisplayName("대기실 수정에도 상장과 같은 이름·소개 규칙이 적용되고, 어긋나면 수정되지 않는다")
     void editInLobbyWithInvalidInput() {
-        assertThatThrownBy(() -> service.editInLobby(leagueId, OWNER_MEMBER, stockId, "새이름!", "소개"))
+        assertThatThrownBy(() -> service.editInLobby(leagueId, OWNER_MEMBER, stockId, "!!!", "소개"))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_STOCK_NAME);
         assertThatThrownBy(() -> service.editInLobby(leagueId, OWNER_MEMBER, stockId, "새이름", " "))

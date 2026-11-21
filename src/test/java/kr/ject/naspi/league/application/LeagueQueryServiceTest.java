@@ -245,6 +245,29 @@ class LeagueQueryServiceTest {
     }
 
     @Test
+    @DisplayName("주문 조회는 진행 중인 리그에서만 가능하며 대기실·종료 리그를 사유별 코드로 거절한다")
+    void requireTradable() {
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));
+        CreatedLeague league = leagueWithParticipants(3);
+        assertThatThrownBy(() -> queryService.requireTradable(league.leagueId()))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.LEAGUE_NOT_TRADABLE));
+
+        leagueStartUseCase.start(memberOf(league), league.leagueId());
+        clock.setTo(LocalDateTime.of(2026, 11, 23, 8, 59, 59));
+        queryService.requireTradable(league.leagueId());
+
+        clock.setTo(LocalDateTime.of(2026, 11, 23, 9, 0));
+        assertThatThrownBy(() -> queryService.requireTradable(league.leagueId()))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode())
+                                .isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED));
+        assertThatThrownBy(() -> queryService.requireTradable(Long.MAX_VALUE))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
+    }
+
+    @Test
     @DisplayName("진행 중인 리그만 현재 거래일을 알려주고, 대기실은 거래일이 없다")
     void findCurrentTradingDay() {
         clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));

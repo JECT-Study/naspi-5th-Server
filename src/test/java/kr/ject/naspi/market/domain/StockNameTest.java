@@ -14,8 +14,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 class StockNameTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"가", "나스피", "Naspi", "나스피 2호", "열두글자이름입니다열두글", "あいう"})
-    @DisplayName("종목 이름은 글자, 숫자, 중간 공백으로 12자까지 사용할 수 있다")
+    @ValueSource(strings = {"가", "나스피", "Naspi", "나스피 2호", "열두글자이름입니다열두글", "あいう",
+            "나스피!", "a-b", "나스피😀", "!1"})
+    @DisplayName("종목 이름은 특수문자를 포함한 모든 문자를 12자까지 사용할 수 있다 (글자·숫자가 하나 이상 있어야 한다)")
     void validName(String value) {
         assertThat(StockName.of(value).getValue()).isEqualTo(value);
     }
@@ -36,8 +37,8 @@ class StockNameTest {
 
     @ParameterizedTest
     @NullAndEmptySource
-    @ValueSource(strings = {"   ", "나스피!", "나스피#1", "a-b", "나스피😀", "나스피\t호"})
-    @DisplayName("비어 있거나 특수문자·이모지가 있으면 INVALID_STOCK_NAME 예외가 발생한다")
+    @ValueSource(strings = {"   ", "!", "!!!", "😀", "😀 !", "-_ ."})
+    @DisplayName("비어 있거나 특수문자·이모지·공백만으로 구성되면 INVALID_STOCK_NAME 예외가 발생한다")
     void invalidCharacters(String value) {
         assertInvalid(value);
     }

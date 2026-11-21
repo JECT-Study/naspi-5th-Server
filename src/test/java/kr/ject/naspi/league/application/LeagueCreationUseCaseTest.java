@@ -113,7 +113,7 @@ class LeagueCreationUseCaseTest {
     @Test
     @DisplayName("방장의 종목이 상장 규칙에 맞지 않으면 리그를 생성할 수 없다")
     void failLeagueCreationWhenHostStockInvalid() {
-        assertThatThrownBy(() -> useCase.create(HOST_MEMBER_ID, "리그", "특수문자!", "소개"))
+        assertThatThrownBy(() -> useCase.create(HOST_MEMBER_ID, "리그", "!!!", "소개"))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_STOCK_NAME);
     }

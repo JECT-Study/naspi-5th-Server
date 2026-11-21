@@ -214,7 +214,7 @@ class StockListingServiceTest {
         League league = waitingRoom(NOW.minusDays(1));
         Player player = enter(league, 10L);
 
-        assertThatThrownBy(() -> service.list(league.getId(), 10L, "나스피!", "소개"))
+        assertThatThrownBy(() -> service.list(league.getId(), 10L, "!!!", "소개"))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_STOCK_NAME);
         assertThatThrownBy(() -> service.list(league.getId(), 10L, "나스피", " "))

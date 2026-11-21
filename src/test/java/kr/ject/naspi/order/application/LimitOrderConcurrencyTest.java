@@ -23,6 +23,7 @@ import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.league.application.LeagueTradingService;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
@@ -33,6 +34,7 @@ import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
+import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
@@ -46,6 +48,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +60,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({LimitOrderService.class, LeagueTradingService.class, StockQueryService.class,
+@Import({LimitOrderService.class, OrderExecutionSupport.class,
+        LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
         LocalStockSnapshotCache.class, AssetReservationService.class,
         AssetSettlementService.class, LimitOrderConcurrencyTest.FixedClockConfig.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -70,7 +74,6 @@ class LimitOrderConcurrencyTest {
     private static final List<Long> PLAYERS = List.of(LISTER, SELLER, BUYER);
     private static final long INITIAL_DEPOSIT = 1_000_000;
     private static final long BASE_PRICE = 10_000;
-    private static final int TRADING_DAY = 1;
     private static final int REQUESTS = 10;
 
     @TestConfiguration
@@ -81,6 +84,9 @@ class LimitOrderConcurrencyTest {
             return Clock.fixed(NOW.atZone(ClockConfig.KST).toInstant(), ClockConfig.KST);
         }
     }
+
+    @MockitoBean
+    private MemberService memberService;
 
     @Autowired
     private LimitOrderService service;
@@ -224,7 +230,7 @@ class LimitOrderConcurrencyTest {
     /** 주문을 접수하고 주문 ID를 돌려준다. */
     private long place(long playerId, OrderSide side, long price, long quantity) {
         return service.placeLimitOrder(new PlaceLimitOrder(leagueId, playerId, stockId, side,
-                price, quantity), TRADING_DAY, BASE_PRICE).orderId();
+                price, quantity), BASE_PRICE).orderId();
     }
 
     /**

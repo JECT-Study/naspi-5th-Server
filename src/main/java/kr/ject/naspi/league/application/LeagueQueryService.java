@@ -165,6 +165,19 @@ public class LeagueQueryService {
     }
 
     /**
+     * 거래할 수 있는 리그인지 검증한다. 조회용이라 락을 걸지 않는다. 거래 처리에는
+     * {@code LeagueTradingService.lockForTrading}을 쓴다. 판정과 에러 코드는 접수·취소 경로와 같다.
+     *
+     * @param leagueId 리그 ID
+     * @throws NaspiBizException 없거나 만료된 대기실이거나, 종료되었거나, 아직 시작하지 않은 리그인 경우
+     */
+    public void requireTradable(long leagueId) {
+        League league = leagueRepository.findById(leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        league.requireTradable(LocalDateTime.now(clock));
+    }
+
+    /**
      * 리그에 입장한 회원의 플레이어 ID를 조회한다. 다른 모듈이 로그인 회원 본인의 플레이어를 찾을 때 쓴다
      * (클라이언트가 보낸 플레이어 ID를 믿지 않는다).
      *
@@ -190,6 +203,26 @@ public class LeagueQueryService {
             return Optional.empty();
         }
         return Optional.of(tradingDayOf(league));
+    }
+
+    /**
+     * 주어진 시각의 거래일 번호를 계산한다. order가 주문을 접수할 때, 거래 가능 판정에 쓴 시각으로 거래일을
+     * 정하는 데 쓴다. 이 메서드는 시계를 읽지 않으므로 판정 시각과 거래일 번호가 어긋나지 않는다.
+     *
+     * @param leagueId 리그 ID
+     * @param at 거래일을 알고 싶은 시각 (KST)
+     * @return 1~7 사이의 거래일 번호
+     * @throws NaspiBizException 리그가 없거나({@link ErrorCode#LEAGUE_NOT_FOUND}), 아직 시작하지 않은 경우
+     *     ({@link ErrorCode#LEAGUE_NOT_TRADABLE})
+     */
+    public int getTradingDayNumberAt(long leagueId, LocalDateTime at) {
+        League league = leagueRepository.findById(leagueId)
+                .filter(found -> !found.isUnavailable(at))
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        if (league.getStatus() == LeagueStatus.WAITING) {
+            throw new NaspiBizException(ErrorCode.LEAGUE_NOT_TRADABLE);
+        }
+        return league.tradingSchedule().dayNumberAt(at);
     }
 
     /**

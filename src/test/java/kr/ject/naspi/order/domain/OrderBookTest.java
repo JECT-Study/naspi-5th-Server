@@ -68,9 +68,9 @@ class OrderBookTest {
         Order filled = limit(1, OrderSide.BUY, 10_000, 1);
         filled.fill(1);
         Order canceled = limit(2, OrderSide.BUY, 10_000, 1);
-        canceled.cancel();
+        canceled.cancel(CancelReason.USER_REQUESTED, NOW);
         Order expired = limit(3, OrderSide.SELL, 10_000, 1);
-        expired.expire();
+        expired.expire(NOW);
         Order market = Order.market(1L, 10L, STOCK_ID, OrderSide.BUY, 1, 1, NOW);
         ReflectionTestUtils.setField(market, "id", 4L);
 

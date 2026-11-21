@@ -1,6 +1,6 @@
 package kr.ject.naspi.league.application;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@Import(LeagueTradingService.class)
+@Import({LeagueTradingService.class, MutableClock.Config.class})
 class LeagueTradingServiceTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 15, 10, 0);
@@ -34,26 +34,54 @@ class LeagueTradingServiceTest {
     private LeagueTradingService service;
 
     @Autowired
+    private MutableClock clock;
+
+    @Autowired
     private TestEntityManager entityManager;
 
     @Test
     @DisplayName("시작되어 진행 중인 리그는 거래 락을 걸 수 있다")
     void lockStartedLeague() {
         League league = startedLeague();
+        clock.setTo(NOW);
 
-        assertThatCode(() -> service.lockForTrading(league.getId())).doesNotThrowAnyException();
+        assertThat(service.lockForTrading(league.getId())).isEqualTo(NOW);
     }
 
     @Test
     @DisplayName("시작하지 않은 대기실에서는 거래할 수 없다")
     void waitingLeagueIsNotTradable() {
+        clock.setTo(NOW);
         League league = entityManager.persistAndFlush(
                 League.create(LeagueName.of("리그"), InviteCode.of("AAAAAAA"), NOW));
 
         assertThatThrownBy(() -> service.lockForTrading(league.getId()))
                 .isInstanceOfSatisfying(NaspiBizException.class, e ->
-                        org.assertj.core.api.Assertions.assertThat(e.getErrorCode())
+                        assertThat(e.getErrorCode())
                                 .isEqualTo(ErrorCode.LEAGUE_NOT_TRADABLE));
+    }
+
+    @Test
+    @DisplayName("종료 처리 전이라도 종료 시각이 지난 리그에서는 거래할 수 없다")
+    void endsAtPassedLeagueIsNotTradable() {
+        League league = startedLeague();
+        clock.setTo(league.getEndsAt());
+
+        assertThatThrownBy(() -> service.lockForTrading(league.getId()))
+                .isInstanceOfSatisfying(NaspiBizException.class, e ->
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED));
+    }
+
+    @Test
+    @DisplayName("만료된 대기실은 없는 리그로 거절한다")
+    void expiredWaitingRoomIsNotFound() {
+        League league = entityManager.persistAndFlush(
+                League.create(LeagueName.of("리그"), InviteCode.of("AAAAAAA"), NOW));
+        clock.setTo(NOW.plusDays(7));
+
+        assertThatThrownBy(() -> service.lockForTrading(league.getId()))
+                .isInstanceOfSatisfying(NaspiBizException.class, e ->
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
     }
 
     @Test
@@ -61,7 +89,7 @@ class LeagueTradingServiceTest {
     void leagueNotFound() {
         assertThatThrownBy(() -> service.lockForTrading(999_999L))
                 .isInstanceOfSatisfying(NaspiBizException.class, e ->
-                        org.assertj.core.api.Assertions.assertThat(e.getErrorCode())
+                        assertThat(e.getErrorCode())
                                 .isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
     }
 

@@ -8,7 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 로그인 회원의 지정가 주문 접수·취소 요청을 받아 {@link LimitOrderService}에 넘긴다 (ORD-02, ORD-07).
+ * 로그인 회원의 지정가·시장가 주문 접수와 취소 요청을 받아 {@link LimitOrderService},
+ * {@link MarketOrderService}에 넘긴다 (ORD-02, ORD-05, ORD-07).
  *
  * <p>클라이언트가 보낸 플레이어 ID를 믿지 않고, 로그인 회원이 리그에서 가진 플레이어를 직접 찾아 쓴다.
  * 이 서비스는 트랜잭션을 열지 않는다. 리그 락과 주문 처리는 {@link LimitOrderService}의 트랜잭션 안에서
@@ -19,15 +20,15 @@ import org.springframework.stereotype.Service;
 public class OrderPlacementService {
 
     /**
-     * TODO: 임시 값. 거래일 계산(league)과 거래일별 기준가(MKT-06)가 생기면 제거하고 league·market에서
-     * 조회한다. 지금은 모든 주문을 1일차, 시초가(10,000원) 기준으로 처리하므로 2일차 이후에는 정책과
-     * 다르게 동작한다. 이 값이 남아 있는 채로 운영에 배포하면 안 된다.
+     * TODO: 임시 값. 거래일별 기준가(MKT-06)가 생기면 제거하고 market에서 조회한다. 지금은 모든 주문을
+     * 시초가(10,000원) 기준으로 처리하므로 2일차 이후에는 정책과 다르게 동작한다. 이 값이 남아 있는 채로
+     * 운영에 배포하면 안 된다.
      */
-    private static final int TEMPORARY_TRADING_DAY = 1;
     private static final long TEMPORARY_BASE_PRICE = 10_000L;
 
     private final LeagueQueryService leagueQueryService;
     private final LimitOrderService limitOrderService;
+    private final MarketOrderService marketOrderService;
 
     /**
      * 로그인 회원이 리그의 종목에 지정가 주문을 넣는다.
@@ -47,7 +48,27 @@ public class OrderPlacementService {
         return limitOrderService.placeLimitOrder(
                 new PlaceLimitOrder(leagueId, playerIdOf(memberId, leagueId), stockId, side,
                         price, quantity),
-                TEMPORARY_TRADING_DAY, TEMPORARY_BASE_PRICE);
+                TEMPORARY_BASE_PRICE);
+    }
+
+    /**
+     * 로그인 회원이 리그의 종목에 시장가 주문을 넣는다.
+     *
+     * @param memberId 로그인한 회원 ID
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param side 매매 구분
+     * @param quantity 주문 수량
+     * @return 접수 직후 주문 상태
+     * @throws NaspiBizException 리그에 입장하지 않은 회원이거나({@link ErrorCode#FORBIDDEN}),
+     *     {@link MarketOrderService#placeMarketOrder}가 거절하는 경우
+     */
+    public PlacedOrder placeMarketOrder(long memberId, long leagueId, long stockId,
+            OrderSide side, long quantity) {
+        return marketOrderService.placeMarketOrder(
+                new PlaceMarketOrder(leagueId, playerIdOf(memberId, leagueId), stockId, side,
+                        quantity),
+                TEMPORARY_BASE_PRICE);
     }
 
     /**

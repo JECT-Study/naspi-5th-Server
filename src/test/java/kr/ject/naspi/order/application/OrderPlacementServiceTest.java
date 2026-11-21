@@ -3,7 +3,6 @@ package kr.ject.naspi.order.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -35,6 +34,9 @@ class OrderPlacementServiceTest {
     @Mock
     private LimitOrderService limitOrderService;
 
+    @Mock
+    private MarketOrderService marketOrderService;
+
     @InjectMocks
     private OrderPlacementService service;
 
@@ -46,7 +48,7 @@ class OrderPlacementServiceTest {
                 .willReturn(Optional.of(PLAYER_ID));
         given(limitOrderService.placeLimitOrder(
                 new PlaceLimitOrder(LEAGUE_ID, PLAYER_ID, 5L, OrderSide.BUY, 10_000L, 10L),
-                1, 10_000L)).willReturn(placed);
+                10_000L)).willReturn(placed);
 
         PlacedOrder result = service.placeLimitOrder(
                 MEMBER_ID, LEAGUE_ID, 5L, OrderSide.BUY, 10_000L, 10L);
@@ -65,7 +67,7 @@ class OrderPlacementServiceTest {
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
 
         then(limitOrderService).should(never())
-                .placeLimitOrder(any(), anyInt(), anyLong());
+                .placeLimitOrder(any(), anyLong());
     }
 
     @Test
@@ -89,5 +91,32 @@ class OrderPlacementServiceTest {
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
 
         then(limitOrderService).should(never()).cancelOrder(anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("리그에 입장하지 않은 회원은 시장가 주문을 넣을 수 없다")
+    void placeMarketOrderRejectsNonPlayer() {
+        given(leagueQueryService.findPlayerId(MEMBER_ID, LEAGUE_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.placeMarketOrder(
+                MEMBER_ID, LEAGUE_ID, 5L, OrderSide.BUY, 10L))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+
+        then(marketOrderService).should(never()).placeMarketOrder(any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("시장가 주문하는 플레이어는 로그인 회원이 리그에서 가진 플레이어로 정한다")
+    void placeMarketOrderUsesPlayerOfLoginMember() {
+        PlacedOrder placed = new PlacedOrder(11L, OrderStatus.FILLED, 10L, 0L);
+        given(leagueQueryService.findPlayerId(MEMBER_ID, LEAGUE_ID))
+                .willReturn(Optional.of(PLAYER_ID));
+        given(marketOrderService.placeMarketOrder(
+                new PlaceMarketOrder(LEAGUE_ID, PLAYER_ID, 5L, OrderSide.BUY, 10L), 10_000L))
+                .willReturn(placed);
+
+        assertThat(service.placeMarketOrder(MEMBER_ID, LEAGUE_ID, 5L, OrderSide.BUY, 10L))
+                .isEqualTo(placed);
     }
 }

@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.LongStream;
 import kr.ject.naspi.asset.application.AssetReservationService;
@@ -14,6 +16,7 @@ import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.league.application.LeagueTradingService;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
@@ -24,9 +27,12 @@ import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
+import kr.ject.naspi.member.application.MemberService;
+import kr.ject.naspi.order.domain.CancelReason;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
+import kr.ject.naspi.order.domain.Trade;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,6 +43,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 
@@ -47,7 +54,8 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @ActiveProfiles("test")
 @DataJpaTest
 @RecordApplicationEvents
-@Import({LimitOrderService.class, LeagueTradingService.class, StockQueryService.class,
+@Import({LimitOrderService.class, OrderExecutionSupport.class,
+        LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
         LocalStockSnapshotCache.class, AssetReservationService.class,
         AssetSettlementService.class, LimitOrderServiceTest.FixedClockConfig.class})
 class LimitOrderServiceTest {
@@ -56,20 +64,56 @@ class LimitOrderServiceTest {
     private static final long LISTER = 1L;
     private static final long SELLER = 20L;
     private static final long BUYER = 30L;
+    private static final long ENDED_LEAGUE_BUYER = 31L;
     private static final long BASE_PRICE = 10_000;
-    private static final int TRADING_DAY = 2;
+    private static final int TRADING_DAY = 1;
 
     @TestConfiguration
     static class FixedClockConfig {
 
         @Bean
         Clock clock() {
-            return Clock.fixed(NOW.atZone(ClockConfig.KST).toInstant(), ClockConfig.KST);
+            return new SettableClock(NOW);
         }
     }
 
+    /** 테스트가 현재 시각을 옮길 수 있는 시계. */
+    static class SettableClock extends Clock {
+
+        private Instant instant;
+
+        SettableClock(LocalDateTime at) {
+            set(at);
+        }
+
+        void set(LocalDateTime at) {
+            this.instant = at.atZone(ClockConfig.KST).toInstant();
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ClockConfig.KST;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
+    }
+
+    @MockitoBean
+    private MemberService memberService;
+
     @Autowired
     private LimitOrderService service;
+
+    @Autowired
+    private Clock clock;
 
     @Autowired
     private TestEntityManager entityManager;
@@ -82,6 +126,7 @@ class LimitOrderServiceTest {
 
     @BeforeEach
     void setUp() {
+        setClock(NOW);
         leagueId = startedLeague().getId();
         stockId = entityManager.persistAndGetId(
                 Stock.list(leagueId, LISTER, StockName.of("종목"), StockDescription.of("소개")),
@@ -154,16 +199,119 @@ class LimitOrderServiceTest {
                 LeagueName.of("대기실"), InviteCode.of("BBBBBBB"), NOW.minusDays(1)));
 
         assertThatThrownBy(() -> service.placeLimitOrder(new PlaceLimitOrder(
-                waiting.getId(), BUYER, stockId, OrderSide.BUY, 9_000, 1), TRADING_DAY, BASE_PRICE))
+                waiting.getId(), BUYER, stockId, OrderSide.BUY, 9_000, 1), BASE_PRICE))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_TRADABLE);
+    }
+
+    @Test
+    @DisplayName("종료 시각 이후에는 지정가 주문을 접수하지 않고 자산도 예약하지 않는다")
+    void rejectAfterLeagueEnd() {
+        League ended = startedLeagueAt("DDDDDDD", NOW.minusDays(8));
+        entityManager.persist(Account.open(ended.getId(), ENDED_LEAGUE_BUYER, 1_000_000));
+        entityManager.flush();
+
+        assertThatThrownBy(() -> service.placeLimitOrder(new PlaceLimitOrder(
+                ended.getId(), BUYER, stockId, OrderSide.BUY, 9_000, 1), BASE_PRICE))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
+
+        Long orders = entityManager.getEntityManager()
+                .createQuery("select count(o) from Order o where o.leagueId = :l", Long.class)
+                .setParameter("l", ended.getId()).getSingleResult();
+        assertThat(orders).isZero();
+        Account endedAccount = entityManager.getEntityManager().createQuery(
+                        "select a from Account a where a.leagueId = :l and a.playerId = :p",
+                        Account.class)
+                .setParameter("l", ended.getId())
+                .setParameter("p", ENDED_LEAGUE_BUYER).getSingleResult();
+        assertThat(endedAccount.getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("체결되면 정산과 같은 트랜잭션에서 체결 기록을 남긴다")
+    void recordsTradeOnExecution() {
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 10);
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 12_000, 4);
+
+        List<Trade> trades = entityManager.getEntityManager()
+                .createQuery("select t from Trade t where t.leagueId = :l", Trade.class)
+                .setParameter("l", leagueId).getResultList();
+        assertThat(trades).hasSize(1);
+        Trade trade = trades.get(0);
+        assertThat(trade.getSellOrderId()).isEqualTo(sell.orderId());
+        assertThat(trade.getBuyOrderId()).isEqualTo(buy.orderId());
+        assertThat(trade.getBuyerPlayerId()).isEqualTo(BUYER);
+        assertThat(trade.getSellerPlayerId()).isEqualTo(SELLER);
+        assertThat(trade.getStockId()).isEqualTo(stockId);
+        assertThat(trade.getTradingDay()).isEqualTo(TRADING_DAY);
+        assertThat(trade.getPrice()).isEqualTo(11_000);
+        assertThat(trade.getQuantity()).isEqualTo(4);
+        assertThat(trade.getAmount()).isEqualTo(44_000);
+        assertThat(trade.getExecutedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("체결 없이 대기만 하는 주문은 체결 기록을 남기지 않는다")
+    void noTradeWithoutExecution() {
+        place(BUYER, OrderSide.BUY, 9_000, 10);
+
+        Long count = entityManager.getEntityManager()
+                .createQuery("select count(t) from Trade t", Long.class).getSingleResult();
+        assertThat(count).isZero();
+    }
+
+    @Test
+    @DisplayName("거래일은 09:00 정각 이전에는 이전 거래일, 09:00:00부터는 새 거래일이다")
+    void tradingDayChangesAtNine() {
+        // 리그 시작은 11-15 10:00이므로 1일차는 11-16 09:00 직전까지이고 2일차는 11-16 09:00:00에 시작한다.
+        setClock(LocalDateTime.of(2026, 11, 16, 8, 59, 59, 999_000_000));
+        PlacedOrder before = place(BUYER, OrderSide.BUY, 9_000, 1);
+        setClock(LocalDateTime.of(2026, 11, 16, 9, 0, 0));
+        PlacedOrder after = place(BUYER, OrderSide.BUY, 9_000, 1);
+
+        assertThat(entityManager.find(Order.class, before.orderId()).getTradingDay()).isEqualTo(1);
+        assertThat(entityManager.find(Order.class, after.orderId()).getTradingDay()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("거래일 번호는 거래 가능 판정 시각 기준으로 정해 접수 시각과 같은 순간을 가리킨다")
+    void tradingDayMatchesOrderedAt() {
+        setClock(LocalDateTime.of(2026, 11, 16, 9, 0, 0));
+        PlacedOrder placed = place(BUYER, OrderSide.BUY, 9_000, 1);
+
+        Order saved = entityManager.find(Order.class, placed.orderId());
+        assertThat(saved.getOrderedAt()).isEqualTo(LocalDateTime.of(2026, 11, 16, 9, 0, 0));
+        assertThat(saved.getTradingDay()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("종료 시각 이후에는 미체결 주문을 취소할 수 없다")
+    void rejectCancelAfterLeagueEnd() {
+        League ended = startedLeagueAt("DDDDDDD", NOW.minusDays(8));
+
+        assertThatThrownBy(() -> service.cancelOrder(ended.getId(), BUYER, 1L))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
+    }
+
+    @Test
+    @DisplayName("접수 시각과 체결 시각은 거래 가능 판정 시각과 같다")
+    void orderAndExecutionTimeEqualsTradableCheckTime() {
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 10);
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 12_000, 4);
+
+        assertThat(entityManager.find(Order.class, sell.orderId()).getOrderedAt()).isEqualTo(NOW);
+        assertThat(entityManager.find(Order.class, buy.orderId()).getOrderedAt()).isEqualTo(NOW);
+        assertThat(events.stream(TradeExecuted.class).toList())
+                .extracting(TradeExecuted::executedAt).containsExactly(NOW);
     }
 
     @Test
     @DisplayName("리그에 없는 종목은 접수를 거절한다")
     void rejectUnknownStock() {
         assertThatThrownBy(() -> service.placeLimitOrder(new PlaceLimitOrder(
-                leagueId, BUYER, 9_999L, OrderSide.BUY, 9_000, 1), TRADING_DAY, BASE_PRICE))
+                leagueId, BUYER, 9_999L, OrderSide.BUY, 9_000, 1), BASE_PRICE))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.STOCK_NOT_FOUND);
     }
@@ -192,6 +340,8 @@ class LimitOrderServiceTest {
         assertThat(account(SELLER).getDeposit()).isEqualTo(1_000_000 + 44_000);
         assertThat(holding(SELLER).getQuantity()).isEqualTo(96);
         assertThat(holding(SELLER).getReservedQuantity()).isEqualTo(6);
+        assertThat(entityManager.find(Order.class, buy.orderId()).getCancelReason()).isNull();
+        assertThat(entityManager.find(Order.class, sell.orderId()).getCancelReason()).isNull();
     }
 
     @Test
@@ -225,6 +375,7 @@ class LimitOrderServiceTest {
         assertThat(buy.status()).isEqualTo(OrderStatus.PARTIALLY_FILLED);
         assertThat(buy.remainingQuantity()).isEqualTo(7);
         assertThat(account(BUYER).getReservedDeposit()).isEqualTo(77_000);
+        assertThat(entityManager.find(Order.class, buy.orderId()).getCancelReason()).isNull();
     }
 
     @Test
@@ -238,6 +389,11 @@ class LimitOrderServiceTest {
         assertThat(account(SELLER).getReservedDeposit()).isZero();
         assertThat(entityManager.find(Order.class, sell.orderId()).getStatus())
                 .isEqualTo(OrderStatus.PENDING);
+        assertThat(entityManager.find(Order.class, sell.orderId()).getCancelReason()).isNull();
+        Order canceledBuy = entityManager.find(Order.class, buy.orderId());
+        assertThat(canceledBuy.getCancelReason()).isEqualTo(CancelReason.SELF_TRADE_PREVENTED);
+        assertThat(canceledBuy.getCanceledAt())
+                .isEqualTo(NOW).isEqualTo(canceledBuy.getOrderedAt());
         assertThat(events.stream(TradeExecuted.class)).isEmpty();
     }
 
@@ -254,6 +410,22 @@ class LimitOrderServiceTest {
                 .isEqualTo(OrderStatus.CANCELED);
         assertThat(account(BUYER).getReservedDeposit()).isZero();
         assertThat(account(BUYER).getDeposit()).isEqualTo(1_000_000);
+        Order order = entityManager.find(Order.class, buy.orderId());
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(order.getCanceledAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("직접 취소의 취소 일시는 접수 시각이 아니라 취소 요청을 거래 가능으로 판정한 시각이다")
+    void cancelRecordsJudgedTime() {
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 10);
+        setClock(NOW.plusMinutes(30));
+
+        cancel(BUYER, buy.orderId());
+
+        Order order = entityManager.find(Order.class, buy.orderId());
+        assertThat(order.getCanceledAt()).isEqualTo(NOW.plusMinutes(30));
+        assertThat(order.getOrderedAt()).isEqualTo(NOW);
     }
 
     @Test
@@ -270,6 +442,9 @@ class LimitOrderServiceTest {
         assertThat(holding(SELLER).getReservedQuantity()).isZero();
         assertThat(account(SELLER).getDeposit()).isEqualTo(1_000_000 + 33_000);
         assertThat(holding(BUYER).getQuantity()).isEqualTo(3);
+        Order order = entityManager.find(Order.class, sell.orderId());
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(order.getRemainingQuantity()).isEqualTo(7);
     }
 
     @Test
@@ -349,6 +524,9 @@ class LimitOrderServiceTest {
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS_TRANSITION);
         assertThat(account(BUYER).getReservedDeposit()).isZero();
+        Order order = entityManager.find(Order.class, buy.orderId());
+        assertThat(order.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
+        assertThat(order.getCanceledAt()).isEqualTo(NOW);
     }
 
     @Test
@@ -371,7 +549,7 @@ class LimitOrderServiceTest {
 
     private PlacedOrder place(long playerId, OrderSide side, long price, long quantity) {
         PlacedOrder placed = service.placeLimitOrder(new PlaceLimitOrder(
-                leagueId, playerId, stockId, side, price, quantity), TRADING_DAY, BASE_PRICE);
+                leagueId, playerId, stockId, side, price, quantity), BASE_PRICE);
         entityManager.flush();
         entityManager.clear();
         return placed;
@@ -391,21 +569,29 @@ class LimitOrderServiceTest {
                 .setParameter("l", leagueId).setParameter("p", playerId).getSingleResult();
     }
 
+    private void setClock(LocalDateTime at) {
+        ((SettableClock) clock).set(at);
+    }
+
     private League startedLeague() {
         return startedLeague("AAAAAAA");
     }
 
     private League startedLeague(String inviteCode) {
+        return startedLeagueAt(inviteCode, NOW);
+    }
+
+    private League startedLeagueAt(String inviteCode, LocalDateTime startedAt) {
         League league = entityManager.persistAndFlush(League.create(
-                LeagueName.of("리그"), InviteCode.of(inviteCode), NOW.minusDays(1)));
+                LeagueName.of("리그"), InviteCode.of(inviteCode), startedAt.minusDays(1)));
         List<Player> players = LongStream.rangeClosed(1, League.MIN_PARTICIPANTS_TO_START)
                 .mapToObj(memberId -> {
-                    Player player = Player.enter(league.getId(), memberId, NOW.minusDays(1));
-                    player.completeListing(NOW.minusDays(1));
+                    Player player = Player.enter(league.getId(), memberId, startedAt.minusDays(1));
+                    player.completeListing(startedAt.minusDays(1));
                     return player;
                 })
                 .toList();
-        league.start(players, NOW);
+        league.start(players, startedAt);
         return entityManager.persistAndFlush(league);
     }
 }

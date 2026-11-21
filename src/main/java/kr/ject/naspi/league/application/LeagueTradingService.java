@@ -1,5 +1,7 @@
 package kr.ject.naspi.league.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.domain.League;
@@ -22,22 +24,26 @@ import org.springframework.transaction.annotation.Transactional;
 public class LeagueTradingService {
 
     private final LeagueRepository leagueRepository;
+    private final Clock clock;
 
     /**
-     * 리그에 거래 락을 건다. 주문을 처리하는 트랜잭션 안에서 호출해야 한다.
+     * 리그에 거래 락을 걸고 거래 가능 여부를 판정한다. 주문을 처리하는 트랜잭션 안에서 호출해야 한다.
+     * 시작 상태 리그는 초기 자산 배분이 끝난 것이므로(LeagueStartUseCase가 같은 트랜잭션으로 처리) 별도로 보지 않는다.
      *
      * @param leagueId 리그 ID
-     * @throws NaspiBizException 리그가 없거나 ({@link ErrorCode#LEAGUE_NOT_FOUND}), 거래할 수 있는 상태가
-     *     아닌 경우 ({@link ErrorCode#LEAGUE_NOT_TRADABLE})
+     * @return 거래 가능하다고 판정한 시각. 호출한 쪽이 주문 접수·체결 시각으로 쓴다
+     * @throws NaspiBizException 리그가 없거나 만료·삭제된 대기실인 경우({@link ErrorCode#LEAGUE_NOT_FOUND}),
+     *     종료되었거나 종료 시각 이후인 경우({@link ErrorCode#LEAGUE_ALREADY_ENDED}), 아직 시작하지 않은 경우
+     *     ({@link ErrorCode#LEAGUE_NOT_TRADABLE})
      * @throws org.springframework.transaction.IllegalTransactionStateException 진행 중인 트랜잭션이
      *     없는 경우 (락이 바로 풀려 직렬화가 되지 않는다)
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void lockForTrading(long leagueId) {
+    public LocalDateTime lockForTrading(long leagueId) {
         League league = leagueRepository.findWithLockById(leagueId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
-        if (!league.isTradable()) {
-            throw new NaspiBizException(ErrorCode.LEAGUE_NOT_TRADABLE);
-        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        league.requireTradable(now);
+        return now;
     }
 }

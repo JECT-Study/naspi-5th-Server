@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
@@ -26,8 +27,10 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "orders",
-        indexes = @Index(name = "idx_orders_book",
-                columnList = "stock_id, side, status, price, id"))
+        indexes = {
+                @Index(name = "idx_orders_book",
+                        columnList = "stock_id, side, status, price, id"),
+                @Index(name = "idx_orders_player", columnList = "player_id, status, id")})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Order {
@@ -85,6 +88,15 @@ public class Order {
 
     @Column(name = "ordered_at", nullable = false)
     private LocalDateTime orderedAt;
+
+    /** 취소·만료된 시각. 취소·만료되지 않은 주문은 {@code null}이다. */
+    @Column(name = "canceled_at")
+    private LocalDateTime canceledAt;
+
+    /** 취소·만료 사유. 취소·만료되지 않은 주문은 {@code null}이다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancel_reason", length = 32)
+    private CancelReason cancelReason;
 
     private Order(long leagueId, long playerId, long stockId, OrderSide side, OrderType type,
             Long price, long quantity, int tradingDay, LocalDateTime orderedAt) {
@@ -177,6 +189,25 @@ public class Order {
     }
 
     /**
+     * 취소 수량. 취소·만료 시점의 미체결 잔여 수량이며, 거래일 변경으로 만료된 수량도 취소로 합산한다.
+     *
+     * @return 취소·만료된 주문이면 잔여 수량, 아니면 0
+     */
+    public long canceledQuantity() {
+        return status == OrderStatus.CANCELED || status == OrderStatus.EXPIRED
+                ? remainingQuantity : 0;
+    }
+
+    /**
+     * 현재 대기 수량.
+     *
+     * @return {@code 최초 주문 수량 - 체결 수량 - 취소 수량}
+     */
+    public long pendingQuantity() {
+        return quantity - filledQuantity() - canceledQuantity();
+    }
+
+    /**
      * 호가창에 남아 체결을 기다리는 주문인지 확인한다. 시장가 주문은 호가창에 남지 않는다.
      *
      * @return 지정가이고 대기 또는 부분 체결 상태면 {@code true}
@@ -232,21 +263,37 @@ public class Order {
     }
 
     /**
-     * 미체결 잔여 수량을 취소한다. 이미 체결된 부분은 유지된다.
+     * 미체결 잔여 수량을 취소한다. 이미 체결된 부분은 유지되며, 취소 수량은 이 시점의 잔여 수량이다.
      *
+     * @param reason 취소 사유 ({@link CancelReason#TRADING_DAY_EXPIRED}는 {@link #expire}로만 기록한다)
+     * @param canceledAt 취소 시각
      * @throws NaspiBizException 이미 종료된 주문인 경우
+     * @throws IllegalArgumentException 사유가 거래일 변경 만료인 경우
      */
-    public void cancel() {
+    public void cancel(CancelReason reason, LocalDateTime canceledAt) {
+        Objects.requireNonNull(reason, "reason");
+        Objects.requireNonNull(canceledAt, "canceledAt");
+        if (reason == CancelReason.TRADING_DAY_EXPIRED) {
+            throw new IllegalArgumentException("거래일 변경 만료는 expire로 기록합니다");
+        }
         transitionTo(OrderStatus.CANCELED);
+        this.canceledAt = canceledAt;
+        this.cancelReason = reason;
     }
 
     /**
-     * 미체결 잔여 수량을 만료시킨다. 이미 체결된 부분은 유지된다.
+     * 미체결 잔여 수량을 만료시킨다. 이미 체결된 부분은 유지된다. 사유는
+     * {@link CancelReason#TRADING_DAY_EXPIRED}로 기록한다.
      *
+     * @param expiredAt 만료 시각. 거래일 전환 시각(09:00:00 KST)을 넘긴다. 만료 처리가 늦어져도 모든
+     *     만료 주문이 같은 일시를 갖도록, ORD-09가 전환 시각을 인자로 넘긴다
      * @throws NaspiBizException 이미 종료된 주문인 경우
      */
-    public void expire() {
+    public void expire(LocalDateTime expiredAt) {
+        Objects.requireNonNull(expiredAt, "expiredAt");
         transitionTo(OrderStatus.EXPIRED);
+        this.canceledAt = expiredAt;
+        this.cancelReason = CancelReason.TRADING_DAY_EXPIRED;
     }
 
     private void transitionTo(OrderStatus next) {

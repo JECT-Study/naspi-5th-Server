@@ -173,6 +173,54 @@ class LeagueTest {
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
     }
 
+    @Test
+    @DisplayName("진행 중인 리그는 종료 시각 직전까지 거래할 수 있고, 종료 시각 09:00 정각부터는 이미 종료된 리그로 거절한다")
+    void requireTradable() {
+        League started = newLeague();
+        started.start(participants(3), STARTED_AT);
+
+        started.requireTradable(started.getEndsAt().minusNanos(1));
+        assertThatThrownBy(() -> started.requireTradable(started.getEndsAt()))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
+    }
+
+    @Test
+    @DisplayName("종료 상태 리그는 종료 시각 전이라도 거래할 수 없다")
+    void requireTradableEnded() {
+        League ended = newLeague();
+        ReflectionTestUtils.setField(ended, "status", LeagueStatus.ENDED);
+
+        assertThatThrownBy(() -> ended.requireTradable(STARTED_AT))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
+    }
+
+    @Test
+    @DisplayName("시작하지 않은 대기실에서는 거래할 수 없다")
+    void requireTradableWaiting() {
+        League waiting = newLeague();
+
+        assertThatThrownBy(() -> waiting.requireTradable(EXPIRES_AT.minusNanos(1)))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_TRADABLE);
+    }
+
+    @Test
+    @DisplayName("만료·삭제된 대기실은 없는 리그로 거절한다")
+    void requireTradableUnavailable() {
+        League waiting = newLeague();
+        assertThatThrownBy(() -> waiting.requireTradable(EXPIRES_AT))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+
+        League expired = newLeague();
+        ReflectionTestUtils.setField(expired, "status", LeagueStatus.EXPIRED);
+        assertThatThrownBy(() -> expired.requireTradable(CREATED_AT))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+
+        League deleted = newLeague();
+        ReflectionTestUtils.setField(deleted, "status", LeagueStatus.DELETED);
+        assertThatThrownBy(() -> deleted.requireTradable(CREATED_AT))
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+    }
+
     private static League newLeague() {
         return League.create(LeagueName.of("리그"), InviteCode.of("ABC1234"), CREATED_AT);
     }

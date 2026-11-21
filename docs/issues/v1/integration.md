@@ -19,17 +19,17 @@
 ---
 
 ### INT-02 시장가 매수 체결·취소 후 남은 예약금을 asset 해제 API로 푼다
-- Jira:
+- Jira: ND-38
 - 목적: AST-05(ND-32)의 미체크 조건 "시장가 매수: 체결 또는 취소 처리 후 예약금 중 실제 총체결 금액을 제외한 나머지 전액 해제"를 시장가 주문 흐름에 연결한다 (asset ↔ order 연동)
 - 배경: asset은 준비돼 있다. 체결분은 `AssetSettlementService`가 `보호최고가 × 체결 수량`을 풀고 `체결가 × 체결 수량`만 차감하며, 잔량은 `releaseCashForBuy(보호최고가, 잔량)`로 푼다 (`AccountTest#releaseRemainingAfterMarketBuyFill`)
 - 내용: 시장가 주문 서비스(ORD-05)에서 `보호최고가 × 주문 수량`으로 예약하고 `Order.recordReservedPrice(보호최고가)`를 남긴 뒤, 매칭 후 보호 범위 밖·상대 호가 없음으로 취소된 잔량을 `releaseCashForBuy` / `releaseStockForSell`로 해제한다
 - 선행: AST-05, ORD-05 (ND-38)
 - 완료 조건 (확인 방법)
-  - [ ] 시장가 매수가 일부 체결·잔량 취소되면 예약금이 0이고, 예수금 감소분은 실제 총체결 금액과 같다 — `./gradlew test --tests "kr.ject.naspi.order.*Market*"`
-  - [ ] 체결 가능 수량이 0이라 전량 취소되면 예약금이 전부 해제된다 — 같은 테스트
-  - [ ] 시장가 매도 잔량 취소 시 예약 주식이 해제된다 — 같은 테스트
-  - [ ] asset 전제 테스트가 통과한다 — `./gradlew test --tests "kr.ject.naspi.asset.domain.AccountTest"`
-  - [ ] AST-05 시장가 체크박스를 `[x]`로 바꾼다 — `scripts/find-story.sh ND-32`
+  - [x] 시장가 매수가 일부 체결·잔량 취소되면 예약금이 0이고, 예수금 감소분은 실제 총체결 금액과 같다 — `./gradlew test --tests "kr.ject.naspi.order.*Market*"`
+  - [x] 체결 가능 수량이 0이라 전량 취소되면 예약금이 전부 해제된다 — 같은 테스트
+  - [x] 시장가 매도 잔량 취소 시 예약 주식이 해제된다 — 같은 테스트
+  - [x] asset 전제 테스트가 통과한다 — `./gradlew test --tests "kr.ject.naspi.asset.domain.AccountTest"`
+  - [x] AST-05 시장가 체크박스를 `[x]`로 바꾼다 — `scripts/find-story.sh ND-32`
 
 ### INT-03 미체결 만료·리그 종료 취소 시 예약 자산을 asset 해제 API로 푼다
 - Jira:
