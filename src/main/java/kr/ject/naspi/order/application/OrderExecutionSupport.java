@@ -5,11 +5,11 @@ import kr.ject.naspi.asset.application.AssetReservationService;
 import kr.ject.naspi.asset.application.AssetSettlementService;
 import kr.ject.naspi.asset.application.TradeSettlement;
 import kr.ject.naspi.market.application.StockExecutionService;
+import kr.ject.naspi.order.domain.CancelReason;
 import kr.ject.naspi.order.domain.Execution;
 import kr.ject.naspi.order.domain.MatchResult;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
-import kr.ject.naspi.order.domain.OrderStatus;
 import kr.ject.naspi.order.domain.Trade;
 import kr.ject.naspi.order.domain.TradeRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
- * 지정가·시장가 접수 흐름이 함께 쓰는 자산 예약·정산·해제 처리.
+ * 지정가·시장가 접수·취소·만료 흐름이 함께 쓰는 자산 예약·정산·해제 처리.
  *
  * <p>트랜잭션은 호출하는 서비스가 연다.
  */
@@ -63,13 +63,30 @@ class OrderExecutionSupport {
     }
 
     /**
-     * 취소된 주문의 미체결 잔여 수량에 묶인 예약을 푼다. 취소 상태가 아니거나 잔여 수량이 없으면 아무것도 하지
-     * 않는다.
+     * 미체결 주문을 취소·만료로 종료하고 미체결 잔여 수량에 묶인 예약을 푼다. 사유가
+     * {@link CancelReason#TRADING_DAY_EXPIRED}이면 만료, 아니면 취소로 처리한다. 이미 종료된 주문이면
+     * 도메인이 상태 전이를 거절하고 해제는 일어나지 않는다.
+     *
+     * @param order 주문
+     * @param reason 종료 사유
+     * @param closedAt 종료 시각
+     */
+    void closeRemaining(Order order, CancelReason reason, LocalDateTime closedAt) {
+        if (reason == CancelReason.TRADING_DAY_EXPIRED) {
+            order.expire(closedAt);
+        } else {
+            order.cancel(reason, closedAt);
+        }
+        releaseRemaining(order);
+    }
+
+    /**
+     * 취소·만료된 주문의 미체결 잔여 수량에 묶인 예약을 푼다. 취소·만료 수량이 없으면 아무것도 하지 않는다.
      *
      * @param order 주문
      */
     void releaseRemaining(Order order) {
-        if (order.getStatus() != OrderStatus.CANCELED || order.getRemainingQuantity() == 0) {
+        if (order.canceledQuantity() == 0) {
             return;
         }
         if (order.getSide() == OrderSide.BUY) {

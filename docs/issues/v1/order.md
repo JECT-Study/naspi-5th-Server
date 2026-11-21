@@ -118,12 +118,14 @@
 - 정책: [order.md#미체결-주문-관리](../../policies/v1/domain/order.md#미체결-주문-관리)
 - 선행: LEA-11, AST-06
 - 완료 조건
-  - [ ] 거래일 전환 UseCase(LEA-11 `TradingDayChangeUseCase`) 호출 시 이전 거래일 지정가 미체결 잔량 만료, 예약 자산 해제
-  - [ ] 이미 체결된 부분 유지
-- 결정: 09:00 이후 전환 처리 전 신규 주문은 접수 거절한다(방식 A, MKT-06에서 구현, `213`). 남은 일은 전환 UseCase에서 만료 호출
-- 진행: `Order.expire(LocalDateTime)`가 사유 `TRADING_DAY_EXPIRED`와 일시를 기록한다. 인자는 거래일 전환 시각(09:00:00 KST)을 넘긴다.
+  - [x] 거래일 전환 UseCase(LEA-11 `TradingDayChangeUseCase`) 호출 시 이전 거래일 지정가 미체결 잔량 만료, 예약 자산 해제
+  - [x] 이미 체결된 부분 유지
+  - 테스트: `./gradlew test --tests "kr.ject.naspi.order.application.OpenOrderClosing*" --tests "kr.ject.naspi.league.application.TradingDayChange*" --tests "kr.ject.naspi.order.application.TradingDayExpirationConcurrencyTest"`
+- 결정: 호가창 거래일 필터 대 락 방식은 방식 A로 확정한다(`213`, MKT-06). 09:00:00 이후 전환 처리 전에는 `requireTradingDayOpened`가 접수를 거절하므로 호가창에는 마감 거래일 이하 주문만 존재하고, 전환은 리그 락 안에서 만료까지 한 트랜잭션으로 끝나므로 새 거래일 주문이 이전 거래일 주문과 체결될 수 없다. 따라서 호가창 조회에 거래일 필터가 필요 없다. 전환 전 구간의 사용자 취소는 허용한다(`USER_REQUESTED`로 기록, 예약 해제 결과는 만료와 같음)
+- 진행: `OpenOrderClosingService#expireTradingDay`(마감 거래일 이하 지정가 대기·부분 체결 주문을 `TRADING_DAY_EXPIRED`로 만료, 만료 일시는 새 거래일 시작 시각 09:00:00)와 공통 종료 로직 `OrderExecutionSupport#closeRemaining`(사유만 다른 취소·만료 + 잔여 예약 해제)을 구현했고 `TradingDayChangeUseCase`가 market 호출 다음에 호출한다. 호출자가 리그 락을 잡은 트랜잭션에서 호출해야 하며(`Propagation.MANDATORY`는 트랜잭션 존재만 확인), 만료 대상 조회에 리그 기준 인덱스는 두지 않았다(운영 지표를 보고 추가).
+- 위험: 만료 중 예약 해제 오류 등으로 전환이 롤백되면 그 리그는 다음 날 09:00 또는 서버 재기동 때까지 재시도되지 않고, 그동안 방식 A 때문에 신규 주문이 `213`으로 거절된다(LEA-11 market 실패와 같은 성질). 현행 유지하며 로그 경보 후 수동 조치한다. 재시도 주기 단축은 별도 Task 후보.
 - 비고 (asset 구현 시 전달받은 주의사항): 해제 중 데이터 오류가 나면 트랜잭션 전체가 롤백되므로, 만료 일괄 처리는 리그 단위 한 트랜잭션으로 처리한다 (리그 락 안에서 끝내 순서를 보장하고, 오류 시 그 리그의 전환이 함께 롤백되어 다음 실행에서 보정된다).
-- 확인 필요 (ORD-10, ORD-11 포함): 지금은 주문 상태를 바꾸는 경로(접수·체결, 취소)가 모두 리그 락 안에서 실행되고, `LimitOrderService.cancelOrder`의 주문 행 락(`findWithLockById`)은 리그 락과 겹치는 방어적 중복이다(리그 락만으로도 `LimitOrderConcurrencyTest` 40/40 통과, 2026-11-19 대조 실험). 만료·종료·탈퇴 취소가 리그 락을 잡지 않고 주문 상태를 바꾸는 경로가 된다면(예: 위 비고처럼 주문별로 트랜잭션을 나눈 만료 배치) 사용자 취소와 같은 주문을 동시에 처리해도 예약이 두 번 풀리지 않는지(주문 행 락의 필요성)를 동시성 테스트로 확인한다. 리그 락 안에서 처리한다면 주문 행 락을 유지할지 제거할지 이때 결정한다.
+- 확인 결과 (ORD-10, ORD-11 포함): 접수·체결, 사용자 취소, 거래일 만료는 모두 같은 리그 락 안에서 실행되어 직렬화된다. `TradingDayExpirationConcurrencyTest`(취소와 전환을 10라운드 동시 실행)가 예약 이중 해제·음수 예약 없이 통과하고, `OrderJpaRepository.findWithLockById`의 `@Lock`을 임시로 뺀 대조 실험(5회 반복)에서도 통과했다. 즉 `LimitOrderService.cancelOrder`의 주문 행 락은 리그 락과 겹치는 방어적 중복이다. 행 락은 유지하고, ORD-10·ORD-11(ND-43·ND-44)이 리그 락을 잡지 않는 경로를 만들 경우의 락 정책(리그 락을 잡을지, 일괄 조회를 `FOR UPDATE`로 잠글지)과 함께 그때 유지·제거를 결정한다. 일괄 종료 공통 로직은 `OpenOrderClosingService#closeAll`·`OrderExecutionSupport#closeRemaining`를 재사용한다. `OpenOrderClosingService`는 리그 락을 직접 잡지 않으므로(`MANDATORY`는 리그 락 보유를 확인하지 못한다) ND-43·ND-44가 호출 경로의 락을 정해야 한다.
 
 ### ORD-10 리그가 종료되면 주문 접수가 막히고 모든 미체결 주문이 취소된다
 - Jira: ND-43

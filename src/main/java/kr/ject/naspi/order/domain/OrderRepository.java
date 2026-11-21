@@ -47,6 +47,19 @@ public interface OrderRepository {
             List<OrderStatus> statuses);
 
     /**
+     * 거래일 만료 대상 주문을 접수 순서로 조회한다. 리그에서 마감하는 거래일 이하에 접수한 주어진 유형·상태의
+     * 주문이다.
+     *
+     * @param leagueId 리그 ID
+     * @param type 주문 유형 (지정가)
+     * @param statuses 열린 상태 (대기, 부분 체결)
+     * @param tradingDay 마감하는 거래일 일차 (이 일차 이하)
+     * @return 주문 목록. 접수 순서(id 오름차순)
+     */
+    List<Order> findAllByLeagueIdAndTypeAndStatusInAndTradingDayLessThanEqualOrderByIdAsc(
+            Long leagueId, OrderType type, List<OrderStatus> statuses, int tradingDay);
+
+    /**
      * 플레이어가 접수한 주문 중 주어진 상태의 주문을 접수 역순으로 조회한다.
      *
      * @param playerId 플레이어 ID

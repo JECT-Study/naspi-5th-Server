@@ -21,6 +21,8 @@ import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
 import kr.ject.naspi.market.application.StockTradingDayService;
+import kr.ject.naspi.member.application.MemberService;
+import kr.ject.naspi.order.application.OrderClosingTestConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,13 +39,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** 여러 서버가 같은 전환을 동시에 실행해도 리그 락으로 직렬화되어 한 번만 처리되는지 검증한다 (LEA-11). */
 @ActiveProfiles("test")
 @DataJpaTest
-@Import({TradingDayChangeUseCase.class, StockTradingDayService.class})
+@Import({TradingDayChangeUseCase.class, StockTradingDayService.class,
+        OrderClosingTestConfig.class, MutableClock.Config.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class TradingDayChangeConcurrencyTest {
 
     private static final LocalDateTime STARTED_AT = LocalDateTime.of(2026, 11, 15, 10, 0);
     private static final LocalDateTime DAY2 = LocalDateTime.of(2026, 11, 16, 9, 0);
     private static final int THREADS = 4;
+
+    @MockitoBean
+    private MemberService memberService;
 
     @Autowired
     private TradingDayChangeUseCase useCase;

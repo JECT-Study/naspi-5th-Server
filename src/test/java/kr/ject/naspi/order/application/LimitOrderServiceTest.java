@@ -60,7 +60,7 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @ActiveProfiles("test")
 @DataJpaTest
 @RecordApplicationEvents
-@Import({LimitOrderService.class, OrderExecutionSupport.class,
+@Import({LimitOrderService.class, OrderExecutionSupport.class, OpenOrderClosingService.class,
         LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
         StockExecutionService.class, StockTradingDayService.class, LocalStockSnapshotCache.class,
         AssetReservationService.class, AssetSettlementService.class,
@@ -117,6 +117,9 @@ class LimitOrderServiceTest {
 
     @Autowired
     private LimitOrderService service;
+
+    @Autowired
+    private OpenOrderClosingService openOrderClosingService;
 
     @Autowired
     private Clock clock;
@@ -543,6 +546,23 @@ class LimitOrderServiceTest {
         Order order = entityManager.find(Order.class, buy.orderId());
         assertThat(order.getCancelReason()).isEqualTo(CancelReason.USER_REQUESTED);
         assertThat(order.getCanceledAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("거래일 변경으로 만료된 주문은 취소할 수 없다")
+    void cancelExpiredRejected() {
+        final PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 10);
+        openOrderClosingService.expireTradingDay(leagueId, TRADING_DAY,
+                LocalDateTime.of(2026, 11, 16, 9, 0));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThatThrownBy(() -> cancel(BUYER, buy.orderId()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_ORDER_STATUS_TRANSITION);
+        assertThat(entityManager.find(Order.class, buy.orderId()).getStatus())
+                .isEqualTo(OrderStatus.EXPIRED);
+        assertThat(account(BUYER).getReservedDeposit()).isZero();
     }
 
     @Test

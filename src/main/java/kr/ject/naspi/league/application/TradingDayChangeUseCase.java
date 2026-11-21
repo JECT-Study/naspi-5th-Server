@@ -8,6 +8,7 @@ import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
 import kr.ject.naspi.market.application.StockTradingDayService;
+import kr.ject.naspi.order.application.OpenOrderClosingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 처리하고, 놓친 전환은 다음 실행에서 일차 순서대로 보정한다. 마지막 거래일의 마감은 리그 종료 처리(LEA-12)가 맡는다.
  *
  * <p>후속 처리는 하위 모듈 application을 {@link #changeTo}에서 직접 호출한다 (README "거래일 전환"):
- * market 종가 확정·기준가 적용(MKT-06)을 호출한다. order 미체결 만료(ORD-09)는 그 뒤에 호출한다.
+ * market 종가 확정·기준가 적용(MKT-06)을 호출하고, 이어서 order 미체결 지정가 주문 만료·예약
+ * 해제(ORD-09)를 호출한다. 해제 중 오류가 나면 그 리그의 전환 전체가 롤백되어 다음 실행에서 보정된다.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,6 +35,7 @@ public class TradingDayChangeUseCase {
     private final LeagueRepository leagueRepository;
     private final TradingDayRepository tradingDayRepository;
     private final StockTradingDayService stockTradingDayService;
+    private final OpenOrderClosingService openOrderClosingService;
 
     /**
      * 진행 중인 리그의 밀린 거래일 전환을 처리한다.
@@ -63,5 +66,7 @@ public class TradingDayChangeUseCase {
     private void changeTo(TradingDay closingDay) {
         stockTradingDayService.changeTradingDay(
                 closingDay.getLeagueId(), closingDay.getDayNumber());
+        openOrderClosingService.expireTradingDay(
+                closingDay.getLeagueId(), closingDay.getDayNumber(), closingDay.getEndsAt());
     }
 }

@@ -107,8 +107,7 @@ public class LimitOrderService {
         Order order = orderRepository.findWithLockById(orderId)
                 .filter(o -> o.getLeagueId() == leagueId && o.getPlayerId() == playerId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.ORDER_NOT_FOUND));
-        order.cancel(CancelReason.USER_REQUESTED, now);
-        support.releaseRemaining(order);
+        support.closeRemaining(order, CancelReason.USER_REQUESTED, now);
         return CanceledOrder.from(order);
     }
 

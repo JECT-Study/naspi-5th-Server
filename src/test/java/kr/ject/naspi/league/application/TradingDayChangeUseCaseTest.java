@@ -6,6 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.LongStream;
+import kr.ject.naspi.asset.application.AssetReservationService;
+import kr.ject.naspi.asset.domain.Account;
+import kr.ject.naspi.asset.domain.Holding;
+import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
@@ -19,6 +23,11 @@ import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDailyPrice;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
+import kr.ject.naspi.member.application.MemberService;
+import kr.ject.naspi.order.application.OrderClosingTestConfig;
+import kr.ject.naspi.order.domain.Order;
+import kr.ject.naspi.order.domain.OrderSide;
+import kr.ject.naspi.order.domain.OrderStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,20 +35,31 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({TradingDayChangeUseCase.class, StockTradingDayService.class,
-        StockExecutionService.class})
+        OrderClosingTestConfig.class, MutableClock.Config.class})
 class TradingDayChangeUseCaseTest {
 
     /** 시작 후 1일차: 2026-11-15 10:00 시작, 2일차는 11-16 09:00. */
     private static final LocalDateTime STARTED_AT = LocalDateTime.of(2026, 11, 15, 10, 0);
     private static final LocalDateTime DAY2 = LocalDateTime.of(2026, 11, 16, 9, 0);
 
+    private static final long LISTER = 10L;
+    private static final long SELLER = 20L;
+    private static final long BUYER = 30L;
+
+    @MockitoBean
+    private MemberService memberService;
+
     @Autowired
     private TradingDayChangeUseCase useCase;
+
+    @Autowired
+    private AssetReservationService reservationService;
 
     @Autowired
     private StockExecutionService executionService;
@@ -151,6 +171,96 @@ class TradingDayChangeUseCaseTest {
 
         // 서비스 트랜잭션이 테스트 트랜잭션에 참여하므로 메모리 상태로 롤백 대상(마감 기록 전)을 확인한다
         assertThat(closedDayNumbers(league)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("09:00 거래일 전환에서 이전 거래일 지정가 미체결 주문이 만료되고 예약 자산이 해제된다")
+    void expiresOpenOrdersOnChange() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        Order buy = reservedOrder(league, stockId, BUYER, OrderSide.BUY, 1);
+        final Order sell = reservedOrder(league, stockId, SELLER, OrderSide.SELL, 1);
+
+        useCase.change(league.getId(), DAY2.minusSeconds(1));
+        assertThat(buy.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(account(league, BUYER).getReservedDeposit()).isEqualTo(90_000);
+
+        useCase.change(league.getId(), DAY2);
+
+        assertThat(buy.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        assertThat(sell.getStatus()).isEqualTo(OrderStatus.EXPIRED);
+        assertThat(account(league, BUYER).getReservedDeposit()).isZero();
+        assertThat(holding(league, SELLER).getReservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("놓친 전환을 보정해도 만료 일시는 각 거래일의 09:00:00이다")
+    void catchUpExpiresWithEachDayStart() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        Order day1 = reservedOrder(league, stockId, BUYER, OrderSide.BUY, 1);
+        Order day2 = reservedOrder(league, stockId, BUYER, OrderSide.BUY, 2);
+
+        useCase.change(league.getId(), DAY2.plusDays(2).plusSeconds(1));
+
+        assertThat(day1.getCanceledAt()).isEqualTo(DAY2);
+        assertThat(day2.getCanceledAt()).isEqualTo(DAY2.plusDays(1));
+        assertThat(account(league, BUYER).getReservedDeposit()).isZero();
+    }
+
+    @Test
+    @DisplayName("미체결 만료 중 예약 해제가 실패하면 종가 확정과 거래일 마감도 롤백된다")
+    void rollbackOnExpirationFailure() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        executionService.applyExecution(league.getId(), stockId, 1, 11_000, 3);
+        // 예약 없이 열린 매도 주문을 만들어 해제 시 데이터 오류를 일으킨다
+        entityManager.persistAndFlush(Account.open(league.getId(), SELLER, 1_000_000));
+        entityManager.persistAndFlush(Holding.allocate(league.getId(), SELLER, stockId, 100));
+        entityManager.persistAndFlush(Order.limit(league.getId(), SELLER, stockId,
+                OrderSide.SELL, 10_000, 10, 1, STARTED_AT));
+
+        assertThatThrownBy(() -> useCase.change(league.getId(), DAY2))
+                .isInstanceOf(NaspiRuntimeException.class);
+
+        // 서비스 트랜잭션이 테스트 트랜잭션에 참여하므로 마감 기록 전 상태를 메모리로 확인한다
+        assertThat(closedDayNumbers(league)).isEmpty();
+    }
+
+    private Order reservedOrder(League league, long stockId, long playerId, OrderSide side,
+            int tradingDay) {
+        if (entityManager.getEntityManager().createQuery(
+                "select count(a) from Account a where a.leagueId = :l and a.playerId = :p",
+                Long.class).setParameter("l", league.getId()).setParameter("p", playerId)
+                .getSingleResult() == 0) {
+            entityManager.persist(Account.open(league.getId(), playerId, 1_000_000));
+            entityManager.persist(Holding.allocate(league.getId(), playerId, stockId,
+                    playerId == LISTER ? 3_000 : playerId == SELLER ? 100 : 0));
+            entityManager.flush();
+        }
+        Order order = Order.limit(league.getId(), playerId, stockId, side, 9_000, 10, tradingDay,
+                STARTED_AT);
+        if (side == OrderSide.BUY) {
+            reservationService.reserveCashForBuy(league.getId(), playerId, 9_000, 10);
+            order.recordReservedPrice(9_000);
+        } else {
+            reservationService.reserveStockForSell(league.getId(), playerId, stockId, 10);
+        }
+        return entityManager.persistAndFlush(order);
+    }
+
+    private Account account(League league, long playerId) {
+        return entityManager.getEntityManager().createQuery(
+                        "select a from Account a where a.leagueId = :l and a.playerId = :p",
+                        Account.class)
+                .setParameter("l", league.getId()).setParameter("p", playerId).getSingleResult();
+    }
+
+    private Holding holding(League league, long playerId) {
+        return entityManager.getEntityManager().createQuery(
+                        "select h from Holding h where h.leagueId = :l and h.playerId = :p",
+                        Holding.class)
+                .setParameter("l", league.getId()).setParameter("p", playerId).getSingleResult();
     }
 
     private long stockWithFirstDay(League league) {
