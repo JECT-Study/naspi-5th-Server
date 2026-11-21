@@ -47,7 +47,8 @@ public class MemberWithdrawController {
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
 
                     **성공 시** HTTP 200, `code` `"000"`. 회원 정보가 삭제되고 로그아웃된다.
-                    같은 카카오 계정으로 다시 로그인하면 신규 회원으로 가입된다.
+                    카카오 계정 연결도 끊으므로(실패해도 탈퇴는 처리), 같은 카카오 계정으로 다시 로그인하면 \
+                    카카오 동의 화면을 다시 거쳐 신규 회원으로 가입된다.
 
                     **실패 응답** (`code`는 3자리 문자열)
 
