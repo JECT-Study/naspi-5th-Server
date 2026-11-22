@@ -16,9 +16,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 @ActiveProfiles("test")
 @DataJpaTest
+@RecordApplicationEvents
 @Import({MemberService.class, MemberAuthService.class, ClockConfig.class})
 class MemberServiceTest {
 
@@ -30,6 +33,9 @@ class MemberServiceTest {
 
     @Autowired
     private MemberRepository memberRepository;
+
+    @Autowired
+    private ApplicationEvents events;
 
     @Test
     @DisplayName("회원은 자신의 이름을 조회할 수 있다")
@@ -98,6 +104,17 @@ class MemberServiceTest {
         memberService.withdraw(memberId);
 
         assertThat(memberRepository.findById(memberId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("회원 탈퇴 시 카카오 연결을 끊을 수 있도록 카카오 회원 번호를 담은 탈퇴 이벤트를 발행한다")
+    void withdrawPublishesEvent() {
+        long memberId = join(1L, "홍길동");
+
+        memberService.withdraw(memberId);
+
+        assertThat(events.stream(MemberWithdrawn.class))
+                .containsExactly(new MemberWithdrawn(memberId, 1L));
     }
 
     @Test

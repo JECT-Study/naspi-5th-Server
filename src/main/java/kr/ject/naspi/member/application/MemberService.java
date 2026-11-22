@@ -9,6 +9,7 @@ import kr.ject.naspi.member.domain.Member;
 import kr.ject.naspi.member.domain.MemberName;
 import kr.ject.naspi.member.domain.MemberRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemberService {
 
     private final MemberRepository memberRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 회원 이름을 조회한다.
@@ -63,14 +65,17 @@ public class MemberService {
     /**
      * 회원 정보를 삭제(hard delete)한다. 다른 모듈의 탈퇴 후속 처리는 {@link MemberWithdrawalUseCase}가 맡는다.
      *
-     * <p>정책 (docs/policies/v1/member.md "회원 탈퇴"): 탈퇴 후 같은 카카오 계정으로 로그인하면 신규 회원으로 가입된다.
+     * <p>정책 (docs/policies/v1/domain/member.md "회원 탈퇴"): 탈퇴 후 같은 카카오 계정으로 로그인하면 신규 회원으로 가입된다.
+     * 탈퇴가 커밋되면 {@link MemberWithdrawn}을 받아 카카오 연결을 끊는다 ({@code MemberWithdrawnListener}).
      *
      * @param memberId 회원 ID
      * @throws NaspiBizException 회원이 없는 경우
      */
     @Transactional
     public void withdraw(long memberId) {
-        memberRepository.delete(getMember(memberId));
+        Member member = getMember(memberId);
+        memberRepository.delete(member);
+        eventPublisher.publishEvent(new MemberWithdrawn(member.getId(), member.getKakaoId()));
     }
 
     private Member getMember(long memberId) {
