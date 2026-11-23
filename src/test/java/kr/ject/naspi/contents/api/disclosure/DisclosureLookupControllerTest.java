@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.SecurityConfig;
+import kr.ject.naspi.contents.application.CommentItem;
+import kr.ject.naspi.contents.application.CommentPreview;
 import kr.ject.naspi.contents.application.DisclosureDetail;
 import kr.ject.naspi.contents.application.DisclosureListItem;
 import kr.ject.naspi.contents.application.DisclosureNews;
@@ -68,7 +70,9 @@ class DisclosureLookupControllerTest {
                         List.of(new ImageUrl(100L, "https://signed/a", EXPIRES_AT),
                                 new ImageUrl(101L, "https://signed/b", EXPIRES_AT)),
                         new DisclosureReactionSummary(30L, 4, 1,
-                                DisclosureReactionType.LIKE))), 30L));
+                                DisclosureReactionType.LIKE),
+                        new CommentPreview(3, new CommentItem(9L, "댓글", 71L, "상대", false,
+                                CREATED_AT)))), 30L));
 
         mockMvc.perform(get(URL).param("cursor", "40").param("size", "2").with(loginMember()))
                 .andExpect(status().isOk())
@@ -86,7 +90,11 @@ class DisclosureLookupControllerTest {
                         .value("https://signed/b"))
                 .andExpect(jsonPath("$.data.items[0].likeCount").value(4))
                 .andExpect(jsonPath("$.data.items[0].dislikeCount").value(1))
-                .andExpect(jsonPath("$.data.items[0].myReaction").value("LIKE"));
+                .andExpect(jsonPath("$.data.items[0].myReaction").value("LIKE"))
+                .andExpect(jsonPath("$.data.items[0].commentCount").value(3))
+                .andExpect(jsonPath("$.data.items[0].latestComment.content").value("댓글"))
+                .andExpect(jsonPath("$.data.items[0].latestComment.authorName").value("상대"))
+                .andExpect(jsonPath("$.data.items[0].news").doesNotExist());
     }
 
     @Test
@@ -114,13 +122,14 @@ class DisclosureLookupControllerTest {
     }
 
     @Test
-    @DisplayName("공시 상세는 전체 이미지와 작성 정보, 반응, AI 뉴스를 돌려준다")
+    @DisplayName("공시 상세는 목록 항목의 필드(이미지, 작성 정보, 반응, 댓글 수)에 댓글 전체와 AI 뉴스를 더해 돌려준다")
     void getDetail() throws Exception {
         List<ImageUrl> images = List.of(new ImageUrl(100L, "https://signed/a", EXPIRES_AT),
                 new ImageUrl(101L, "https://signed/b", EXPIRES_AT));
         given(disclosureQueryService.getDetail(MEMBER_ID, 3L, 11L, 30L))
                 .willReturn(new DisclosureDetail(30L, 11L, "제목", "본문", 2, CREATED_AT, 70L,
                         true, images, new DisclosureReactionSummary(30L, 0, 2, null),
+                        List.of(new CommentItem(9L, "댓글", 71L, "상대", false, CREATED_AT)),
                         new DisclosureNews(40L, NewsStatus.PUBLISHED, "뉴스 제목", "뉴스 본문",
                                 NewsSentiment.NEGATIVE)));
 
@@ -131,6 +140,10 @@ class DisclosureLookupControllerTest {
                 .andExpect(jsonPath("$.data.images[1].signedUrl").value("https://signed/b"))
                 .andExpect(jsonPath("$.data.dislikeCount").value(2))
                 .andExpect(jsonPath("$.data.myReaction").doesNotExist())
+                .andExpect(jsonPath("$.data.commentCount").value(1))
+                .andExpect(jsonPath("$.data.latestComment").doesNotExist())
+                .andExpect(jsonPath("$.data.comments[0].content").value("댓글"))
+                .andExpect(jsonPath("$.data.comments.length()").value(1))
                 .andExpect(jsonPath("$.data.news.newsId").value(40))
                 .andExpect(jsonPath("$.data.news.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.data.news.title").value("뉴스 제목"))

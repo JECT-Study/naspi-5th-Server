@@ -17,7 +17,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.SecurityConfig;
-import kr.ject.naspi.contents.application.NewsItem;
+import kr.ject.naspi.contents.application.CommentItem;
+import kr.ject.naspi.contents.application.CommentPreview;
+import kr.ject.naspi.contents.application.NewsDetail;
+import kr.ject.naspi.contents.application.NewsDisclosure;
+import kr.ject.naspi.contents.application.NewsListItem;
 import kr.ject.naspi.contents.application.NewsPage;
 import kr.ject.naspi.contents.application.NewsQueryService;
 import kr.ject.naspi.contents.application.NewsRegenerationService;
@@ -72,7 +76,10 @@ class NewsControllerTest {
                 .andExpect(jsonPath("$.code").value("000"))
                 .andExpect(jsonPath("$.data.nextCursor").value(30))
                 .andExpect(jsonPath("$.data.items[0].newsId").value(30))
-                .andExpect(jsonPath("$.data.items[0].sentiment").value("POSITIVE"));
+                .andExpect(jsonPath("$.data.items[0].sentiment").value("POSITIVE"))
+                .andExpect(jsonPath("$.data.items[0].commentCount").value(3))
+                .andExpect(jsonPath("$.data.items[0].latestComment.content").value("댓글"))
+                .andExpect(jsonPath("$.data.items[0].disclosure").doesNotExist());
     }
 
     @Test
@@ -88,21 +95,38 @@ class NewsControllerTest {
     }
 
     @Test
-    @DisplayName("뉴스 상세는 제목, 본문, 호재/악재, 발행 정보, 연결된 공시 ID를 준다")
+    @DisplayName("뉴스 상세는 목록 항목의 필드(제목, 본문, 호재/악재, 발행 정보, 댓글 수)에 댓글 전체와 연결된 공시를 더해 준다")
     void detail() throws Exception {
-        given(newsQueryService.getDetail(MEMBER_ID, 3L, 11L, 30L)).willReturn(item());
+        given(newsQueryService.getDetail(MEMBER_ID, 3L, 11L, 30L))
+                .willReturn(newsDetail(new NewsDisclosure(20L, "공시 제목", "공시 본문", CREATED_AT)));
 
         mockMvc.perform(get(URL + "/30").with(loginMember()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.newsId").value(30))
                 .andExpect(jsonPath("$.data.stockId").value(11))
-                .andExpect(jsonPath("$.data.disclosureId").value(20))
                 .andExpect(jsonPath("$.data.title").value("뉴스 제목"))
                 .andExpect(jsonPath("$.data.body").value("뉴스 본문"))
                 .andExpect(jsonPath("$.data.sentiment").value("POSITIVE"))
                 .andExpect(jsonPath("$.data.tradingDay").value(2))
                 .andExpect(jsonPath("$.data.createdAt").exists())
-                .andExpect(jsonPath("$.data.publishedAt").exists());
+                .andExpect(jsonPath("$.data.publishedAt").exists())
+                .andExpect(jsonPath("$.data.commentCount").value(1))
+                .andExpect(jsonPath("$.data.latestComment").doesNotExist())
+                .andExpect(jsonPath("$.data.comments[0].authorName").value("나"))
+                .andExpect(jsonPath("$.data.comments.length()").value(1))
+                .andExpect(jsonPath("$.data.disclosure.disclosureId").value(20))
+                .andExpect(jsonPath("$.data.disclosure.title").value("공시 제목"))
+                .andExpect(jsonPath("$.data.disclosure.body").value("공시 본문"));
+    }
+
+    @Test
+    @DisplayName("연결된 공시가 없는 뉴스는 상세의 disclosure를 null로 준다")
+    void detailWithoutDisclosure() throws Exception {
+        given(newsQueryService.getDetail(MEMBER_ID, 3L, 11L, 30L)).willReturn(newsDetail(null));
+
+        mockMvc.perform(get(URL + "/30").with(loginMember()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.disclosure").isEmpty());
     }
 
     @Test
@@ -143,9 +167,22 @@ class NewsControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    private static NewsItem item() {
-        return new NewsItem(30L, 11L, 20L, "뉴스 제목", "뉴스 본문", NewsSentiment.POSITIVE, 2,
-                CREATED_AT, PUBLISHED_AT);
+    private static NewsListItem item() {
+        return new NewsListItem(30L, 11L, "뉴스 제목", "뉴스 본문", NewsSentiment.POSITIVE, 2,
+                CREATED_AT, PUBLISHED_AT, comments());
+    }
+
+    private static NewsDetail newsDetail(NewsDisclosure disclosure) {
+        return new NewsDetail(30L, 11L, "뉴스 제목", "뉴스 본문", NewsSentiment.POSITIVE, 2,
+                CREATED_AT, PUBLISHED_AT, List.of(comment()), disclosure);
+    }
+
+    private static CommentPreview comments() {
+        return new CommentPreview(3, comment());
+    }
+
+    private static CommentItem comment() {
+        return new CommentItem(9L, "댓글", 70L, "나", true, CREATED_AT);
     }
 
     private static RequestPostProcessor loginMember() {

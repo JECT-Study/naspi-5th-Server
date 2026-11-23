@@ -12,8 +12,10 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Optional;
+import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureBody;
+import kr.ject.naspi.contents.domain.DisclosureComment;
 import kr.ject.naspi.contents.domain.DisclosureReaction;
 import kr.ject.naspi.contents.domain.DisclosureReactionType;
 import kr.ject.naspi.contents.domain.DisclosureTitle;
@@ -42,7 +44,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({DisclosureQueryService.class, ImageService.class, DisclosureReactionService.class,
-        DisclosureQueryServiceTest.Config.class})
+        DisclosureCommentService.class, DisclosureQueryServiceTest.Config.class})
 class DisclosureQueryServiceTest {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -106,6 +108,32 @@ class DisclosureQueryServiceTest {
         assertThat(page.items().get(1).reaction())
                 .isEqualTo(new DisclosureReactionSummary(older, 0, 0, null));
         assertThat(page.nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("공시 목록은 공시마다 댓글 수와 가장 최근 댓글을, 상세는 댓글 전체를 주고, 연결된 뉴스는 상세에만 준다")
+    void comments() {
+        long withComments = publish(STOCK_ID, "댓글 있음", 2);
+        long withoutComments = publish(STOCK_ID, "댓글 없음", 2);
+        requestNews(withComments);
+        long first = comment(withComments, AUTHOR_PLAYER_ID, "처음");
+        long latest = comment(withComments, VIEWER_PLAYER_ID, "최근");
+
+        DisclosurePage page = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
+                null, 20);
+
+        assertThat(page.items()).extracting(DisclosureListItem::disclosureId)
+                .containsExactly(withoutComments, withComments);
+        assertThat(page.items().get(0).comments()).isEqualTo(new CommentPreview(0, null));
+        CommentPreview preview = page.items().get(1).comments();
+        assertThat(preview.commentCount()).isEqualTo(2);
+        assertThat(preview.latestComment().commentId()).isEqualTo(latest);
+        assertThat(preview.latestComment().mine()).isTrue();
+        DisclosureDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
+                withComments);
+        assertThat(detail.comments()).extracting(CommentItem::commentId)
+                .containsExactly(latest, first);
+        assertThat(detail.news()).isNotNull();
     }
 
     @Test
@@ -273,6 +301,12 @@ class DisclosureQueryServiceTest {
     private News requestNews(long disclosureId) {
         return entityManager.persistAndFlush(News.requestFrom(
                 entityManager.find(Disclosure.class, disclosureId), NOW));
+    }
+
+    private long comment(long disclosureId, long playerId, String content) {
+        Disclosure disclosure = entityManager.find(Disclosure.class, disclosureId);
+        return entityManager.persistAndFlush(DisclosureComment.write(disclosure, playerId,
+                CommentContent.of(content), NOW)).getId();
     }
 
     private void attachImages(long disclosureId, int count) {

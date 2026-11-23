@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>정책 (docs/policies/v1/domain/contents.md "공시"·"삭제"): 리그 참여자는 종목에 등록된 공시를 볼 수 있고,
  * 삭제된 공시 원문은 볼 수 없다. 결정 (docs/issues/v1/contents.md CNT-02): 목록은 종목별 최신순 커서 페이징이고,
- * 이미지는 목록에서 첫 장만, 상세에서 전부 서명 URL로 준다. 리그가 끝난 뒤에도 조회할 수 있다.
+ * 목록·상세 모두 이미지 전부, 반응, 댓글 수를 준다. 댓글은 목록에 가장 최근 1개, 상세에 전체를 주고, 연결된
+ * 뉴스는 상세에만 준다. 리그가 끝난
+ * 뒤에도 조회할 수 있다. 뉴스 조회({@link NewsQueryService})와 같은 구조다.
  *
  * <p>이미지 서명 URL 발급(운영에서는 IAM API 호출)이 DB 커넥션을 잡고 있지 않도록 트랜잭션으로 묶지 않는다.
  * 저장소 호출은 각각 읽기만 한다.
@@ -32,6 +34,7 @@ public class DisclosureQueryService {
     private final DisclosureRepository disclosureRepository;
     private final ImageService imageService;
     private final DisclosureReactionService reactionService;
+    private final DisclosureCommentService commentService;
     private final LeagueQueryService leagueQueryService;
     private final NewsRepository newsRepository;
 
@@ -41,17 +44,20 @@ public class DisclosureQueryService {
      * @param disclosureRepository 공시 저장소
      * @param imageService 이미지 서명 URL 발급
      * @param reactionService 반응 집계
+     * @param commentService 댓글 미리보기 조회
      * @param leagueQueryService 플레이어 조회
      * @param newsRepository 뉴스 저장소
      */
     public DisclosureQueryService(DisclosureRepository disclosureRepository,
                                   ImageService imageService,
                                   DisclosureReactionService reactionService,
+                                  DisclosureCommentService commentService,
                                   LeagueQueryService leagueQueryService,
                                   NewsRepository newsRepository) {
         this.disclosureRepository = disclosureRepository;
         this.imageService = imageService;
         this.reactionService = reactionService;
+        this.commentService = commentService;
         this.leagueQueryService = leagueQueryService;
         this.newsRepository = newsRepository;
     }
@@ -77,12 +83,11 @@ public class DisclosureQueryService {
         List<Disclosure> disclosures = hasNext ? fetched.subList(0, size) : fetched;
         List<Long> ids = disclosures.stream().map(Disclosure::getId).toList();
 
-        // 이미지·반응은 공시마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
+        // 이미지·반응·댓글은 공시마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
         Map<Long, List<ImageUrl>> images = imageService.issueUrls(ids);
         Map<Long, DisclosureReactionSummary> reactions =
                 reactionService.summarizeAll(ids, playerId);
-        // TODO: 댓글(CNT-09)을 구현하면 공시마다 댓글이 있을 경우 최대 1개를 함께 담는다.
-        //       공시마다 따로 조회하지 말고 이미지·반응처럼 페이지 단위로 한 번에 읽는다.
+        Map<Long, CommentPreview> comments = commentService.previews(leagueId, ids, playerId);
 
         List<DisclosureListItem> items = disclosures.stream()
                 .map(d -> new DisclosureListItem(d.getId(), d.getStockId(),
@@ -90,7 +95,7 @@ public class DisclosureQueryService {
                         d.getCreatedAt(), d.getAuthorPlayerId(),
                         d.getAuthorPlayerId() == playerId,
                         images.getOrDefault(d.getId(), List.of()),
-                        reactions.get(d.getId())))
+                        reactions.get(d.getId()), comments.get(d.getId())))
                 .toList();
         Long nextCursor = hasNext ? ids.get(ids.size() - 1) : null;
         return new DisclosurePage(items, nextCursor);
@@ -120,6 +125,7 @@ public class DisclosureQueryService {
                 d.getAuthorPlayerId(), d.getAuthorPlayerId() == playerId,
                 imageService.issueUrls(d.getId()),
                 reactionService.summarizeAll(List.of(d.getId()), playerId).get(d.getId()),
+                commentService.findAll(leagueId, d.getId(), playerId),
                 newsRepository.findByDisclosureId(d.getId()).map(DisclosureNews::from)
                         .orElse(null));
     }

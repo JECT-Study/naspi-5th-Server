@@ -29,10 +29,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class NewsController {
 
     private static final String FIELDS = """
-            - 뉴스: `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재), \
-            `disclosureId`(원본 공시 ID. 공시가 삭제돼도 뉴스는 남으며, 이때 공시 상세는 `"607"`).
+            - 뉴스: `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재).
             - 일시(KST): `tradingDay`(원본 공시를 작성한 거래일 1~7), `createdAt`(뉴스 생성 요청 일시), \
             `publishedAt`(발행 일시).
+            - 댓글: `commentCount`(삭제되지 않은 댓글 수). 목록은 `latestComment`(가장 최근 댓글 1개, \
+            없으면 `null`), 상세는 `latestComment` 대신 `comments`(댓글 전체 배열, 최신순, 페이징 없음)를 \
+            준다. 댓글 항목은 댓글 목록 API의 항목과 같은 모양이다.
             """;
 
     private final NewsQueryService newsQueryService;
@@ -63,7 +65,8 @@ public class NewsController {
                     - `size`: 1~50, 기본 20. 범위를 벗어나면 HTTP 400.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data.items`에 뉴스 목록, \
-                    `data.nextCursor`에 다음 커서 (`null`이면 마지막 페이지).
+                    `data.nextCursor`에 다음 커서 (`null`이면 마지막 페이지). \
+                    원본 공시는 목록에 없고 상세에서 준다.
                     """ + FIELDS + """
 
                     **실패 응답** (`code`는 3자리 문자열)
@@ -99,14 +102,17 @@ public class NewsController {
     @Operation(
             summary = "뉴스 상세",
             description = """
-                    발행된 뉴스의 제목, 본문, 호재/악재, 발행 정보, 원본 공시 ID를 조회한다.
+                    발행된 뉴스의 제목, 본문, 호재/악재, 발행 정보, 댓글 전체, 원본 공시를 조회한다.
 
                     **요청**
                     - 로그인 세션 쿠키가 필요하다. \
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
                     - 리그에 입장한 회원만 조회할 수 있다. 종료된 리그도 조회할 수 있다.
 
-                    **성공 시** HTTP 200, `code` `"000"`, `data`에 뉴스 상세.
+                    **성공 시** HTTP 200, `code` `"000"`, `data`에 뉴스 상세. 목록 항목과 같은 필드에서 \
+                    `latestComment` 대신 `comments`를 주고 `disclosure`가 더해진다.
+                    - `disclosure`: 원본 공시 (`disclosureId`, `title`, `body`, `createdAt`). \
+                    공시 없이 만든 뉴스이거나 원본 공시가 삭제됐으면 `null`이다.
                     """ + FIELDS + """
 
                     **실패 응답** (`code`는 3자리 문자열)
@@ -118,12 +124,12 @@ public class NewsController {
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
     @GetMapping("/stocks/{stockId}/news/{newsId}")
-    public Result<NewsResponse> getDetail(
+    public Result<NewsDetailResponse> getDetail(
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId,
             @PathVariable long stockId,
             @PathVariable long newsId) {
-        return Result.success(NewsResponse.from(newsQueryService.getDetail(
+        return Result.success(NewsDetailResponse.from(newsQueryService.getDetail(
                 loginMember.memberId(), leagueId, stockId, newsId)));
     }
 
