@@ -148,6 +148,44 @@ class LeagueQueryServiceTest {
     }
 
     @Test
+    @DisplayName("대기실 조회 시 리그 이름, 초대 코드, 대기실 만료 일시(생성 후 7일)와 플레이어별 본인 여부를 함께 조회한다")
+    void getPlayersOfWaitingRoom() {
+        long host = member("방장");
+        long guest = member("손님");
+        LocalDateTime createdAt = LocalDateTime.now(clock);
+        CreatedLeague league = useCase.create(host, "우리 리그", "나스피", "소개");
+        JoinedLeague joined = leagueService.join(guest, league.inviteCode());
+
+        LeaguePlayers players = queryService.getPlayers(guest, league.leagueId());
+
+        assertThat(players.name()).isEqualTo("우리 리그");
+        assertThat(players.inviteCode()).isEqualTo(league.inviteCode());
+        assertThat(players.waitingRoomExpiresAt())
+                .isEqualTo(createdAt.plus(League.WAITING_ROOM_LIFETIME));
+        assertThat(players.players())
+                .extracting(LeaguePlayer::playerId, LeaguePlayer::me)
+                .containsExactly(
+                        tuple(league.hostPlayerId(), false),
+                        tuple(joined.playerId(), true));
+    }
+
+    @Test
+    @DisplayName("시작된 리그는 초대 코드와 대기실 만료 일시 없이 조회한다")
+    void getPlayersOfStartedLeagueHasNoInvitation() {
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        leagueStartUseCase.start(host, league.leagueId());
+
+        LeaguePlayers players = queryService.getPlayers(host, league.leagueId());
+
+        assertThat(players.inviteCode()).isNull();
+        assertThat(players.waitingRoomExpiresAt()).isNull();
+        assertThat(players.players()).filteredOn(LeaguePlayer::me)
+                .singleElement()
+                .extracting(LeaguePlayer::playerId).isEqualTo(league.hostPlayerId());
+    }
+
+    @Test
     @DisplayName("참여자 3명 이상이고 대기자가 없으면 리그를 시작할 수 있다")
     void startable() {
         CreatedLeague league = leagueWithParticipants(3);

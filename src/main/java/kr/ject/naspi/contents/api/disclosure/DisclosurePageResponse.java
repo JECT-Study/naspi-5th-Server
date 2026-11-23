@@ -30,21 +30,20 @@ record DisclosurePageResponse(List<Item> items, Long nextCursor) {
      * @param createdAt 작성 일시 (KST)
      * @param authorPlayerId 작성자(상장자) 플레이어 ID
      * @param mine 내가 작성한 공시인지
-     * @param imageCount 첨부 이미지 수
-     * @param thumbnail 첫 번째 이미지. 없으면 null
+     * @param images 첨부 이미지 (첨부 순서). 없으면 빈 목록
      * @param likeCount 좋아요(호재) 수
      * @param dislikeCount 싫어요(악재) 수
      * @param myReaction 내 반응. 없으면 null
      */
     record Item(long disclosureId, long stockId, String title, String body, int tradingDay,
-                LocalDateTime createdAt, long authorPlayerId, boolean mine, int imageCount,
-                DisclosureImageResponse thumbnail, long likeCount, long dislikeCount,
+                LocalDateTime createdAt, long authorPlayerId, boolean mine,
+                List<DisclosureImageResponse> images, long likeCount, long dislikeCount,
                 DisclosureReactionType myReaction) {
 
         static Item from(DisclosureListItem item) {
             return new Item(item.disclosureId(), item.stockId(), item.title(), item.body(),
                     item.tradingDay(), item.createdAt(), item.authorPlayerId(), item.mine(),
-                    item.imageCount(), DisclosureImageResponse.from(item.thumbnail()),
+                    item.images().stream().map(DisclosureImageResponse::from).toList(),
                     item.reaction().likeCount(), item.reaction().dislikeCount(),
                     item.reaction().myReaction());
         }

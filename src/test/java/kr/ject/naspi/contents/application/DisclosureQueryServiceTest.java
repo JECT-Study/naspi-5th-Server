@@ -129,8 +129,8 @@ class DisclosureQueryServiceTest {
     }
 
     @Test
-    @DisplayName("공시 목록에는 첫 이미지와 이미지 수만 담고, 서명 URL은 공시당 1개만 발급한다")
-    void listThumbnail() {
+    @DisplayName("공시 목록에는 첨부 이미지 전체를 첨부 순서대로 담고, 이미지가 없으면 빈 목록이다")
+    void listImages() {
         long withImages = publish(STOCK_ID, "이미지 공시", 1);
         attachImages(withImages, 3);
         long withoutImages = publish(STOCK_ID, "글만", 1);
@@ -140,13 +140,13 @@ class DisclosureQueryServiceTest {
 
         DisclosureListItem noImage = page.items().get(0);
         assertThat(noImage.disclosureId()).isEqualTo(withoutImages);
-        assertThat(noImage.imageCount()).isZero();
-        assertThat(noImage.thumbnail()).isNull();
+        assertThat(noImage.images()).isEmpty();
         DisclosureListItem image = page.items().get(1);
-        assertThat(image.imageCount()).isEqualTo(3);
-        assertThat(image.thumbnail().signedUrl()).isEqualTo("https://signed/key-" + withImages
-                + "-0");
-        then(imageStorage).should(times(1)).signedUrl(anyString(), any());
+        assertThat(image.images()).extracting(ImageUrl::signedUrl).containsExactly(
+                "https://signed/key-" + withImages + "-0",
+                "https://signed/key-" + withImages + "-1",
+                "https://signed/key-" + withImages + "-2");
+        then(imageStorage).should(times(3)).signedUrl(anyString(), any());
     }
 
     @Test

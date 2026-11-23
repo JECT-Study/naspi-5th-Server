@@ -78,23 +78,19 @@ public class DisclosureQueryService {
         List<Long> ids = disclosures.stream().map(Disclosure::getId).toList();
 
         // 이미지·반응은 공시마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
-        Map<Long, ImagePreview> previews = imageService.previews(ids);
+        Map<Long, List<ImageUrl>> images = imageService.issueUrls(ids);
         Map<Long, DisclosureReactionSummary> reactions =
                 reactionService.summarizeAll(ids, playerId);
         // TODO: 댓글(CNT-09)을 구현하면 공시마다 댓글이 있을 경우 최대 1개를 함께 담는다.
         //       공시마다 따로 조회하지 말고 이미지·반응처럼 페이지 단위로 한 번에 읽는다.
 
         List<DisclosureListItem> items = disclosures.stream()
-                .map(d -> {
-                    ImagePreview preview = previews.get(d.getId());
-                    return new DisclosureListItem(d.getId(), d.getStockId(),
-                            d.getTitle().getValue(), d.getBody().getValue(), d.getTradingDay(),
-                            d.getCreatedAt(), d.getAuthorPlayerId(),
-                            d.getAuthorPlayerId() == playerId,
-                            preview == null ? 0 : preview.count(),
-                            preview == null ? null : preview.first(),
-                            reactions.get(d.getId()));
-                })
+                .map(d -> new DisclosureListItem(d.getId(), d.getStockId(),
+                        d.getTitle().getValue(), d.getBody().getValue(), d.getTradingDay(),
+                        d.getCreatedAt(), d.getAuthorPlayerId(),
+                        d.getAuthorPlayerId() == playerId,
+                        images.getOrDefault(d.getId(), List.of()),
+                        reactions.get(d.getId())))
                 .toList();
         Long nextCursor = hasNext ? ids.get(ids.size() - 1) : null;
         return new DisclosurePage(items, nextCursor);

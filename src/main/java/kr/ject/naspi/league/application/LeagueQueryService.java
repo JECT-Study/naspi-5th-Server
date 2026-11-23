@@ -93,12 +93,18 @@ public class LeagueQueryService {
         List<LeaguePlayer> result = players.stream()
                 .sorted(Comparator.comparing(Player::getJoinedAt).thenComparing(Player::getId))
                 .map(player -> new LeaguePlayer(player.getId(), displayNameOf(player, names),
+                        Objects.equals(player.getMemberId(), memberId),
                         player.getId().equals(league.getHostPlayerId()), player.isListed(),
                         player.getJoinedAt(), player.getListedAt()))
                 .toList();
         // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
-        boolean startable = league.getStatus() == LeagueStatus.WAITING && League.canStart(players);
-        return new LeaguePlayers(league.getId(), startable, tradingDayOf(league), result);
+        boolean waiting = league.getStatus() == LeagueStatus.WAITING;
+        boolean startable = waiting && League.canStart(players);
+        InviteCode inviteCode = league.getInviteCode();
+        return new LeaguePlayers(league.getId(), league.getName().getValue(),
+                inviteCode == null ? null : inviteCode.getValue(),
+                waiting ? league.waitingRoomExpiresAt() : null, startable, tradingDayOf(league),
+                result);
     }
 
     /**
@@ -226,26 +232,6 @@ public class LeagueQueryService {
             return Optional.empty();
         }
         return Optional.of(tradingDayOf(league));
-    }
-
-    /**
-     * 주어진 시각의 거래일 번호를 계산한다. order가 주문을 접수할 때, 거래 가능 판정에 쓴 시각으로 거래일을
-     * 정하는 데 쓴다. 이 메서드는 시계를 읽지 않으므로 판정 시각과 거래일 번호가 어긋나지 않는다.
-     *
-     * @param leagueId 리그 ID
-     * @param at 거래일을 알고 싶은 시각 (KST)
-     * @return 1~7 사이의 거래일 번호
-     * @throws NaspiBizException 리그가 없거나({@link ErrorCode#LEAGUE_NOT_FOUND}), 아직 시작하지 않은 경우
-     *     ({@link ErrorCode#LEAGUE_NOT_TRADABLE})
-     */
-    public int getTradingDayNumberAt(long leagueId, LocalDateTime at) {
-        League league = leagueRepository.findById(leagueId)
-                .filter(found -> !found.isUnavailable(at))
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
-        if (league.getStatus() == LeagueStatus.WAITING) {
-            throw new NaspiBizException(ErrorCode.LEAGUE_NOT_TRADABLE);
-        }
-        return league.tradingSchedule().dayNumberAt(at);
     }
 
     /**

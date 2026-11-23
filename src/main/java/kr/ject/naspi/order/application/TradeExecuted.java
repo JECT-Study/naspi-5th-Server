@@ -6,8 +6,8 @@ import kr.ject.naspi.order.domain.Execution;
 /**
  * 체결 이벤트. 체결 1건이 정산된 뒤 발행한다 (docs/policies/README.md 이벤트 표).
  *
- * <p>market은 현재가와 거래량을 갱신하고(MKT-05), websocket은 커밋 이후 매수자·매도자의 자산을
- * 발행한다. 체결 1건에 이벤트 1건이므로 거래량은 이 이벤트마다 한 번씩 합산한다.
+ * <p>websocket이 커밋 이후 매수자·매도자의 자산을 발행한다. 현재가·거래량 갱신은 이벤트가 아니라 체결
+ * 흐름이 market을 직접 호출한다 (docs/policies/README.md).
  *
  * @param leagueId 리그 ID
  * @param stockId 종목 ID

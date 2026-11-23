@@ -40,9 +40,11 @@ public class LeagueDetailUseCase {
                 .stream()
                 .collect(Collectors.toMap(LeagueStock::listerPlayerId, Function.identity()));
 
-        return new LeagueDetail(players.leagueId(), players.startable(), players.tradingDay(),
+        return new LeagueDetail(players.leagueId(), players.name(), players.inviteCode(),
+                players.waitingRoomExpiresAt(), players.startable(), players.tradingDay(),
                 players.players().stream()
-                .map(player -> new DetailPlayer(player.playerId(), player.name(), player.host(),
+                .map(player -> new DetailPlayer(player.playerId(), player.name(), player.me(),
+                        player.host(),
                         player.listed(), player.joinedAt(), player.listedAt(),
                         toPlayerStock(stocksByLister.get(player.playerId()))))
                 .toList());

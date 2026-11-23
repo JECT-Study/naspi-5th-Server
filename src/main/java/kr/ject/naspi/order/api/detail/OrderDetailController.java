@@ -65,8 +65,8 @@ class OrderDetailController {
                     | `MARKET_NOT_FILLED` | 체결 가능 수량 없음 |
                     | `SELF_TRADE_PREVENTED` | 내 주문 간 체결 방지 |
                     | `TRADING_DAY_EXPIRED` | 거래일 변경으로 만료 |
-
-                    `LEAGUE_ENDED`(리그 종료), `MEMBER_WITHDRAWN`(회원 탈퇴) 사유는 ORD-10/11에서 추가한다.
+                    | `MEMBER_WITHDRAWN` | 회원 탈퇴 |
+                    | `LEAGUE_ENDED` | 리그 종료 |
 
                     **실패 응답** (`code`는 3자리 문자열)
 
