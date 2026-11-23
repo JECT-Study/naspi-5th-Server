@@ -128,7 +128,8 @@ class LeagueStockLookupServiceTest {
 
     private void joined() {
         given(leagueQueryService.getPlayers(MEMBER_ID, 1L)).willReturn(new LeaguePlayers(1L,
-                false, null, List.of(player(PLAYER_ID, "나"), player(11L, "친구"))));
+                "리그", "ABC1234", null, false, null,
+                List.of(player(PLAYER_ID, "나"), player(11L, "친구"))));
         given(leagueQueryService.findPlayerId(MEMBER_ID, 1L)).willReturn(Optional.of(PLAYER_ID));
     }
 
@@ -138,8 +139,8 @@ class LeagueStockLookupServiceTest {
     }
 
     private static LeaguePlayer player(long playerId, String name) {
-        return new LeaguePlayer(playerId, name, false, true, LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 1, 1, 0, 0));
+        return new LeaguePlayer(playerId, name, false, false, true,
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2026, 1, 1, 0, 0));
     }
 
     private long list(long leagueId, long listerPlayerId, String name, String description) {

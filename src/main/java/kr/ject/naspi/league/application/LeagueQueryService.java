@@ -92,12 +92,18 @@ public class LeagueQueryService {
         List<LeaguePlayer> result = players.stream()
                 .sorted(Comparator.comparing(Player::getJoinedAt).thenComparing(Player::getId))
                 .map(player -> new LeaguePlayer(player.getId(), displayNameOf(player, names),
+                        Objects.equals(player.getMemberId(), memberId),
                         player.getId().equals(league.getHostPlayerId()), player.isListed(),
                         player.getJoinedAt(), player.getListedAt()))
                 .toList();
         // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
-        boolean startable = league.getStatus() == LeagueStatus.WAITING && League.canStart(players);
-        return new LeaguePlayers(league.getId(), startable, tradingDayOf(league), result);
+        boolean waiting = league.getStatus() == LeagueStatus.WAITING;
+        boolean startable = waiting && League.canStart(players);
+        InviteCode inviteCode = league.getInviteCode();
+        return new LeaguePlayers(league.getId(), league.getName().getValue(),
+                inviteCode == null ? null : inviteCode.getValue(),
+                waiting ? league.waitingRoomExpiresAt() : null, startable, tradingDayOf(league),
+                result);
     }
 
     /**

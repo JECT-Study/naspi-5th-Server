@@ -43,6 +43,11 @@ public class LeagueDetailController {
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 다음 값.
+                    - `name`: 리그 이름
+                    - `inviteCode`: 대기실 초대 코드 (영문 대문자·숫자 7자리). \
+                    리그가 시작되었거나 대기실이 만료되었으면 `null`
+                    - `waitingRoomExpiresAt`: 대기실 만료 일시 (KST, 생성 후 7일). \
+                    대기실이 아니면 `null`
                     - `startable`: 리그 시작 가능 여부 (참여자 3명 이상, 대기자 0명)
                     - `tradingDay`: 현재 거래일과 리그 운영 기간 (KST). 대기실이면 `null`
                       - `dayNumber`: 현재 거래일차 (1~7). 매일 09:00에 1씩 늘고, \
@@ -51,6 +56,7 @@ public class LeagueDetailController {
                       - `dayEndsAt`: 현재 거래일이 끝나는 일시 (다음 09:00, 7일차는 `endsAt`과 같음)
                       - `startedAt`·`endsAt`: 리그 시작·종료 일시
                     - `players`: 참여일시 순 목록
+                      - `me`: 조회한 회원 본인 여부 (목록에서 정확히 1명)
                       - `host`: 방장 여부, `listed`: 상장 완료 여부 (true 참여자, false 대기자)
                       - `joinedAt`·`listedAt`: 참여일시·상장일시 (KST), 대기자는 `listedAt`이 `null`
                       - `stock`: 상장한 종목 (`stockId`, `name`, `description`), 대기자는 `null`

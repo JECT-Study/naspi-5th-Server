@@ -51,18 +51,25 @@ class LeagueDetailControllerTest {
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
 
     @Test
-    @DisplayName("리그 플레이어는 플레이어 목록과 각 참여자의 종목, 리그 시작 가능 여부를 조회할 수 있다")
+    @DisplayName("리그 플레이어는 리그 이름, 초대 코드, 대기실 만료 일시, 플레이어 목록과 각 참여자의 종목, "
+            + "리그 시작 가능 여부, 본인 여부를 조회할 수 있다")
     void getDetail() throws Exception {
-        given(leagueDetailUseCase.getDetail(MEMBER_ID, 3L)).willReturn(new LeagueDetail(3L, false,
-                null, List.of(new DetailPlayer(9L, "방장", true, true, NOW, NOW,
+        given(leagueDetailUseCase.getDetail(MEMBER_ID, 3L)).willReturn(new LeagueDetail(3L,
+                "우리 리그", "ABC1234", NOW.plusDays(7), false, null,
+                List.of(new DetailPlayer(9L, "방장", false, true, true, NOW, NOW,
                                 new PlayerStock(11L, "나스피", "소개")),
-                        new DetailPlayer(10L, "손님", false, false, NOW, null, null))));
+                        new DetailPlayer(10L, "손님", true, false, false, NOW, null, null))));
 
         mockMvc.perform(get("/api/leagues/3/detail").with(loginMember()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
+                .andExpect(jsonPath("$.data.name").value("우리 리그"))
+                .andExpect(jsonPath("$.data.inviteCode").value("ABC1234"))
+                .andExpect(jsonPath("$.data.waitingRoomExpiresAt").value("2026-11-17T21:00:00"))
                 .andExpect(jsonPath("$.data.startable").value(false))
                 .andExpect(jsonPath("$.data.tradingDay").isEmpty())
+                .andExpect(jsonPath("$.data.players[0].me").value(false))
+                .andExpect(jsonPath("$.data.players[1].me").value(true))
                 .andExpect(jsonPath("$.data.players[0].host").value(true))
                 .andExpect(jsonPath("$.data.players[0].listed").value(true))
                 .andExpect(jsonPath("$.data.players[0].stock.name").value("나스피"))
@@ -77,12 +84,15 @@ class LeagueDetailControllerTest {
         LeagueTradingDay tradingDay = new LeagueTradingDay(2, 7,
                 LocalDateTime.of(2026, 11, 18, 9, 0), LocalDateTime.of(2026, 11, 16, 15, 0),
                 LocalDateTime.of(2026, 11, 23, 9, 0));
-        given(leagueDetailUseCase.getDetail(MEMBER_ID, 3L)).willReturn(new LeagueDetail(3L, false,
-                tradingDay, List.of(new DetailPlayer(9L, "방장", true, true, NOW, NOW,
+        given(leagueDetailUseCase.getDetail(MEMBER_ID, 3L)).willReturn(new LeagueDetail(3L,
+                "우리 리그", null, null, false, tradingDay,
+                List.of(new DetailPlayer(9L, "방장", true, true, true, NOW, NOW,
                         new PlayerStock(11L, "나스피", "소개")))));
 
         mockMvc.perform(get("/api/leagues/3/detail").with(loginMember()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.inviteCode").isEmpty())
+                .andExpect(jsonPath("$.data.waitingRoomExpiresAt").isEmpty())
                 .andExpect(jsonPath("$.data.tradingDay.dayNumber").value(2))
                 .andExpect(jsonPath("$.data.tradingDay.totalDays").value(7))
                 .andExpect(jsonPath("$.data.tradingDay.dayEndsAt").value("2026-11-18T09:00:00"))

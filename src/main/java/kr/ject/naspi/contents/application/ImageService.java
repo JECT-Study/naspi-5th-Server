@@ -5,7 +5,6 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -144,32 +143,26 @@ public class ImageService {
     }
 
     /**
-     * 공시 목록용 이미지 미리보기를 공시별로 만든다. 서명 URL은 첫 이미지에만 발급해 IAM {@code signBlob} 호출을
-     * 공시 1건당 최대 1번으로 줄인다 (docs/issues/v1/contents.md CNT-02 결정).
+     * 공시 목록용으로 여러 공시의 이미지 서명 URL을 공시별 첨부 순서대로 발급한다. 이미지는 한 번의 쿼리로 읽는다.
+     *
+     * <p>URL 1개마다 IAM {@code signBlob} 호출이 일어나므로 공시 1건당 최대 4번 호출된다.
      *
      * @param disclosureIds 공시 ID 목록
-     * @return 공시 ID별 미리보기. 이미지가 없는 공시는 담지 않는다
+     * @return 공시 ID별 서명 URL 목록. 이미지가 없는 공시는 담지 않는다
      */
-    public Map<Long, ImagePreview> previews(Collection<Long> disclosureIds) {
+    public Map<Long, List<ImageUrl>> issueUrls(Collection<Long> disclosureIds) {
         // 빈 페이지면 IN () 쿼리를 보내지 않는다
         if (disclosureIds.isEmpty()) {
             return Map.of();
         }
-        // 만료 시각 계산
+        // 서명 전에 계산해 실제 만료보다 늦은 시각을 알려주지 않게 한다.
         LocalDateTime expiresAt = LocalDateTime.now(clock).plus(signedUrlExpiration);
-        // 공시 목록의 이미지는 첫 장만 보여주므로 서명 URL도 첫 장에만 발급하고, 나머지는 개수만 알려준다
-        Map<Long, List<Image>> byDisclosure = imageRepository
+        return imageRepository
                 .findAllByDisclosureIdInOrderByDisclosureIdAscSortOrderAsc(disclosureIds).stream()
-                .collect(Collectors.groupingBy(Image::getDisclosureId));
-        Map<Long, ImagePreview> previews = new HashMap<>();
-        byDisclosure.forEach((disclosureId, images) -> {
-            // 첫번째 이미지에만 서명 URL 발급
-            Image first = images.get(0);
-            previews.put(disclosureId, new ImagePreview(images.size(), new ImageUrl(first.getId(),
-                    imageStorage.signedUrl(first.getObjectKey(), signedUrlExpiration),
-                    expiresAt)));
-        });
-        return previews;
+                .collect(Collectors.groupingBy(Image::getDisclosureId,
+                        Collectors.mapping(image -> new ImageUrl(image.getId(),
+                                imageStorage.signedUrl(image.getObjectKey(), signedUrlExpiration),
+                                expiresAt), Collectors.toList())));
     }
 
     /**
