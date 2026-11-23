@@ -1,6 +1,7 @@
 package kr.ject.naspi.contents.application;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 공시 목록의 공시 1건.
@@ -13,12 +14,11 @@ import java.time.LocalDateTime;
  * @param createdAt 작성 일시
  * @param authorPlayerId 작성자(상장자) 플레이어 ID
  * @param mine 조회한 플레이어가 작성자인지 (삭제 버튼 표시용)
- * @param imageCount 첨부 이미지 수
- * @param thumbnail 첫 번째 이미지의 서명 URL. 이미지가 없으면 null
+ * @param images 첨부 이미지의 서명 URL (첨부 순서). 이미지가 없으면 빈 목록
  * @param reaction 반응 집계와 내 반응
  */
 public record DisclosureListItem(long disclosureId, long stockId, String title, String body,
                                  int tradingDay, LocalDateTime createdAt, long authorPlayerId,
-                                 boolean mine, int imageCount, ImageUrl thumbnail,
+                                 boolean mine, List<ImageUrl> images,
                                  DisclosureReactionSummary reaction) {
 }

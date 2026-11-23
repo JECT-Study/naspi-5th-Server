@@ -64,8 +64,9 @@ class DisclosureLookupControllerTest {
     void findByStock() throws Exception {
         given(disclosureQueryService.findByStock(MEMBER_ID, 3L, 11L, 40L, 2))
                 .willReturn(new DisclosurePage(List.of(new DisclosureListItem(30L, 11L, "제목",
-                        "본문", 2, CREATED_AT, 70L, false, 3,
-                        new ImageUrl(100L, "https://signed/a", EXPIRES_AT),
+                        "본문", 2, CREATED_AT, 70L, false,
+                        List.of(new ImageUrl(100L, "https://signed/a", EXPIRES_AT),
+                                new ImageUrl(101L, "https://signed/b", EXPIRES_AT)),
                         new DisclosureReactionSummary(30L, 4, 1,
                                 DisclosureReactionType.LIKE))), 30L));
 
@@ -77,9 +78,12 @@ class DisclosureLookupControllerTest {
                 .andExpect(jsonPath("$.data.items[0].title").value("제목"))
                 .andExpect(jsonPath("$.data.items[0].tradingDay").value(2))
                 .andExpect(jsonPath("$.data.items[0].mine").value(false))
-                .andExpect(jsonPath("$.data.items[0].imageCount").value(3))
-                .andExpect(jsonPath("$.data.items[0].thumbnail.signedUrl")
+                .andExpect(jsonPath("$.data.items[0].images.length()").value(2))
+                .andExpect(jsonPath("$.data.items[0].images[0].imageId").value(100))
+                .andExpect(jsonPath("$.data.items[0].images[0].signedUrl")
                         .value("https://signed/a"))
+                .andExpect(jsonPath("$.data.items[0].images[1].signedUrl")
+                        .value("https://signed/b"))
                 .andExpect(jsonPath("$.data.items[0].likeCount").value(4))
                 .andExpect(jsonPath("$.data.items[0].dislikeCount").value(1))
                 .andExpect(jsonPath("$.data.items[0].myReaction").value("LIKE"));

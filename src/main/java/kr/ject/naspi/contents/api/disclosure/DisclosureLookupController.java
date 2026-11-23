@@ -65,8 +65,7 @@ public class DisclosureLookupController {
 
                     **성공 시** HTTP 200, `code` `"000"`, `data.items`에 공시 목록, \
                     `data.nextCursor`에 다음 커서 (`null`이면 마지막 페이지).
-                    - 목록에는 이미지가 첫 장(`thumbnail`, 없으면 `null`)과 `imageCount`만 들어 있다. \
-                    전체 이미지는 상세 조회에서 받는다.
+                    - `images`: 첨부 이미지 전체 (첨부 순서, 없으면 빈 배열). 상세와 같은 모양이다.
                     """ + FIELDS + """
 
                     **실패 응답** (`code`는 3자리 문자열)
