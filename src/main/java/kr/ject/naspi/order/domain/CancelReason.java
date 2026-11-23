@@ -24,7 +24,7 @@ public enum CancelReason {
     /** 거래일 변경 만료 ("거래일 변경으로 만료", ORD-09). 상태 {@code EXPIRED}와 짝이다. */
     TRADING_DAY_EXPIRED,
 
-    /** 리그 종료. 사용처는 ORD-10에서 만든다. */
+    /** 리그 종료 ("리그 종료", ORD-10). */
     LEAGUE_ENDED,
 
     /** 회원 탈퇴. 사용처는 ORD-11에서 만든다. */

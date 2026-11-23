@@ -47,8 +47,8 @@ class OrderPlacementServiceTest {
         given(leagueQueryService.findPlayerId(MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.of(PLAYER_ID));
         given(limitOrderService.placeLimitOrder(
-                new PlaceLimitOrder(LEAGUE_ID, PLAYER_ID, 5L, OrderSide.BUY, 10_000L, 10L),
-                10_000L)).willReturn(placed);
+                new PlaceLimitOrder(LEAGUE_ID, PLAYER_ID, 5L, OrderSide.BUY, 10_000L, 10L)))
+                .willReturn(placed);
 
         PlacedOrder result = service.placeLimitOrder(
                 MEMBER_ID, LEAGUE_ID, 5L, OrderSide.BUY, 10_000L, 10L);
@@ -67,7 +67,7 @@ class OrderPlacementServiceTest {
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
 
         then(limitOrderService).should(never())
-                .placeLimitOrder(any(), anyLong());
+                .placeLimitOrder(any());
     }
 
     @Test
@@ -103,7 +103,7 @@ class OrderPlacementServiceTest {
                 .isInstanceOfSatisfying(NaspiBizException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
 
-        then(marketOrderService).should(never()).placeMarketOrder(any(), anyLong());
+        then(marketOrderService).should(never()).placeMarketOrder(any());
     }
 
     @Test
@@ -113,7 +113,7 @@ class OrderPlacementServiceTest {
         given(leagueQueryService.findPlayerId(MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.of(PLAYER_ID));
         given(marketOrderService.placeMarketOrder(
-                new PlaceMarketOrder(LEAGUE_ID, PLAYER_ID, 5L, OrderSide.BUY, 10L), 10_000L))
+                new PlaceMarketOrder(LEAGUE_ID, PLAYER_ID, 5L, OrderSide.BUY, 10L)))
                 .willReturn(placed);
 
         assertThat(service.placeMarketOrder(MEMBER_ID, LEAGUE_ID, 5L, OrderSide.BUY, 10L))

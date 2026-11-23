@@ -72,7 +72,7 @@
 - Jira: ND-33
 - 정책: [asset.md#주문-가능-자산-및-정산](../../policies/v1/domain/asset.md#주문-가능-자산-및-정산)
 - 선행: AST-03, AST-04
-- 진행: asset 해제 API(`AssetReservationService.releaseCashForBuy`/`releaseStockForSell`)는 order가 정한 미체결 잔량만큼 해제한다. 현재 운영 호출처는 자전거래 취소(`LimitOrderService`)뿐이고, 사용자 취소·만료·리그 종료·탈퇴 흐름의 호출은 ORD-07/09/10/11(order 담당)에서 붙인다.
+- 진행: asset 해제 API(`AssetReservationService.releaseCashForBuy`/`releaseStockForSell`)는 order가 정한 미체결 잔량만큼 해제한다. 운영 호출처는 자전거래 취소·사용자 취소(ORD-07)·거래일 만료(ORD-09)이며(`OrderExecutionSupport#closeRemaining`), 리그 종료·탈퇴 흐름의 호출은 ORD-10/11(order 담당)에서 붙인다.
 - 완료 조건
   - [x] 취소·만료 시 미체결 잔량에 해당하는 예약 현금·주식 해제
 

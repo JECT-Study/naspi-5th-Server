@@ -22,8 +22,12 @@ import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.Player;
+import kr.ject.naspi.league.domain.TradingDay;
+import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockQueryService;
+import kr.ject.naspi.market.application.StockTradingDayService;
 import kr.ject.naspi.market.domain.Stock;
+import kr.ject.naspi.market.domain.StockDailyPrice;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
@@ -57,8 +61,9 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @RecordApplicationEvents
 @Import({MarketOrderService.class, LimitOrderService.class, OrderExecutionSupport.class,
         LeagueTradingService.class, LeagueQueryService.class, StockQueryService.class,
-        LocalStockSnapshotCache.class, AssetReservationService.class,
-        AssetSettlementService.class, MarketOrderServiceTest.FixedClockConfig.class})
+        StockExecutionService.class, StockTradingDayService.class, LocalStockSnapshotCache.class,
+        AssetReservationService.class, AssetSettlementService.class,
+        MarketOrderServiceTest.FixedClockConfig.class})
 class MarketOrderServiceTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 15, 10, 0);
@@ -67,7 +72,6 @@ class MarketOrderServiceTest {
     private static final long BUYER = 30L;
     private static final long POOR = 40L;
     private static final long CASH = 1_000_000;
-    private static final long BASE_PRICE = 10_000;
 
     @TestConfiguration
     static class FixedClockConfig {
@@ -125,6 +129,9 @@ class MarketOrderServiceTest {
     @Autowired
     private ApplicationEvents events;
 
+    @Autowired
+    private StockTradingDayService stockTradingDayService;
+
     private long leagueId;
     private long stockId;
 
@@ -132,9 +139,11 @@ class MarketOrderServiceTest {
     void setUp() {
         ((SettableClock) clock).set(NOW);
         leagueId = startedLeague("AAAAAAA", NOW).getId();
-        stockId = entityManager.persistAndGetId(
-                Stock.list(leagueId, LISTER, StockName.of("종목"), StockDescription.of("소개")),
-                Long.class);
+        Stock stock = Stock.list(leagueId, LISTER, StockName.of("종목"),
+                StockDescription.of("소개"));
+        stock.open();
+        stockId = entityManager.persistAndGetId(stock, Long.class);
+        entityManager.persist(StockDailyPrice.open(leagueId, stockId, 1, 10_000));
         for (long player : new long[] {LISTER, SELLER, BUYER}) {
             entityManager.persist(Account.open(leagueId, player, CASH));
             entityManager.persist(Holding.allocate(leagueId, player, stockId,
@@ -243,6 +252,38 @@ class MarketOrderServiceTest {
     }
 
     @Test
+    @DisplayName("시장가 보호 가격이 그 거래일 상·하한가를 벗어나면 상·하한가를 적용한다")
+    void protectionClampedToTradingDayLimit() {
+        // 1일차 8,000 체결 -> 2일차 기준가 8,000 (5,600~10,400)
+        limit(SELLER, OrderSide.SELL, 8_000, 1);
+        limit(BUYER, OrderSide.BUY, 8_000, 1);
+        entityManager.getEntityManager().createQuery(
+                "select t from TradingDay t where t.leagueId = :l and t.dayNumber = 1",
+                TradingDay.class).setParameter("l", leagueId).getSingleResult()
+                .close(LocalDateTime.of(2026, 11, 16, 9, 0, 0));
+        stockTradingDayService.changeTradingDay(leagueId, 1);
+        entityManager.flush();
+        entityManager.clear();
+        ((SettableClock) clock).set(LocalDateTime.of(2026, 11, 16, 9, 0, 0));
+        ask(10_000, 1);
+
+        PlacedOrder buy = market(BUYER, OrderSide.BUY, 1);
+
+        assertThat(entityManager.find(Order.class, buy.orderId()).getReservedPrice())
+                .isEqualTo(10_400);
+    }
+
+    @Test
+    @DisplayName("09:00 이후 거래일 전환 처리 전 시장가 주문은 거절된다")
+    void rejectMarketOrderBeforeChange() {
+        ((SettableClock) clock).set(LocalDateTime.of(2026, 11, 16, 9, 0, 0));
+
+        assertThatThrownBy(() -> market(BUYER, OrderSide.BUY, 1))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.TRADING_DAY_CHANGE_PENDING);
+    }
+
+    @Test
     @DisplayName("보호 범위는 접수 시 확정되어 체결로 최우선 호가가 바뀌어도 넓어지지 않는다")
     void protectionFixedAtReceipt() {
         ask(10_000, 1);
@@ -341,7 +382,7 @@ class MarketOrderServiceTest {
     @DisplayName("리그에 없는 종목은 시장가 주문을 거절한다")
     void rejectStockNotInLeague() {
         assertThatThrownBy(() -> service.placeMarketOrder(
-                new PlaceMarketOrder(leagueId, BUYER, 9_999L, OrderSide.BUY, 1), BASE_PRICE))
+                new PlaceMarketOrder(leagueId, BUYER, 9_999L, OrderSide.BUY, 1)))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.STOCK_NOT_FOUND);
     }
@@ -354,13 +395,11 @@ class MarketOrderServiceTest {
         League ended = startedLeague("DDDDDDD", NOW.minusDays(8));
 
         assertThatThrownBy(() -> service.placeMarketOrder(
-                new PlaceMarketOrder(waiting.getId(), BUYER, stockId, OrderSide.BUY, 1),
-                BASE_PRICE))
+                new PlaceMarketOrder(waiting.getId(), BUYER, stockId, OrderSide.BUY, 1)))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_TRADABLE);
         assertThatThrownBy(() -> service.placeMarketOrder(
-                new PlaceMarketOrder(ended.getId(), BUYER, stockId, OrderSide.BUY, 1),
-                BASE_PRICE))
+                new PlaceMarketOrder(ended.getId(), BUYER, stockId, OrderSide.BUY, 1)))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
     }
@@ -383,9 +422,42 @@ class MarketOrderServiceTest {
         assertThat(events.stream(TradeExecuted.class).count()).isEqualTo(2);
     }
 
+    @Test
+    @DisplayName("시장가 체결 시에도 현재가는 마지막 체결가, 거래량은 체결 수량의 합이 된다")
+    void marketTradeUpdatesCurrentPriceAndVolume() {
+        ask(10_000, 3);
+        ask(10_500, 2);
+
+        market(BUYER, OrderSide.BUY, 5);
+
+        assertThat(currentPrice()).isEqualTo(10_500);
+        assertThat(volume()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("시장가 주문이 체결되지 않으면 현재가와 거래량은 바뀌지 않는다")
+    void noOppositeQuoteKeepsPrice() {
+        market(BUYER, OrderSide.BUY, 5);
+
+        assertThat(currentPrice()).isEqualTo(10_000);
+        assertThat(entityManager.getEntityManager().createQuery(
+                "select sum(d.volume) from StockDailyPrice d", Long.class).getSingleResult())
+                .isZero();
+    }
+
+    private long currentPrice() {
+        return entityManager.find(Stock.class, stockId).getCurrentPrice();
+    }
+
+    private long volume() {
+        return entityManager.getEntityManager().createQuery(
+                        "select d.volume from StockDailyPrice d where d.stockId = :s", Long.class)
+                .setParameter("s", stockId).getSingleResult();
+    }
+
     private PlacedOrder market(long playerId, OrderSide side, long quantity) {
         PlacedOrder placed = service.placeMarketOrder(
-                new PlaceMarketOrder(leagueId, playerId, stockId, side, quantity), BASE_PRICE);
+                new PlaceMarketOrder(leagueId, playerId, stockId, side, quantity));
         entityManager.flush();
         entityManager.clear();
         return placed;
@@ -401,7 +473,7 @@ class MarketOrderServiceTest {
 
     private void limit(long playerId, OrderSide side, long price, long quantity) {
         limitOrderService.placeLimitOrder(new PlaceLimitOrder(
-                leagueId, playerId, stockId, side, price, quantity), BASE_PRICE);
+                leagueId, playerId, stockId, side, price, quantity));
         entityManager.flush();
         entityManager.clear();
     }
@@ -437,6 +509,7 @@ class MarketOrderServiceTest {
                 })
                 .toList();
         league.start(players, startedAt);
+        TradingDay.of(league.getId(), league.tradingSchedule()).forEach(entityManager::persist);
         return entityManager.persistAndFlush(league);
     }
 }
