@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import org.junit.jupiter.api.DisplayName;
@@ -35,9 +36,11 @@ class NewsCommentTest {
     @Test
     @DisplayName("댓글에는 이미지를 첨부할 수 없고 대댓글을 달 수 없다")
     void noImageOrReply() {
-        assertThat(NewsComment.class.getDeclaredFields())
-                .extracting(field -> field.getName().toLowerCase())
-                .noneMatch(name -> name.contains("image") || name.contains("parent"));
+        for (Class<?> type : List.of(Comment.class, NewsComment.class)) {
+            assertThat(type.getDeclaredFields())
+                    .extracting(field -> field.getName().toLowerCase())
+                    .noneMatch(name -> name.contains("image") || name.contains("parent"));
+        }
     }
 
     private static News news() {

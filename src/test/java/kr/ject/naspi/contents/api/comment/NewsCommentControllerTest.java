@@ -1,9 +1,7 @@
 package kr.ject.naspi.contents.api.comment;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -18,8 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.common.security.SecurityConfig;
-import kr.ject.naspi.contents.application.NewsCommentItem;
-import kr.ject.naspi.contents.application.NewsCommentPage;
+import kr.ject.naspi.contents.application.CommentItem;
 import kr.ject.naspi.contents.application.NewsCommentService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,19 +77,14 @@ class NewsCommentControllerTest {
     }
 
     @Test
-    @DisplayName("댓글 목록을 커서·개수로 조회하고, 개수가 1~50을 벗어나면 HTTP 400이다")
+    @DisplayName("댓글 목록은 페이징 없이 전체를 배열로 준다")
     void list() throws Exception {
-        given(commentService.findByNews(MEMBER_ID, 3L, 11L, 5L, 40L, 2))
-                .willReturn(new NewsCommentPage(List.of(item()), 9L));
+        given(commentService.findByTarget(MEMBER_ID, 3L, 11L, 5L)).willReturn(List.of(item()));
 
-        mockMvc.perform(get(URL).param("cursor", "40").param("size", "2").with(loginMember()))
+        mockMvc.perform(get(URL).with(loginMember()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.nextCursor").value(9))
-                .andExpect(jsonPath("$.data.items[0].content").value("댓글"));
-        mockMvc.perform(get(URL).param("size", "51").with(loginMember()))
-                .andExpect(status().isBadRequest());
-        then(commentService).should(never()).findByNews(anyLong(), anyLong(), anyLong(),
-                anyLong(), any(), eq(51));
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].content").value("댓글"));
     }
 
     @Test
@@ -114,8 +106,8 @@ class NewsCommentControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    private static NewsCommentItem item() {
-        return new NewsCommentItem(9L, "댓글", 70L, "나", true, CREATED_AT);
+    private static CommentItem item() {
+        return new CommentItem(9L, "댓글", 70L, "나", true, CREATED_AT);
     }
 
     private static RequestPostProcessor loginMember() {

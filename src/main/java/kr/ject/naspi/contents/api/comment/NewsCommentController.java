@@ -4,12 +4,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import java.util.List;
 import kr.ject.naspi.common.response.Result;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.contents.application.NewsCommentService;
-import kr.ject.naspi.contents.application.NewsQueryService;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,7 +16,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -71,13 +68,13 @@ public class NewsCommentController {
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
     @PostMapping
-    public Result<NewsCommentResponse> write(
+    public Result<CommentResponse> write(
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId,
             @PathVariable long stockId,
             @PathVariable long newsId,
-            @Valid @RequestBody WriteNewsCommentRequest request) {
-        return Result.success(NewsCommentResponse.from(commentService.write(
+            @Valid @RequestBody WriteCommentRequest request) {
+        return Result.success(CommentResponse.from(commentService.write(
                 loginMember.memberId(), leagueId, stockId, newsId, request.content())));
     }
 
@@ -88,26 +85,21 @@ public class NewsCommentController {
      * @param leagueId 리그 ID
      * @param stockId 종목 ID
      * @param newsId 뉴스 ID
-     * @param cursor 이전 응답의 {@code nextCursor}. 첫 페이지면 생략
-     * @param size 한 페이지 개수
-     * @return 댓글 목록 한 페이지
+     * @return 댓글 전체 (최신순)
      * @throws NaspiBizException 리그에 입장하지 않았거나 뉴스가 없는 경우
      */
     @Operation(
             summary = "뉴스 댓글 목록",
             description = """
-                    뉴스의 댓글을 최신순으로 조회한다. 삭제된 댓글은 나오지 않는다. \
-                    무한 스크롤용 커서 페이징이다.
+                    뉴스의 댓글을 최신순으로 모두 조회한다. 삭제된 댓글은 나오지 않는다. 페이징하지 않는다. \
+                    뉴스 상세의 `comments`와 같은 목록이므로 댓글 작성·삭제 후 다시 불러올 때 쓴다.
 
                     **요청**
                     - 로그인 세션 쿠키가 필요하다. \
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
                     - 리그에 입장한 회원만 조회할 수 있다. 종료된 리그도 조회할 수 있다.
-                    - `cursor`: 첫 페이지는 생략, 다음 페이지는 이전 응답의 `nextCursor`.
-                    - `size`: 1~50, 기본 20. 범위를 벗어나면 HTTP 400.
 
-                    **성공 시** HTTP 200, `code` `"000"`, `data.items`에 댓글 목록, \
-                    `data.nextCursor`에 다음 커서 (`null`이면 마지막 페이지).
+                    **성공 시** HTTP 200, `code` `"000"`, `data`에 댓글 배열 (최신순, 없으면 빈 배열).
                     - `authorName`: 작성자 계정 이름. 탈퇴한 작성자는 `"탈퇴한 사용자"`.
                     - `mine`이 `true`이면 내가 쓴 댓글이다 (삭제 버튼 노출).
 
@@ -117,20 +109,16 @@ public class NewsCommentController {
                     |---|---|---|---|
                     | 200 | `"610"` | 뉴스가 없거나 발행되지 않음 | 목록으로 |
                     | 200 | `"004"` | 리그에 입장하지 않은 회원 (리그가 없는 경우 포함) | 안내 후 홈으로 |
-                    | 400 | `"002"` | `size`가 1~50을 벗어남 | 요청 값 확인 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
     @GetMapping
-    public Result<NewsCommentPageResponse> findByNews(
+    public Result<List<CommentResponse>> findByNews(
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId,
             @PathVariable long stockId,
-            @PathVariable long newsId,
-            @RequestParam(required = false) Long cursor,
-            @RequestParam(defaultValue = "" + NewsQueryService.DEFAULT_PAGE_SIZE)
-            @Min(1) @Max(NewsQueryService.MAX_PAGE_SIZE) int size) {
-        return Result.success(NewsCommentPageResponse.from(commentService.findByNews(
-                loginMember.memberId(), leagueId, stockId, newsId, cursor, size)));
+            @PathVariable long newsId) {
+        return Result.success(commentService.findByTarget(loginMember.memberId(), leagueId,
+                stockId, newsId).stream().map(CommentResponse::from).toList());
     }
 
     /**
