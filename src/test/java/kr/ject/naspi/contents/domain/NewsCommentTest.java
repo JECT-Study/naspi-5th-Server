@@ -32,6 +32,14 @@ class NewsCommentTest {
                 e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.COMMENT_NOT_FOUND));
     }
 
+    @Test
+    @DisplayName("댓글에는 이미지를 첨부할 수 없고 대댓글을 달 수 없다")
+    void noImageOrReply() {
+        assertThat(NewsComment.class.getDeclaredFields())
+                .extracting(field -> field.getName().toLowerCase())
+                .noneMatch(name -> name.contains("image") || name.contains("parent"));
+    }
+
     private static News news() {
         Disclosure disclosure = Disclosure.publish(3L, 11L, 70L, DisclosureTitle.of("제목"),
                 DisclosureBody.of("본문"), 2, NOW);
