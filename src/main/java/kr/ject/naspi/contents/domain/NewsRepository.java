@@ -1,5 +1,6 @@
 package kr.ject.naspi.contents.domain;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -22,4 +23,23 @@ public interface NewsRepository {
      * @return 뉴스 (상태와 관계없이)
      */
     Optional<News> findByDisclosureId(long disclosureId);
+
+    /**
+     * 뉴스를 ID로 찾는다.
+     *
+     * @param id 뉴스 ID
+     * @return 뉴스 (상태와 관계없이)
+     */
+    Optional<News> findById(Long id);
+
+    /**
+     * 종목의 발행된(PUBLISHED) 뉴스를 최신순(ID 내림차순)으로 찾는다.
+     *
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param cursor 이 ID보다 작은 뉴스만 찾는다. 첫 페이지면 null
+     * @param limit 최대 개수
+     * @return 뉴스 목록
+     */
+    List<News> findPublishedByStock(long leagueId, long stockId, Long cursor, int limit);
 }

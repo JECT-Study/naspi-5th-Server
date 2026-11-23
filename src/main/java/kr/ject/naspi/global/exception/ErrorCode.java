@@ -189,7 +189,10 @@ public enum ErrorCode {
     DISCLOSURE_NOT_AUTHOR("608", "공시 작성자만 삭제할 수 있습니다."),
 
     /** 진행 중이 아닌 리그(대기실, 종료)의 공시에 반응하거나 반응을 바꾸려는 경우. */
-    DISCLOSURE_REACTION_LEAGUE_NOT_STARTED("609", "진행 중인 리그에서만 공시에 반응할 수 있습니다.");
+    DISCLOSURE_REACTION_LEAGUE_NOT_STARTED("609", "진행 중인 리그에서만 공시에 반응할 수 있습니다."),
+
+    /** 뉴스가 없거나, 다른 리그·종목의 뉴스이거나, 발행(PUBLISHED)되지 않은 경우. */
+    NEWS_NOT_FOUND("610", "뉴스를 찾을 수 없습니다.");
 
     private final String code;
     private final String message;

@@ -18,12 +18,13 @@ class NewsTest {
     void completeOnce() {
         News news = News.requestFrom(disclosure(), NOW);
         news.complete(new NewsGenerationResult.Generated("제목", "본문", NewsSentiment.POSITIVE,
-                "요약"));
+                "요약"), NOW);
 
-        assertThatThrownBy(() -> news.complete(new NewsGenerationResult.Failed("x")))
+        assertThatThrownBy(() -> news.complete(new NewsGenerationResult.Failed("x"), NOW))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(news.getStatus()).isEqualTo(NewsStatus.PUBLISHED);
         assertThat(news.getTitle()).isEqualTo("제목");
+        assertThat(news.getPublishedAt()).isEqualTo(NOW);
     }
 
     @Test

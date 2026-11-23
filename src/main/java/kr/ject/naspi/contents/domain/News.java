@@ -74,6 +74,10 @@ public class News {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /** 발행된 시각. 발행된 뉴스에만 있다. */
+    @Column(name = "published_at")
+    private LocalDateTime publishedAt;
+
     private News(long leagueId, long stockId, long disclosureId, int tradingDay,
                  LocalDateTime createdAt) {
         this.leagueId = leagueId;
@@ -102,9 +106,10 @@ public class News {
      * 생성 중인 뉴스에만 한 번 반영할 수 있다.
      *
      * @param result 생성 결과
+     * @param now 반영 일시 (발행되면 발행 일시가 된다)
      * @throws IllegalStateException 생성 중인 뉴스가 아닌 경우
      */
-    public void complete(NewsGenerationResult result) {
+    public void complete(NewsGenerationResult result, LocalDateTime now) {
         if (status != NewsStatus.PENDING) {
             throw new IllegalStateException("생성 중인 뉴스가 아닙니다: id=%d, status=%s"
                     .formatted(id, status));
@@ -115,6 +120,7 @@ public class News {
                 this.body = generated.body();
                 this.sentiment = generated.sentiment();
                 this.status = NewsStatus.PUBLISHED;
+                this.publishedAt = Objects.requireNonNull(now, "now");
             }
             case NewsGenerationResult.Skipped skipped -> this.status = NewsStatus.SKIPPED;
             case NewsGenerationResult.Failed failed -> this.status = NewsStatus.FAILED;
