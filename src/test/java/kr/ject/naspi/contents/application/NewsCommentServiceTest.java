@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.given;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import kr.ject.naspi.contents.domain.CommentContent;
@@ -79,7 +80,7 @@ class NewsCommentServiceTest {
     void write() {
         long news = publishedNews(STOCK_ID);
 
-        NewsCommentItem item = service.write(ME, LEAGUE_ID, STOCK_ID, news, "첫 댓글");
+        CommentItem item = service.write(ME, LEAGUE_ID, STOCK_ID, news, "첫 댓글");
 
         assertThat(item.content()).isEqualTo("첫 댓글");
         assertThat(item.authorPlayerId()).isEqualTo(ME_PLAYER);
@@ -110,26 +111,20 @@ class NewsCommentServiceTest {
     }
 
     @Test
-    @DisplayName("댓글 목록은 최신순 커서 페이징이고 작성자 이름과 내 댓글 여부를 표시한다")
+    @DisplayName("댓글 목록은 페이징 없이 전체를 최신순으로 주고 작성자 이름과 내 댓글 여부를 표시한다")
     void list() {
         long news = publishedNews(STOCK_ID);
         long first = comment(news, ME_PLAYER, "1");
         long second = comment(news, OTHER_PLAYER, "2");
         long third = comment(news, 99L, "3");
 
-        NewsCommentPage page1 = service.findByNews(ME, LEAGUE_ID, STOCK_ID, news, null, 2);
-        assertThat(page1.items()).extracting(NewsCommentItem::commentId)
-                .containsExactly(third, second);
-        assertThat(page1.items()).extracting(NewsCommentItem::authorName)
-                .containsExactly("탈퇴한 사용자", "상대");
-        assertThat(page1.items()).extracting(NewsCommentItem::mine).containsExactly(false, false);
-        assertThat(page1.nextCursor()).isEqualTo(second);
+        List<CommentItem> comments = service.findByTarget(ME, LEAGUE_ID, STOCK_ID, news);
 
-        NewsCommentPage page2 = service.findByNews(ME, LEAGUE_ID, STOCK_ID, news,
-                page1.nextCursor(), 2);
-        assertThat(page2.items()).extracting(NewsCommentItem::commentId).containsExactly(first);
-        assertThat(page2.items().get(0).mine()).isTrue();
-        assertThat(page2.nextCursor()).isNull();
+        assertThat(comments).extracting(CommentItem::commentId)
+                .containsExactly(third, second, first);
+        assertThat(comments).extracting(CommentItem::authorName)
+                .containsExactly("탈퇴한 사용자", "상대", "나");
+        assertThat(comments).extracting(CommentItem::mine).containsExactly(false, false, true);
     }
 
     @Test
@@ -139,7 +134,7 @@ class NewsCommentServiceTest {
         comment(news, ME_PLAYER, "댓글");
         given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
 
-        assertThat(service.findByNews(OTHER, LEAGUE_ID, STOCK_ID, news, null, 20).items())
+        assertThat(service.findByTarget(OTHER, LEAGUE_ID, STOCK_ID, news))
                 .hasSize(1);
     }
 
@@ -150,7 +145,7 @@ class NewsCommentServiceTest {
 
         assertBiz(() -> service.write(OUTSIDER, LEAGUE_ID, STOCK_ID, news, "댓글"),
                 ErrorCode.FORBIDDEN);
-        assertBiz(() -> service.findByNews(OUTSIDER, LEAGUE_ID, STOCK_ID, news, null, 20),
+        assertBiz(() -> service.findByTarget(OUTSIDER, LEAGUE_ID, STOCK_ID, news),
                 ErrorCode.FORBIDDEN);
     }
 
@@ -159,7 +154,7 @@ class NewsCommentServiceTest {
     void otherStock() {
         long news = publishedNews(STOCK_ID);
 
-        assertBiz(() -> service.findByNews(ME, LEAGUE_ID, OTHER_STOCK_ID, news, null, 20),
+        assertBiz(() -> service.findByTarget(ME, LEAGUE_ID, OTHER_STOCK_ID, news),
                 ErrorCode.NEWS_NOT_FOUND);
     }
 
@@ -176,12 +171,33 @@ class NewsCommentServiceTest {
 
         assertThat(entityManager.find(NewsComment.class, deleted).getStatus())
                 .isEqualTo(CommentStatus.DELETED);
-        assertThat(service.findByNews(ME, LEAGUE_ID, STOCK_ID, news, null, 20).items())
-                .extracting(NewsCommentItem::commentId).containsExactly(kept);
+        assertThat(service.findByTarget(ME, LEAGUE_ID, STOCK_ID, news))
+                .extracting(CommentItem::commentId).containsExactly(kept);
         assertBiz(() -> service.delete(ME, LEAGUE_ID, STOCK_ID, news, deleted),
                 ErrorCode.COMMENT_NOT_FOUND);
         assertBiz(() -> service.delete(ME, LEAGUE_ID, STOCK_ID, news, kept),
                 ErrorCode.COMMENT_NOT_AUTHOR);
+    }
+
+    @Test
+    @DisplayName("목록용 미리보기는 뉴스별 댓글 수와 가장 최근 댓글 1개를 주고, 삭제된 댓글은 빼며, 댓글이 없으면 0개다")
+    void previews() {
+        long news = publishedNews(STOCK_ID);
+        final long empty = publishedNews(STOCK_ID);
+        comment(news, ME_PLAYER, "처음");
+        final long latest = comment(news, OTHER_PLAYER, "최근");
+        long deleted = comment(news, ME_PLAYER, "삭제");
+        service.delete(ME, LEAGUE_ID, STOCK_ID, news, deleted);
+        entityManager.flush();
+
+        Map<Long, CommentPreview> previews = service.previews(LEAGUE_ID, List.of(news, empty),
+                ME_PLAYER);
+
+        assertThat(previews.get(news).commentCount()).isEqualTo(2);
+        assertThat(previews.get(news).latestComment().commentId()).isEqualTo(latest);
+        assertThat(previews.get(news).latestComment().authorName()).isEqualTo("상대");
+        assertThat(previews.get(news).latestComment().mine()).isFalse();
+        assertThat(previews.get(empty)).isEqualTo(new CommentPreview(0, null));
     }
 
     @Test

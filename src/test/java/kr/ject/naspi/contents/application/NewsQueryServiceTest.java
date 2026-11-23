@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
+import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureBody;
 import kr.ject.naspi.contents.domain.DisclosureTitle;
 import kr.ject.naspi.contents.domain.News;
+import kr.ject.naspi.contents.domain.NewsComment;
 import kr.ject.naspi.contents.domain.NewsGenerationResult;
 import kr.ject.naspi.contents.domain.NewsSentiment;
 import kr.ject.naspi.global.exception.ErrorCode;
@@ -21,15 +25,19 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
-@Import(NewsQueryService.class)
+@Import({NewsQueryService.class, NewsCommentService.class, NewsQueryServiceTest.Config.class})
 class NewsQueryServiceTest {
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 17, 10, 0);
     private static final LocalDateTime PUBLISHED_AT = NOW.plusMinutes(1);
     private static final long LEAGUE_ID = 3L;
@@ -38,6 +46,7 @@ class NewsQueryServiceTest {
     private static final long OTHER_STOCK_ID = 12L;
     private static final long VIEWER_MEMBER_ID = 8L;
     private static final long OUTSIDER_MEMBER_ID = 9L;
+    private static final long VIEWER_PLAYER_ID = 80L;
 
     @Autowired
     private NewsQueryService queryService;
@@ -51,7 +60,7 @@ class NewsQueryServiceTest {
     @BeforeEach
     void setUp() {
         given(leagueQueryService.findPlayerId(VIEWER_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.of(80L));
+                .willReturn(Optional.of(VIEWER_PLAYER_ID));
         given(leagueQueryService.findPlayerId(OUTSIDER_MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.empty());
     }
@@ -64,14 +73,14 @@ class NewsQueryServiceTest {
         long third = published(LEAGUE_ID, STOCK_ID, NewsSentiment.POSITIVE);
 
         NewsPage page1 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 2);
-        assertThat(page1.items()).extracting(NewsItem::newsId).containsExactly(third, second);
-        assertThat(page1.items()).extracting(NewsItem::sentiment)
+        assertThat(page1.items()).extracting(NewsListItem::newsId).containsExactly(third, second);
+        assertThat(page1.items()).extracting(NewsListItem::sentiment)
                 .containsExactly(NewsSentiment.POSITIVE, NewsSentiment.NEGATIVE);
         assertThat(page1.nextCursor()).isEqualTo(second);
 
         NewsPage page2 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
                 page1.nextCursor(), 2);
-        assertThat(page2.items()).extracting(NewsItem::newsId).containsExactly(first);
+        assertThat(page2.items()).extracting(NewsListItem::newsId).containsExactly(first);
         assertThat(page2.nextCursor()).isNull();
     }
 
@@ -84,7 +93,7 @@ class NewsQueryServiceTest {
         long failed = news(LEAGUE_ID, STOCK_ID, new NewsGenerationResult.Failed("오류"));
 
         assertThat(queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 20)
-                .items()).extracting(NewsItem::newsId).containsExactly(published);
+                .items()).extracting(NewsListItem::newsId).containsExactly(published);
         for (long id : new long[] {pending, skipped, failed}) {
             assertBiz(() -> queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id),
                     ErrorCode.NEWS_NOT_FOUND);
@@ -108,7 +117,7 @@ class NewsQueryServiceTest {
     }
 
     @Test
-    @DisplayName("공시가 삭제돼도 이미 발행된 뉴스는 목록·상세에서 조회할 수 있다")
+    @DisplayName("공시가 삭제돼도 이미 발행된 뉴스는 목록·상세에서 조회할 수 있고, 삭제된 공시 원문은 상세에 담지 않는다")
     void deletedDisclosure() {
         long id = published(LEAGUE_ID, STOCK_ID, NewsSentiment.NEGATIVE);
         Long disclosureId = entityManager.find(News.class, id).getDisclosureId();
@@ -116,21 +125,60 @@ class NewsQueryServiceTest {
         entityManager.flush();
 
         assertThat(queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 20)
-                .items()).extracting(NewsItem::newsId).containsExactly(id);
-        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id).newsId())
-                .isEqualTo(id);
+                .items()).extracting(NewsListItem::newsId).containsExactly(id);
+        NewsDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id);
+        assertThat(detail.newsId()).isEqualTo(id);
+        assertThat(detail.disclosure()).isNull();
     }
 
     @Test
-    @DisplayName("뉴스 상세는 제목, 본문, 호재/악재, 거래일·작성·발행 일시, 연결된 공시 ID를 준다")
+    @DisplayName("공시 없이 만든 뉴스는 상세의 원본 공시가 비어 있다")
+    void newsWithoutDisclosure() {
+        Disclosure source = entityManager.persistAndFlush(Disclosure.publish(LEAGUE_ID,
+                STOCK_ID, 70L, DisclosureTitle.of("공시"), DisclosureBody.of("본문"), 2, NOW));
+        News news = News.requestFrom(source, NOW);
+        ReflectionTestUtils.setField(news, "disclosureId", null);
+        news.complete(new NewsGenerationResult.Generated("뉴스 제목", "뉴스 본문",
+                NewsSentiment.POSITIVE, "요약"), PUBLISHED_AT);
+        long id = entityManager.persistAndFlush(news).getId();
+
+        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id).disclosure())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("뉴스 상세는 목록 항목의 필드(제목, 본문, 호재/악재, 거래일·작성·발행 일시, 댓글 수)에 댓글 전체와 원본 공시를 더해 준다")
     void detail() {
         long id = published(LEAGUE_ID, STOCK_ID, NewsSentiment.NEGATIVE);
-        Long disclosureId = entityManager.find(News.class, id).getDisclosureId();
+        long disclosureId = entityManager.find(News.class, id).getDisclosureId();
+        long commentId = comment(id, VIEWER_PLAYER_ID, "댓글");
 
-        NewsItem item = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id);
+        NewsDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id);
 
-        assertThat(item).isEqualTo(new NewsItem(id, STOCK_ID, disclosureId, "뉴스 제목", "뉴스 본문",
-                NewsSentiment.NEGATIVE, 2, NOW, PUBLISHED_AT));
+        assertThat(detail).usingRecursiveComparison().ignoringFields("comments")
+                .isEqualTo(new NewsDetail(id, STOCK_ID, "뉴스 제목", "뉴스 본문",
+                        NewsSentiment.NEGATIVE, 2, NOW, PUBLISHED_AT, null,
+                        new NewsDisclosure(disclosureId, "공시", "본문", NOW)));
+        assertThat(detail.comments()).extracting(CommentItem::commentId)
+                .containsExactly(commentId);
+        assertThat(detail.comments().get(0).mine()).isTrue();
+    }
+
+    @Test
+    @DisplayName("뉴스 목록은 뉴스마다 댓글 수와 가장 최근 댓글을 함께 준다")
+    void listWithComments() {
+        long withComments = published(LEAGUE_ID, STOCK_ID, NewsSentiment.POSITIVE);
+        long withoutComments = published(LEAGUE_ID, STOCK_ID, NewsSentiment.POSITIVE);
+        comment(withComments, 70L, "처음");
+        long latest = comment(withComments, VIEWER_PLAYER_ID, "최근");
+
+        NewsPage page = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 20);
+
+        assertThat(page.items()).extracting(NewsListItem::newsId)
+                .containsExactly(withoutComments, withComments);
+        assertThat(page.items().get(0).comments()).isEqualTo(new CommentPreview(0, null));
+        assertThat(page.items().get(1).comments().commentCount()).isEqualTo(2);
+        assertThat(page.items().get(1).comments().latestComment().commentId()).isEqualTo(latest);
     }
 
     @Test
@@ -161,8 +209,23 @@ class NewsQueryServiceTest {
         return news.getId();
     }
 
+    private long comment(long newsId, long playerId, String content) {
+        News news = entityManager.find(News.class, newsId);
+        return entityManager.persistAndFlush(NewsComment.write(news, playerId,
+                CommentContent.of(content), NOW)).getId();
+    }
+
     private static void assertBiz(Runnable call, ErrorCode errorCode) {
         assertThatThrownBy(call::run).isInstanceOfSatisfying(NaspiBizException.class,
                 e -> assertThat(e.getErrorCode()).isEqualTo(errorCode));
+    }
+
+    @TestConfiguration
+    static class Config {
+
+        @Bean
+        Clock clock() {
+            return Clock.fixed(NOW.atZone(KST).toInstant(), KST);
+        }
     }
 }

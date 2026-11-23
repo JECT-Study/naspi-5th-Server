@@ -1,6 +1,8 @@
 package kr.ject.naspi.contents.application;
 
 import java.util.List;
+import java.util.Map;
+import kr.ject.naspi.contents.domain.DisclosureRepository;
 import kr.ject.naspi.contents.domain.News;
 import kr.ject.naspi.contents.domain.NewsRepository;
 import kr.ject.naspi.contents.domain.NewsStatus;
@@ -10,11 +12,13 @@ import kr.ject.naspi.league.application.LeagueQueryService;
 import org.springframework.stereotype.Service;
 
 /**
- * 종목별 뉴스 목록·상세 조회.
+ * 종목별 뉴스 목록·상세 조회. 공시 조회({@link DisclosureQueryService})와 같은 구조다.
  *
  * <p>정책 (docs/policies/v1/domain/contents.md "뉴스 - 공시 기반 AI 뉴스"): 뉴스는 종목에 연결되고 삭제할 수
- * 없으며, 공시가 삭제돼도 발행된 뉴스는 유지된다(공시 테이블을 보지 않는다). 발행(PUBLISHED)된 뉴스만 보이고,
- * 리그 참여자만 볼 수 있으며 종료된 리그도 조회할 수 있다.
+ * 없으며, 공시가 삭제돼도 발행된 뉴스는 유지된다. 발행(PUBLISHED)된 뉴스만 보이고, 리그 참여자만 볼 수 있으며
+ * 종료된 리그도 조회할 수 있다. 결정 (docs/issues/v1/contents.md CNT-08): 목록에는 댓글 수와 가장 최근 댓글을,
+ * 상세에는 댓글 전체를 주고, 원본 공시는 상세에만 준다. 삭제된 공시 원문은 조회할 수 없으므로
+ * 원본 공시가 삭제됐으면 공시 없이 만든 뉴스처럼 비워 둔다.
  */
 @Service
 public class NewsQueryService {
@@ -26,18 +30,25 @@ public class NewsQueryService {
     public static final int MAX_PAGE_SIZE = 50;
 
     private final NewsRepository newsRepository;
+    private final NewsCommentService commentService;
     private final LeagueQueryService leagueQueryService;
+    private final DisclosureRepository disclosureRepository;
 
     /**
      * 뉴스 조회 서비스를 만든다.
      *
      * @param newsRepository 뉴스 저장소
+     * @param commentService 댓글 미리보기 조회
      * @param leagueQueryService 플레이어 조회
+     * @param disclosureRepository 공시 저장소
      */
-    public NewsQueryService(NewsRepository newsRepository,
-                            LeagueQueryService leagueQueryService) {
+    public NewsQueryService(NewsRepository newsRepository, NewsCommentService commentService,
+                            LeagueQueryService leagueQueryService,
+                            DisclosureRepository disclosureRepository) {
         this.newsRepository = newsRepository;
+        this.commentService = commentService;
         this.leagueQueryService = leagueQueryService;
+        this.disclosureRepository = disclosureRepository;
     }
 
     /**
@@ -53,18 +64,28 @@ public class NewsQueryService {
      */
     public NewsPage findByStock(long memberId, long leagueId, long stockId, Long cursor,
                                 int size) {
-        checkViewer(memberId, leagueId);
+        long playerId = viewerPlayerId(memberId, leagueId);
         // 다음 페이지가 있는지 알기 위해 1개 더 읽는다
         List<News> fetched = newsRepository.findPublishedByStock(leagueId, stockId, cursor,
                 size + 1);
         boolean hasNext = fetched.size() > size;
         List<News> news = hasNext ? fetched.subList(0, size) : fetched;
-        Long nextCursor = hasNext ? news.get(news.size() - 1).getId() : null;
-        return new NewsPage(news.stream().map(NewsItem::from).toList(), nextCursor);
+        List<Long> ids = news.stream().map(News::getId).toList();
+
+        // 댓글은 뉴스마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
+        Map<Long, CommentPreview> comments = commentService.previews(leagueId, ids, playerId);
+
+        List<NewsListItem> items = news.stream()
+                .map(n -> new NewsListItem(n.getId(), n.getStockId(), n.getTitle(), n.getBody(),
+                        n.getSentiment(), n.getTradingDay(), n.getCreatedAt(),
+                        n.getPublishedAt(), comments.get(n.getId())))
+                .toList();
+        Long nextCursor = hasNext ? ids.get(ids.size() - 1) : null;
+        return new NewsPage(items, nextCursor);
     }
 
     /**
-     * 발행된 뉴스 상세를 조회한다.
+     * 발행된 뉴스 상세를 조회한다. 원본 공시를 함께 준다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -73,19 +94,34 @@ public class NewsQueryService {
      * @return 뉴스 상세
      * @throws NaspiBizException 리그에 입장하지 않았거나, 뉴스가 없거나 발행되지 않은 경우
      */
-    public NewsItem getDetail(long memberId, long leagueId, long stockId, long newsId) {
-        checkViewer(memberId, leagueId);
-        return newsRepository.findById(newsId)
-                .filter(n -> n.getLeagueId() == leagueId && n.getStockId() == stockId
-                        && n.getStatus() == NewsStatus.PUBLISHED)
-                .map(NewsItem::from)
+    public NewsDetail getDetail(long memberId, long leagueId, long stockId, long newsId) {
+        long playerId = viewerPlayerId(memberId, leagueId);
+        // 경로의 리그·종목에 속하고 발행된 뉴스만 보여준다
+        News n = newsRepository.findById(newsId)
+                .filter(found -> found.getLeagueId() == leagueId
+                        && found.getStockId() == stockId)
+                .filter(found -> found.getStatus() == NewsStatus.PUBLISHED)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.NEWS_NOT_FOUND));
+        return new NewsDetail(n.getId(), n.getStockId(), n.getTitle(), n.getBody(),
+                n.getSentiment(), n.getTradingDay(), n.getCreatedAt(), n.getPublishedAt(),
+                commentService.findAll(leagueId, n.getId(), playerId),
+                findDisclosure(n));
+    }
+
+    /** 원본 공시. 공시 없이 만든 뉴스이거나 공시가 삭제됐으면(원문 조회 불가) null. */
+    private NewsDisclosure findDisclosure(News news) {
+        if (news.getDisclosureId() == null) {
+            return null;
+        }
+        return disclosureRepository.findById(news.getDisclosureId())
+                .filter(d -> !d.isDeleted())
+                .map(NewsDisclosure::from)
+                .orElse(null);
     }
 
     /** 리그 참여자만 뉴스를 볼 수 있다. 리그 상태는 따지지 않아 종료된 리그도 조회할 수 있다. */
-    private void checkViewer(long memberId, long leagueId) {
-        if (leagueQueryService.findPlayerId(memberId, leagueId).isEmpty()) {
-            throw new NaspiBizException(ErrorCode.FORBIDDEN);
-        }
+    private long viewerPlayerId(long memberId, long leagueId) {
+        return leagueQueryService.findPlayerId(memberId, leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
     }
 }

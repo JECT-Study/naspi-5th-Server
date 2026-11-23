@@ -3,7 +3,7 @@ package kr.ject.naspi.contents.application;
 import java.time.LocalDateTime;
 
 /**
- * 뉴스 댓글.
+ * 댓글 (공시·뉴스 공통).
  *
  * @param commentId 댓글 ID
  * @param content 내용
@@ -12,6 +12,6 @@ import java.time.LocalDateTime;
  * @param mine 내가 작성한 댓글인지
  * @param createdAt 작성 일시 (KST)
  */
-public record NewsCommentItem(long commentId, String content, long authorPlayerId,
-                              String authorName, boolean mine, LocalDateTime createdAt) {
+public record CommentItem(long commentId, String content, long authorPlayerId,
+                          String authorName, boolean mine, LocalDateTime createdAt) {
 }

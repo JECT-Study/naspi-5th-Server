@@ -2,6 +2,7 @@ package kr.ject.naspi.contents.api.disclosure;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import kr.ject.naspi.contents.api.comment.CommentResponse;
 import kr.ject.naspi.contents.application.DisclosureListItem;
 import kr.ject.naspi.contents.application.DisclosurePage;
 import kr.ject.naspi.contents.domain.DisclosureReactionType;
@@ -20,7 +21,7 @@ record DisclosurePageResponse(List<Item> items, Long nextCursor) {
     }
 
     /**
-     * 공시 목록의 공시 1건.
+     * 공시 목록의 공시 1건. 연결된 뉴스는 상세에만 있다.
      *
      * @param disclosureId 공시 ID
      * @param stockId 종목 ID
@@ -34,18 +35,22 @@ record DisclosurePageResponse(List<Item> items, Long nextCursor) {
      * @param likeCount 좋아요(호재) 수
      * @param dislikeCount 싫어요(악재) 수
      * @param myReaction 내 반응. 없으면 null
+     * @param commentCount 댓글 수
+     * @param latestComment 가장 최근 댓글. 없으면 null
      */
     record Item(long disclosureId, long stockId, String title, String body, int tradingDay,
                 LocalDateTime createdAt, long authorPlayerId, boolean mine,
                 List<DisclosureImageResponse> images, long likeCount, long dislikeCount,
-                DisclosureReactionType myReaction) {
+                DisclosureReactionType myReaction, long commentCount,
+                CommentResponse latestComment) {
 
         static Item from(DisclosureListItem item) {
             return new Item(item.disclosureId(), item.stockId(), item.title(), item.body(),
                     item.tradingDay(), item.createdAt(), item.authorPlayerId(), item.mine(),
                     item.images().stream().map(DisclosureImageResponse::from).toList(),
                     item.reaction().likeCount(), item.reaction().dislikeCount(),
-                    item.reaction().myReaction());
+                    item.reaction().myReaction(), item.comments().commentCount(),
+                    CommentResponse.from(item.comments().latestComment()));
         }
     }
 }
