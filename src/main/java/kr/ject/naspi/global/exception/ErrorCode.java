@@ -192,7 +192,21 @@ public enum ErrorCode {
     DISCLOSURE_REACTION_LEAGUE_NOT_STARTED("609", "진행 중인 리그에서만 공시에 반응할 수 있습니다."),
 
     /** 뉴스가 없거나, 다른 리그·종목의 뉴스이거나, 발행(PUBLISHED)되지 않은 경우. */
-    NEWS_NOT_FOUND("610", "뉴스를 찾을 수 없습니다.");
+    NEWS_NOT_FOUND("610", "뉴스를 찾을 수 없습니다."),
+
+    // 611~614는 뉴스 재생성(CNT-07)용으로 비워 둔다.
+
+    /** 댓글이 비었거나(공백만 포함) 100자를 넘는 경우. */
+    INVALID_COMMENT_CONTENT("615", "댓글은 1~100자로 입력해야 합니다."),
+
+    /** 진행 중이 아닌 리그(대기실, 종료)에 댓글을 작성하려는 경우. */
+    COMMENT_LEAGUE_NOT_STARTED("616", "진행 중인 리그에서만 댓글을 작성할 수 있습니다."),
+
+    /** 댓글이 없거나, 다른 뉴스의 댓글이거나, 이미 삭제된 경우. */
+    COMMENT_NOT_FOUND("617", "댓글을 찾을 수 없습니다."),
+
+    /** 댓글 작성자가 아닌 플레이어가 댓글을 삭제하려는 경우. */
+    COMMENT_NOT_AUTHOR("618", "댓글 작성자만 삭제할 수 있습니다.");
 
     private final String code;
     private final String message;
