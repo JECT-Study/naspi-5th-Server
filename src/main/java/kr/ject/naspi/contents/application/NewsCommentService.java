@@ -2,7 +2,6 @@ package kr.ject.naspi.contents.application;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import kr.ject.naspi.contents.domain.CommentContent;
@@ -13,7 +12,6 @@ import kr.ject.naspi.contents.domain.NewsRepository;
 import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.league.application.LeaguePlayers;
 import kr.ject.naspi.league.application.LeagueQueryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,7 +74,7 @@ public class NewsCommentService {
 
         NewsComment saved = commentRepository.save(NewsComment.write(news, playerId,
                 commentContent, LocalDateTime.now(clock)));
-        String name = playerNames(memberId, leagueId).get(playerId);
+        String name = leagueQueryService.getPlayerNames(leagueId, List.of(playerId)).get(playerId);
         return toItem(saved, name, playerId);
     }
 
@@ -95,8 +93,7 @@ public class NewsCommentService {
     @Transactional(readOnly = true)
     public NewsCommentPage findByNews(long memberId, long leagueId, long stockId, long newsId,
                                       Long cursor, int size) {
-        // 입장 확인과 이름 조회를 함께 한다 (미입장은 FORBIDDEN)
-        Map<Long, String> names = playerNames(memberId, leagueId);
+        // 조회는 리그 상태와 무관하므로 입장 여부만 확인한다 (리그가 없어도 미입장으로 FORBIDDEN)
         long playerId = viewerPlayerId(memberId, leagueId);
         findPublishedNews(leagueId, stockId, newsId);
 
@@ -105,6 +102,8 @@ public class NewsCommentService {
         boolean hasNext = fetched.size() > size;
         List<NewsComment> comments = hasNext ? fetched.subList(0, size) : fetched;
         Long nextCursor = hasNext ? comments.get(comments.size() - 1).getId() : null;
+        Map<Long, String> names = leagueQueryService.getPlayerNames(leagueId,
+                comments.stream().map(NewsComment::getPlayerId).distinct().toList());
         return new NewsCommentPage(comments.stream()
                 .map(c -> toItem(c, names.get(c.getPlayerId()), playerId))
                 .toList(), nextCursor);
@@ -144,16 +143,6 @@ public class NewsCommentService {
                 .filter(n -> n.getLeagueId() == leagueId && n.getStockId() == stockId
                         && n.getStatus() == NewsStatus.PUBLISHED)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.NEWS_NOT_FOUND));
-    }
-
-    /** 리그 플레이어 ID별 이름 (탈퇴한 참여자는 "탈퇴한 사용자"). 입장하지 않았으면 FORBIDDEN. */
-    private Map<Long, String> playerNames(long memberId, long leagueId) {
-        Map<Long, String> names = new HashMap<>();
-        for (LeaguePlayers.LeaguePlayer p
-                : leagueQueryService.getPlayers(memberId, leagueId).players()) {
-            names.put(p.playerId(), p.name());
-        }
-        return names;
     }
 
     private static NewsCommentItem toItem(NewsComment c, String name, long viewerPlayerId) {

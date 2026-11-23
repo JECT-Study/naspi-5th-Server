@@ -6,6 +6,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
@@ -226,6 +227,26 @@ class LeagueQueryServiceTest {
                 .filteredOn(player -> player.playerId() == league.hostPlayerId())
                 .singleElement()
                 .extracting(LeaguePlayer::name).isEqualTo("방장");
+    }
+
+    @Test
+    @DisplayName("요청한 플레이어의 표시 이름만 조회하고, 탈퇴한 참여자는 '탈퇴한 사용자', 다른 리그 플레이어는 빠진다")
+    void getPlayerNames() {
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        long guestMember = member("손님");
+        final JoinedLeague guest = leagueService.join(guestMember, league.inviteCode());
+        stockListingService.list(league.leagueId(), guestMember, "손님종목", "소개");
+        leagueStartUseCase.start(host, league.leagueId());
+        leagueService.recordWithdrawal(guestMember);
+        entityManager.remove(entityManager.find(Member.class, guestMember));
+        entityManager.flush();
+        CreatedLeague otherLeague = useCase.create(member("남"), "다른 리그", "남종목", "소개");
+
+        assertThat(queryService.getPlayerNames(league.leagueId(), List.of(league.hostPlayerId(),
+                guest.playerId(), otherLeague.hostPlayerId())))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        league.hostPlayerId(), "방장", guest.playerId(), "탈퇴한 사용자"));
     }
 
     @Test

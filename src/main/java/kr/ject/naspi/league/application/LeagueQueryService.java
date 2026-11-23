@@ -3,6 +3,7 @@ package kr.ject.naspi.league.application;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -187,6 +188,28 @@ public class LeagueQueryService {
      */
     public Optional<Long> findPlayerId(long memberId, long leagueId) {
         return playerRepository.findByLeagueIdAndMemberId(leagueId, memberId).map(Player::getId);
+    }
+
+    /**
+     * 리그 플레이어들의 표시 이름을 조회한다. 리그 상태와 관계없이 조회하며, 입장 확인은 호출하는 쪽이
+     * {@link #findPlayerId}로 한다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerIds 이름을 찾을 플레이어 ID 목록
+     * @return 플레이어 ID별 이름. 탈퇴한 참여자는 '탈퇴한 사용자'. 이 리그에 없는 플레이어 ID는 빠진다
+     */
+    public Map<Long, String> getPlayerNames(long leagueId, Collection<Long> playerIds) {
+        List<Player> players = playerRepository.findAllByLeagueId(leagueId).stream()
+                .filter(player -> playerIds.contains(player.getId()))
+                .toList();
+        Map<Long, String> names = memberService.getNames(players.stream()
+                .filter(player -> !player.isWithdrawn())
+                .map(Player::getMemberId)
+                .filter(Objects::nonNull)
+                .toList());
+        Map<Long, String> result = new HashMap<>();
+        players.forEach(player -> result.put(player.getId(), displayNameOf(player, names)));
+        return result;
     }
 
     /**

@@ -2,12 +2,14 @@ package kr.ject.naspi.contents.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.CommentStatus;
@@ -20,8 +22,6 @@ import kr.ject.naspi.contents.domain.NewsGenerationResult;
 import kr.ject.naspi.contents.domain.NewsSentiment;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
-import kr.ject.naspi.league.application.LeaguePlayers;
-import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
 import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.league.application.LeagueTradingDay;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,8 +70,8 @@ class NewsCommentServiceTest {
         given(leagueQueryService.findPlayerId(OTHER, LEAGUE_ID))
                 .willReturn(Optional.of(OTHER_PLAYER));
         given(leagueQueryService.findPlayerId(OUTSIDER, LEAGUE_ID)).willReturn(Optional.empty());
-        given(leagueQueryService.getPlayers(ME, LEAGUE_ID)).willReturn(players());
-        given(leagueQueryService.getPlayers(OTHER, LEAGUE_ID)).willReturn(players());
+        given(leagueQueryService.getPlayerNames(eq(LEAGUE_ID), anyCollection()))
+                .willReturn(Map.of(ME_PLAYER, "나", OTHER_PLAYER, "상대", 99L, "탈퇴한 사용자"));
     }
 
     @Test
@@ -147,8 +147,6 @@ class NewsCommentServiceTest {
     @DisplayName("리그에 입장하지 않은 회원은 댓글을 쓰거나 볼 수 없다")
     void outsider() {
         long news = publishedNews(STOCK_ID);
-        given(leagueQueryService.getPlayers(OUTSIDER, LEAGUE_ID))
-                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
 
         assertBiz(() -> service.write(OUTSIDER, LEAGUE_ID, STOCK_ID, news, "댓글"),
                 ErrorCode.FORBIDDEN);
@@ -197,12 +195,6 @@ class NewsCommentServiceTest {
                 ErrorCode.COMMENT_NOT_FOUND);
     }
 
-    private static LeaguePlayers players() {
-        return new LeaguePlayers(LEAGUE_ID, false, null, List.of(
-                new LeaguePlayer(ME_PLAYER, "나", false, true, NOW, NOW),
-                new LeaguePlayer(OTHER_PLAYER, "상대", false, true, NOW, NOW),
-                new LeaguePlayer(99L, "탈퇴한 사용자", false, true, NOW, NOW)));
-    }
 
     private long publishedNews(long stockId) {
         return news(stockId, new NewsGenerationResult.Generated("제목", "본문",
