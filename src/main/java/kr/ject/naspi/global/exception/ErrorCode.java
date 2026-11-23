@@ -192,7 +192,34 @@ public enum ErrorCode {
     DISCLOSURE_NOT_AUTHOR("608", "공시 작성자만 삭제할 수 있습니다."),
 
     /** 진행 중이 아닌 리그(대기실, 종료)의 공시에 반응하거나 반응을 바꾸려는 경우. */
-    DISCLOSURE_REACTION_LEAGUE_NOT_STARTED("609", "진행 중인 리그에서만 공시에 반응할 수 있습니다.");
+    DISCLOSURE_REACTION_LEAGUE_NOT_STARTED("609", "진행 중인 리그에서만 공시에 반응할 수 있습니다."),
+
+    /** 뉴스가 없거나, 다른 리그·종목의 뉴스이거나, 발행(PUBLISHED)되지 않은 경우. */
+    NEWS_NOT_FOUND("610", "뉴스를 찾을 수 없습니다."),
+
+    /** 공시 작성자가 아닌 플레이어가 뉴스를 다시 생성하려는 경우. */
+    NEWS_REGENERATION_NOT_AUTHOR("611", "공시 작성자만 뉴스를 다시 생성할 수 있습니다."),
+
+    /** 생성에 실패(FAILED)한 뉴스가 아닌 뉴스를 다시 생성하려는 경우. */
+    NEWS_NOT_REGENERATABLE("612", "생성에 실패한 뉴스만 다시 생성할 수 있습니다."),
+
+    /** 직전 재생성 요청 후 1분이 지나기 전에 다시 요청한 경우. */
+    NEWS_REGENERATION_TOO_SOON("613", "뉴스 재생성은 1분에 한 번만 요청할 수 있습니다."),
+
+    /** 진행 중이 아닌 리그(대기실, 종료)에서 뉴스를 다시 생성하려는 경우. */
+    NEWS_REGENERATION_LEAGUE_NOT_STARTED("614", "진행 중인 리그에서만 뉴스를 다시 생성할 수 있습니다."),
+
+    /** 댓글이 비었거나(공백만 포함) 100자를 넘는 경우. */
+    INVALID_COMMENT_CONTENT("615", "댓글은 1~100자로 입력해야 합니다."),
+
+    /** 진행 중이 아닌 리그(대기실, 종료)에 댓글을 작성하려는 경우. */
+    COMMENT_LEAGUE_NOT_STARTED("616", "진행 중인 리그에서만 댓글을 작성할 수 있습니다."),
+
+    /** 댓글이 없거나, 다른 뉴스의 댓글이거나, 이미 삭제된 경우. */
+    COMMENT_NOT_FOUND("617", "댓글을 찾을 수 없습니다."),
+
+    /** 댓글 작성자가 아닌 플레이어가 댓글을 삭제하려는 경우. */
+    COMMENT_NOT_AUTHOR("618", "댓글 작성자만 삭제할 수 있습니다.");
 
     private final String code;
     private final String message;

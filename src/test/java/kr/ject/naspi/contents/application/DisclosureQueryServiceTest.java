@@ -193,7 +193,7 @@ class DisclosureQueryServiceTest {
         long id = publish(STOCK_ID, "상세 공시", 1);
         News news = requestNews(id);
         news.complete(new NewsGenerationResult.Generated("뉴스 제목", "뉴스 본문",
-                NewsSentiment.POSITIVE, "요약"));
+                NewsSentiment.POSITIVE, "요약"), NOW);
         entityManager.flush();
 
         DisclosureDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
@@ -210,7 +210,7 @@ class DisclosureQueryServiceTest {
         News pendingNews = requestNews(pending);
         long failed = publish(STOCK_ID, "실패", 1);
         News failedNews = requestNews(failed);
-        failedNews.complete(new NewsGenerationResult.Failed("오류"));
+        failedNews.complete(new NewsGenerationResult.Failed("오류"), NOW);
         entityManager.flush();
 
         assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, pending).news())

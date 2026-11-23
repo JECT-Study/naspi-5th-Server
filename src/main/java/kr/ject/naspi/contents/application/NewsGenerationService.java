@@ -1,5 +1,7 @@
 package kr.ject.naspi.contents.application;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
@@ -33,6 +35,7 @@ public class NewsGenerationService {
     private final ImageService imageService;
     private final NewsGenerator newsGenerator;
     private final TransactionTemplate transactionTemplate;
+    private final Clock clock;
 
     /**
      * 뉴스 생성 서비스를 만든다.
@@ -42,16 +45,19 @@ public class NewsGenerationService {
      * @param imageService 공시 이미지 URL 발급
      * @param newsGenerator AI 뉴스 생성기
      * @param transactionManager 뉴스 저장 트랜잭션
+     * @param clock 발행 일시 기준 시계
      */
     public NewsGenerationService(NewsRepository newsRepository,
                                  DisclosureRepository disclosureRepository,
                                  ImageService imageService, NewsGenerator newsGenerator,
-                                 PlatformTransactionManager transactionManager) {
+                                 PlatformTransactionManager transactionManager,
+                                 Clock clock) {
         this.newsRepository = newsRepository;
         this.disclosureRepository = disclosureRepository;
         this.imageService = imageService;
         this.newsGenerator = newsGenerator;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.clock = clock;
     }
 
     /**
@@ -117,7 +123,7 @@ public class NewsGenerationService {
 
     private void complete(long disclosureId, NewsGenerationResult result) {
         News news = newsRepository.findByDisclosureId(disclosureId).orElseThrow();
-        news.complete(result);
+        news.complete(result, LocalDateTime.now(clock));
         switch (result) {
             case NewsGenerationResult.Generated generated -> {
                 // 같은 종목의 다음 뉴스 생성에 과거 맥락으로 쓴다

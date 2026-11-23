@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 import java.lang.reflect.Method;
 import java.time.Clock;
@@ -221,6 +222,32 @@ class NewsGenerationServiceTest {
         assertThat(method.isAnnotationPresent(Async.class)).isTrue();
         assertThat(method.getAnnotation(TransactionalEventListener.class).phase())
                 .isEqualTo(TransactionPhase.AFTER_COMMIT);
+    }
+
+    @Test
+    @DisplayName("수동 재생성 요청도 커밋 후 비동기로 생성하고, 같은 자동 재시도 흐름을 탄다")
+    void regenerate() throws NoSuchMethodException {
+        Method method = DisclosurePublishedListener.class.getMethod(
+                "onNewsRegenerationRequested", NewsRegenerationRequested.class);
+        assertThat(method.isAnnotationPresent(Async.class)).isTrue();
+        assertThat(method.getAnnotation(TransactionalEventListener.class).phase())
+                .isEqualTo(TransactionPhase.AFTER_COMMIT);
+
+        Disclosure disclosure = disclosure(STOCK_ID, "헬스장 등록", "3개월 끊었습니다.", 2);
+        given(newsGenerator.generate(any()))
+                .willReturn(new NewsGenerationResult.Failed("timeout"))
+                .willReturn(generated("헬스 시작", "3개월 등록", NewsSentiment.POSITIVE, "요약"));
+        newsGenerationService.generate(disclosure.getId());
+        News failed = news(disclosure.getId());
+        assertThat(failed.getStatus()).isEqualTo(NewsStatus.FAILED);
+        failed.requestRegeneration(NOW);
+        entityManager.flush();
+
+        // 리스너가 커밋 후 호출하는 것과 같은 호출
+        newsGenerationService.generate(disclosure.getId());
+
+        assertThat(news(disclosure.getId()).getStatus()).isEqualTo(NewsStatus.PUBLISHED);
+        then(newsGenerator).should(times(2)).generate(any());
     }
 
     /** 공시 작성과 같이 공시와 생성 중(PENDING) 뉴스를 함께 저장한다. */

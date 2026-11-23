@@ -99,9 +99,6 @@ public class DisclosureQueryService {
     /**
      * 공시 상세를 조회한다. 공시로 만든 AI 뉴스를 생성 상태와 함께 준다.
      *
-     * <p>TODO: 공시가 삭제돼도 이미 발행된 뉴스는 볼 수 있어야 하므로, 삭제된 공시의 뉴스는 뉴스 쪽 API(CNT-08)로
-     *       제공한다.
-     *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
      * @param stockId 종목 ID

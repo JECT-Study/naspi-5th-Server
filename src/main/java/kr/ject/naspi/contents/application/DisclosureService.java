@@ -123,8 +123,10 @@ public class DisclosureService {
      * 상태만 바꾸며, 첨부 이미지는 더 이상 볼 수 없으므로 파일까지 지운다 (파일은 커밋 후 삭제). 작성과 달리
      * 리그 상태는 따지지 않아 종료된 리그의 공시도 삭제할 수 있다 (docs/issues/v1/contents.md CNT-03 결정).
      *
-     * <p>TODO: 뉴스 자동 재시도 유지·수동 재시도 차단(CNT-06, CNT-07)과 댓글 조회 차단(CNT-09)은 해당 기능을
-     *       구현할 때 {@link Disclosure#isDeleted()}로 처리한다.
+     * <p>삭제된 공시의 뉴스도 자동 재시도는 계속하고, 수동 재생성은 막는다 ({@link NewsRegenerationService}).
+     *
+     * <p>TODO: 댓글 조회 차단(CNT-09 공시 댓글)은 해당 기능을 구현할 때 {@link Disclosure#isDeleted()}로
+     *       처리한다.
      *
      * @param memberId 삭제하는 회원 ID
      * @param leagueId 리그 ID
