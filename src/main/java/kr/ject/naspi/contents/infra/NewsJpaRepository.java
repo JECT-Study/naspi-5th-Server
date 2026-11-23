@@ -1,10 +1,13 @@
 package kr.ject.naspi.contents.infra;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.util.Optional;
 import kr.ject.naspi.contents.domain.News;
 import kr.ject.naspi.contents.domain.NewsRepository;
 import kr.ject.naspi.contents.domain.NewsStatus;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +16,10 @@ import org.springframework.data.repository.query.Param;
  * {@link NewsRepository}의 Spring Data 구현.
  */
 interface NewsJpaRepository extends Repository<News, Long>, NewsRepository {
+
+    @Override
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<News> findWithLockByDisclosureId(long disclosureId);
 
     @Override
     default List<News> findPublishedByStock(long leagueId, long stockId, Long cursor,

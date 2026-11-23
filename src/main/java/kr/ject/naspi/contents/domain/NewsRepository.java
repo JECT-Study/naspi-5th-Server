@@ -25,6 +25,14 @@ public interface NewsRepository {
     Optional<News> findByDisclosureId(long disclosureId);
 
     /**
+     * 공시로 만든 뉴스를 쓰기 잠금을 걸고 찾는다. 같은 뉴스의 동시 재생성 요청을 직렬화한다.
+     *
+     * @param disclosureId 공시 ID
+     * @return 뉴스 (상태와 관계없이)
+     */
+    Optional<News> findWithLockByDisclosureId(long disclosureId);
+
+    /**
      * 뉴스를 ID로 찾는다.
      *
      * @param id 뉴스 ID

@@ -8,11 +8,13 @@ import jakarta.validation.constraints.Min;
 import kr.ject.naspi.common.response.Result;
 import kr.ject.naspi.common.security.LoginMember;
 import kr.ject.naspi.contents.application.NewsQueryService;
+import kr.ject.naspi.contents.application.NewsRegenerationService;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "뉴스", description = "종목별 AI 뉴스 조회")
 @RestController
-@RequestMapping("/api/leagues/{leagueId}/stocks/{stockId}/news")
+@RequestMapping("/api/leagues/{leagueId}")
 @RequiredArgsConstructor
 public class NewsController {
 
@@ -34,6 +36,7 @@ public class NewsController {
             """;
 
     private final NewsQueryService newsQueryService;
+    private final NewsRegenerationService newsRegenerationService;
 
     /**
      * 종목의 발행된 뉴스를 최신순으로 조회한다.
@@ -71,7 +74,7 @@ public class NewsController {
                     | 400 | `"002"` | `size`가 1~50을 벗어남 | 요청 값 확인 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
-    @GetMapping
+    @GetMapping("/stocks/{stockId}/news")
     public Result<NewsPageResponse> findByStock(
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId,
@@ -114,7 +117,7 @@ public class NewsController {
                     | 200 | `"004"` | 리그에 입장하지 않은 회원 (리그가 없는 경우 포함) | 안내 후 홈으로 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
-    @GetMapping("/{newsId}")
+    @GetMapping("/stocks/{stockId}/news/{newsId}")
     public Result<NewsResponse> getDetail(
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId,
@@ -122,5 +125,54 @@ public class NewsController {
             @PathVariable long newsId) {
         return Result.success(NewsResponse.from(newsQueryService.getDetail(
                 loginMember.memberId(), leagueId, stockId, newsId)));
+    }
+
+    /**
+     * 생성에 실패한 공시의 뉴스를 다시 생성하도록 요청한다.
+     *
+     * @param loginMember 로그인한 회원
+     * @param leagueId 리그 ID
+     * @param stockId 종목 ID
+     * @param disclosureId 공시 ID
+     * @return 재생성을 요청한 뉴스 ID와 상태
+     * @throws NaspiBizException 작성자가 아니거나, 실패한 뉴스가 아니거나, 1분 안에 다시 요청한 경우 등
+     */
+    @Operation(
+            summary = "뉴스 다시 생성",
+            description = """
+                    자동 재시도까지 실패(`FAILED`)한 공시의 AI 뉴스를 공시 작성자가 다시 생성하도록 \
+                    요청한다. 뉴스는 곧바로 `PENDING`(생성 중)이 되고, 생성은 서버에서 비동기로 진행되며 \
+                    첫 생성과 같이 자동 재시도가 적용된다. 결과는 공시 상세의 `news.status`로 확인한다.
+
+                    **요청**
+                    - 로그인 세션 쿠키가 필요하다. \
+                    `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
+                    - 공시 작성자만, 삭제되지 않은 공시에서, 진행 중인 리그에서만 요청할 수 있다.
+                    - 같은 뉴스는 1분에 한 번만 요청할 수 있다. 요청 본문은 없다.
+
+                    **성공 시** HTTP 200, `code` `"000"`, `data`에 `newsId`, `status`(`PENDING`).
+
+                    **실패 응답** (`code`는 3자리 문자열)
+
+                    | HTTP | code | 상황 | 프론트 처리 |
+                    |---|---|---|---|
+                    | 200 | `"611"` | 공시 작성자가 아님 | 버튼 숨김 |
+                    | 200 | `"612"` | 생성에 실패한 뉴스가 아님 (생성 중·발행·미생성) | 공시 상세 새로고침 |
+                    | 200 | `"613"` | 직전 요청 후 1분이 지나지 않음 | 잠시 후 다시 시도 안내 |
+                    | 200 | `"614"` | 진행 중인 리그가 아님 (대기실, 종료) | 버튼 비활성화 |
+                    | 200 | `"607"` | 공시가 없거나 삭제됨 (다른 리그·종목의 공시 포함) | 목록으로 |
+                    | 200 | `"610"` | 공시에 뉴스가 없음 | 공시 상세 새로고침 |
+                    | 200 | `"204"` | 리그가 없음 | 안내 후 홈으로 |
+                    | 200 | `"004"` | 리그에 입장하지 않은 회원 | 안내 후 홈으로 |
+                    | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
+                    """)
+    @PostMapping("/stocks/{stockId}/disclosures/{disclosureId}/news/regenerate")
+    public Result<RegeneratedNewsResponse> regenerate(
+            @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
+            @PathVariable long leagueId,
+            @PathVariable long stockId,
+            @PathVariable long disclosureId) {
+        return Result.success(RegeneratedNewsResponse.from(newsRegenerationService.regenerate(
+                loginMember.memberId(), leagueId, stockId, disclosureId)));
     }
 }

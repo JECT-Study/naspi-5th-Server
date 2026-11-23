@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -25,6 +27,56 @@ class NewsTest {
         assertThat(news.getStatus()).isEqualTo(NewsStatus.PUBLISHED);
         assertThat(news.getTitle()).isEqualTo("제목");
         assertThat(news.getPublishedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("자동 재시도까지 실패한 뉴스만 수동 재생성할 수 있고, 요청하면 생성 중으로 돌아간다")
+    void regenerateFailedNews() {
+        News news = failedNews();
+
+        news.requestRegeneration(NOW);
+
+        assertThat(news.getStatus()).isEqualTo(NewsStatus.PENDING);
+        assertThat(news.getRegenerationRequestedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("생성 중·발행·미생성 뉴스는 다시 생성할 수 없다")
+    void regenerateRejectNotFailed() {
+        News pending = News.requestFrom(disclosure(), NOW);
+        News published = News.requestFrom(disclosure(), NOW);
+        published.complete(new NewsGenerationResult.Generated("제목", "본문",
+                NewsSentiment.POSITIVE, "요약"), NOW);
+        News skipped = News.requestFrom(disclosure(), NOW);
+        skipped.complete(new NewsGenerationResult.Skipped("없음"), NOW);
+
+        for (News news : new News[] {pending, published, skipped}) {
+            assertThatThrownBy(() -> news.requestRegeneration(NOW.plusHours(1)))
+                    .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(
+                            e.getErrorCode()).isEqualTo(ErrorCode.NEWS_NOT_REGENERATABLE));
+        }
+    }
+
+    @Test
+    @DisplayName("재생성 요청은 뉴스당 1분에 한 번만 할 수 있다 (정확히 1분이 지나면 허용)")
+    void regenerateInterval() {
+        News news = failedNews();
+        news.requestRegeneration(NOW);
+        news.complete(new NewsGenerationResult.Failed("x"), NOW);
+
+        assertThatThrownBy(() -> news.requestRegeneration(NOW.plusSeconds(59)))
+                .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(
+                        e.getErrorCode()).isEqualTo(ErrorCode.NEWS_REGENERATION_TOO_SOON));
+        assertThat(news.getStatus()).isEqualTo(NewsStatus.FAILED);
+
+        news.requestRegeneration(NOW.plusSeconds(60));
+        assertThat(news.getStatus()).isEqualTo(NewsStatus.PENDING);
+    }
+
+    private static News failedNews() {
+        News news = News.requestFrom(disclosure(), NOW);
+        news.complete(new NewsGenerationResult.Failed("x"), NOW);
+        return news;
     }
 
     @Test

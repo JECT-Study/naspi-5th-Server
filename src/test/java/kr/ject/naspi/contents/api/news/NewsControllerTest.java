@@ -7,7 +7,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -18,7 +20,10 @@ import kr.ject.naspi.common.security.SecurityConfig;
 import kr.ject.naspi.contents.application.NewsItem;
 import kr.ject.naspi.contents.application.NewsPage;
 import kr.ject.naspi.contents.application.NewsQueryService;
+import kr.ject.naspi.contents.application.NewsRegenerationService;
+import kr.ject.naspi.contents.application.RegeneratedNews;
 import kr.ject.naspi.contents.domain.NewsSentiment;
+import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +54,9 @@ class NewsControllerTest {
 
     @MockitoBean
     private NewsQueryService newsQueryService;
+
+    @MockitoBean
+    private NewsRegenerationService newsRegenerationService;
 
     @MockitoBean
     private AuthenticationSuccessHandler kakaoLoginSuccessHandler;
@@ -112,6 +120,27 @@ class NewsControllerTest {
     void unauthorized() throws Exception {
         mockMvc.perform(get(URL)).andExpect(status().isUnauthorized());
         mockMvc.perform(get(URL + "/30")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("뉴스 재생성을 요청하면 뉴스 ID와 생성 중 상태를 준다")
+    void regenerate() throws Exception {
+        given(newsRegenerationService.regenerate(MEMBER_ID, 3L, 11L, 20L))
+                .willReturn(new RegeneratedNews(30L, NewsStatus.PENDING));
+
+        mockMvc.perform(post(URL.replace("/news", "") + "/disclosures/20/news/regenerate")
+                        .with(loginMember()).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.newsId").value(30))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+    }
+
+    @Test
+    @DisplayName("로그인하지 않으면 뉴스를 다시 생성할 수 없다")
+    void regenerateUnauthorized() throws Exception {
+        mockMvc.perform(post("/api/leagues/3/stocks/11/disclosures/20/news/regenerate")
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized());
     }
 
     private static NewsItem item() {

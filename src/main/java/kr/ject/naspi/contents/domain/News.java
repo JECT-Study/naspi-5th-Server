@@ -10,8 +10,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import kr.ject.naspi.global.exception.ErrorCode;
+import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,6 +34,9 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class News {
+
+    /** 같은 뉴스를 다시 생성 요청할 수 있는 최소 간격. */
+    public static final Duration REGENERATION_INTERVAL = Duration.ofMinutes(1);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -77,6 +83,10 @@ public class News {
     /** 발행된 시각. 발행된 뉴스에만 있다. */
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
+
+    /** 마지막으로 수동 재생성을 요청한 시각. 요청한 적이 없으면 null. */
+    @Column(name = "regeneration_requested_at")
+    private LocalDateTime regenerationRequestedAt;
 
     private News(long leagueId, long stockId, long disclosureId, int tradingDay,
                  LocalDateTime createdAt) {
@@ -125,5 +135,26 @@ public class News {
             case NewsGenerationResult.Skipped skipped -> this.status = NewsStatus.SKIPPED;
             case NewsGenerationResult.Failed failed -> this.status = NewsStatus.FAILED;
         }
+    }
+
+    /**
+     * 실패한 뉴스의 수동 재생성을 요청한다. 생성 중 상태로 되돌린다.
+     *
+     * <p>정책: 자동 재시도까지 실패(FAILED)한 뉴스만 다시 생성할 수 있다. 결정(CNT-07): 뉴스당 1분에 한 번만
+     * 요청할 수 있고, 직전 요청으로부터 정확히 1분이 지난 시각부터 허용한다.
+     *
+     * @param now 요청 일시
+     * @throws NaspiBizException 실패한 뉴스가 아니거나, 직전 요청 후 1분이 지나지 않은 경우
+     */
+    public void requestRegeneration(LocalDateTime now) {
+        if (status != NewsStatus.FAILED) {
+            throw new NaspiBizException(ErrorCode.NEWS_NOT_REGENERATABLE);
+        }
+        if (regenerationRequestedAt != null
+                && now.isBefore(regenerationRequestedAt.plus(REGENERATION_INTERVAL))) {
+            throw new NaspiBizException(ErrorCode.NEWS_REGENERATION_TOO_SOON);
+        }
+        this.status = NewsStatus.PENDING;
+        this.regenerationRequestedAt = Objects.requireNonNull(now, "now");
     }
 }
