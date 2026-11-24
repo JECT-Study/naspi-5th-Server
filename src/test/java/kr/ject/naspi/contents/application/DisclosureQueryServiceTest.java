@@ -147,13 +147,24 @@ class DisclosureQueryServiceTest {
                 null, 2);
         assertThat(page1.items()).extracting(DisclosureListItem::disclosureId)
                 .containsExactly(third, second);
-        assertThat(page1.nextCursor()).isEqualTo(second);
+        assertThat(page1.nextCursor()).isNotNull();
 
         DisclosurePage page2 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
                 page1.nextCursor(), 2);
         assertThat(page2.items()).extracting(DisclosureListItem::disclosureId)
                 .containsExactly(first);
         assertThat(page2.nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("형식이 올바르지 않거나 뉴스 커서를 보내면 거절한다")
+    void invalidCursor() {
+        String newsCursor = new ContentCursor(NOW, FeedItemType.NEWS, 1L).encode();
+
+        for (String cursor : new String[] {"not-a-cursor", "30", newsCursor}) {
+            assertBiz(() -> queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
+                    cursor, 20), ErrorCode.INVALID_INPUT);
+        }
     }
 
     @Test

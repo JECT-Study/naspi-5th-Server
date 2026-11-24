@@ -42,17 +42,6 @@ public interface NewsRepository {
     Optional<News> findById(Long id);
 
     /**
-     * 종목의 발행된(PUBLISHED) 뉴스를 최신순(ID 내림차순)으로 찾는다.
-     *
-     * @param leagueId 리그 ID
-     * @param stockId 종목 ID
-     * @param cursor 이 ID보다 작은 뉴스만 찾는다. 첫 페이지면 null
-     * @param limit 최대 개수
-     * @return 뉴스 목록
-     */
-    List<News> findPublishedByStock(long leagueId, long stockId, Long cursor, int limit);
-
-    /**
      * 리그의 발행된(PUBLISHED) 뉴스를 발행 일시 최신순(같으면 ID 내림차순)으로 기준 위치 다음부터 찾는다.
      * 발행 일시가 {@code before}보다 이르거나, 같으면서 ID가 {@code idBefore}보다 작은 뉴스만 찾는다.
      *

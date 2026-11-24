@@ -26,17 +26,6 @@ public interface DisclosureRepository {
     Optional<Disclosure> findById(Long id);
 
     /**
-     * 종목의 게시 중인(삭제되지 않은) 공시를 최신순으로 커서 이후부터 찾는다.
-     *
-     * @param leagueId 리그 ID
-     * @param stockId 종목 ID
-     * @param cursor 이 ID보다 작은(이전에 작성된) 공시부터 찾는다. 첫 페이지면 null
-     * @param limit 최대 개수
-     * @return 공시 목록 (ID 내림차순)
-     */
-    List<Disclosure> findPublishedByStock(long leagueId, long stockId, Long cursor, int limit);
-
-    /**
      * 리그의 게시 중인(삭제되지 않은) 공시를 작성 일시 최신순(같으면 ID 내림차순)으로 기준 위치 다음부터 찾는다.
      * 작성 일시가 {@code before}보다 이르거나, 같으면서 ID가 {@code idBefore}보다 작은 공시만 찾는다.
      *

@@ -63,7 +63,7 @@ public class DisclosureQueryService {
     }
 
     /**
-     * 종목의 공시를 최신순으로 한 페이지 조회한다. 삭제된 공시는 빠진다.
+     * 종목의 공시를 작성 일시 최신순(같으면 ID 내림차순)으로 한 페이지 조회한다. 삭제된 공시는 빠진다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -71,18 +71,21 @@ public class DisclosureQueryService {
      * @param cursor 이전 페이지의 {@link DisclosurePage#nextCursor()}. 첫 페이지면 null
      * @param size 한 페이지 개수 (1~{@value #MAX_PAGE_SIZE})
      * @return 공시 목록 한 페이지
-     * @throws NaspiBizException 리그에 입장하지 않은 회원인 경우
+     * @throws NaspiBizException 리그에 입장하지 않았거나 커서 형식이 올바르지 않은 경우
      */
-    public DisclosurePage findByStock(long memberId, long leagueId, long stockId, Long cursor,
+    public DisclosurePage findByStock(long memberId, long leagueId, long stockId, String cursor,
                                       int size) {
         long playerId = viewerPlayerId(memberId, leagueId);
+        ContentCursor after = ContentCursor.decode(cursor, FeedItemType.DISCLOSURE);
         // 다음 페이지가 있는지 알기 위해 1개 더 읽는다
-        List<Disclosure> fetched = disclosureRepository.findPublishedByStock(leagueId, stockId,
-                cursor, size + 1);
+        List<Disclosure> fetched = disclosureRepository.findPublishedInLeague(leagueId, stockId,
+                after == null ? null : after.at(), after == null ? Long.MAX_VALUE : after.id(),
+                size + 1);
         boolean hasNext = fetched.size() > size;
         List<Disclosure> disclosures = hasNext ? fetched.subList(0, size) : fetched;
         List<DisclosureListItem> items = toListItems(leagueId, playerId, disclosures);
-        Long nextCursor = hasNext ? disclosures.get(disclosures.size() - 1).getId() : null;
+        String nextCursor = hasNext
+                ? ContentCursor.of(disclosures.get(disclosures.size() - 1)).encode() : null;
         return new DisclosurePage(items, nextCursor);
     }
 

@@ -4,24 +4,47 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Comparator;
+import kr.ject.naspi.contents.domain.Disclosure;
+import kr.ject.naspi.contents.domain.News;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 
 /**
- * 통합 피드의 정렬 위치. 등록 일시 내림차순, 같으면 공시 먼저, 같으면 ID 내림차순으로 정렬한다.
+ * 공시 목록·뉴스 목록·통합 피드의 정렬 위치. 등록 일시 내림차순, 같으면 공시 먼저, 같으면 ID 내림차순으로 정렬한다.
  * 클라이언트에는 내용을 알 수 없는 문자열로 준다.
  *
  * @param at 등록 일시 (공시는 작성 일시, 뉴스는 발행 일시)
  * @param type 항목 종류
  * @param id 공시 ID 또는 뉴스 ID
  */
-record FeedCursor(LocalDateTime at, FeedItemType type, long id) {
+record ContentCursor(LocalDateTime at, FeedItemType type, long id) {
 
-    /** 피드 정렬 순서 (앞이 최신). */
-    static final Comparator<FeedCursor> ORDER = Comparator
-            .comparing(FeedCursor::at, Comparator.reverseOrder())
+    /**
+     * 공시의 위치.
+     *
+     * @param disclosure 공시
+     * @return 작성 일시 기준 위치
+     */
+    static ContentCursor of(Disclosure disclosure) {
+        return new ContentCursor(disclosure.getCreatedAt(), FeedItemType.DISCLOSURE,
+                disclosure.getId());
+    }
+
+    /**
+     * 발행된 뉴스의 위치.
+     *
+     * @param news 발행된 뉴스
+     * @return 발행 일시 기준 위치
+     */
+    static ContentCursor of(News news) {
+        return new ContentCursor(news.getPublishedAt(), FeedItemType.NEWS, news.getId());
+    }
+
+    /** 정렬 순서 (앞이 최신). */
+    static final Comparator<ContentCursor> ORDER = Comparator
+            .comparing(ContentCursor::at, Comparator.reverseOrder())
             .thenComparingInt(cursor -> typeOrder(cursor.type()))
-            .thenComparing(FeedCursor::id, Comparator.reverseOrder());
+            .thenComparing(ContentCursor::id, Comparator.reverseOrder());
 
     private static final String SEPARATOR = "|";
 
@@ -65,7 +88,7 @@ record FeedCursor(LocalDateTime at, FeedItemType type, long id) {
      * @return 정렬 위치. 첫 페이지면 null
      * @throws NaspiBizException 커서 형식이 올바르지 않은 경우
      */
-    static FeedCursor decode(String cursor) {
+    static ContentCursor decode(String cursor) {
         if (cursor == null) {
             return null;
         }
@@ -76,10 +99,26 @@ record FeedCursor(LocalDateTime at, FeedItemType type, long id) {
             if (parts.length != 3) {
                 throw new IllegalArgumentException("커서 구성 요소 수: " + parts.length);
             }
-            return new FeedCursor(LocalDateTime.parse(parts[0]), FeedItemType.valueOf(parts[1]),
-                    Long.parseLong(parts[2]));
+            return new ContentCursor(LocalDateTime.parse(parts[0]),
+                    FeedItemType.valueOf(parts[1]), Long.parseLong(parts[2]));
         } catch (RuntimeException e) {
             throw new NaspiBizException(ErrorCode.INVALID_INPUT);
         }
+    }
+
+    /**
+     * 한 종류만 담는 목록의 커서 문자열을 읽는다.
+     *
+     * @param cursor {@link #encode()}로 만든 문자열. 첫 페이지면 null
+     * @param type 목록의 항목 종류
+     * @return 정렬 위치. 첫 페이지면 null
+     * @throws NaspiBizException 커서 형식이 올바르지 않거나 다른 종류의 커서인 경우
+     */
+    static ContentCursor decode(String cursor, FeedItemType type) {
+        ContentCursor decoded = decode(cursor);
+        if (decoded != null && decoded.type() != type) {
+            throw new NaspiBizException(ErrorCode.INVALID_INPUT);
+        }
+        return decoded;
     }
 }

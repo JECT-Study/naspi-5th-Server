@@ -9,7 +9,7 @@ import kr.ject.naspi.contents.application.NewsPage;
  * @param items 뉴스 목록 (최신순)
  * @param nextCursor 다음 페이지 요청 시 {@code cursor}로 보낼 값. 더 없으면 null
  */
-record NewsPageResponse(List<NewsListItemResponse> items, Long nextCursor) {
+record NewsPageResponse(List<NewsListItemResponse> items, String nextCursor) {
 
     static NewsPageResponse from(NewsPage page) {
         return new NewsPageResponse(

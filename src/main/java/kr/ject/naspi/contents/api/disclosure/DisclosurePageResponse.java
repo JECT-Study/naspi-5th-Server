@@ -9,7 +9,7 @@ import kr.ject.naspi.contents.application.DisclosurePage;
  * @param items 공시 목록 (최신순)
  * @param nextCursor 다음 페이지 요청 시 {@code cursor}로 보낼 값. 더 없으면 null
  */
-record DisclosurePageResponse(List<DisclosureListItemResponse> items, Long nextCursor) {
+record DisclosurePageResponse(List<DisclosureListItemResponse> items, String nextCursor) {
 
     static DisclosurePageResponse from(DisclosurePage page) {
         return new DisclosurePageResponse(

@@ -76,7 +76,7 @@ public class FeedQueryService {
                          String cursor, int size) {
         final long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
-        FeedCursor after = FeedCursor.decode(cursor);
+        ContentCursor after = ContentCursor.decode(cursor);
 
         // 종류별로 다음 페이지 여부를 알 만큼(size + 1) 읽어 합친 뒤 앞에서부터 자른다
         List<Disclosure> disclosures = type == FeedItemType.NEWS ? List.of()
@@ -90,14 +90,12 @@ public class FeedQueryService {
                         after == null ? Long.MAX_VALUE : after.idBefore(FeedItemType.NEWS),
                         size + 1);
 
-        List<FeedCursor> merged = new ArrayList<>();
-        disclosures.forEach(d -> merged.add(
-                new FeedCursor(d.getCreatedAt(), FeedItemType.DISCLOSURE, d.getId())));
-        news.forEach(n -> merged.add(
-                new FeedCursor(n.getPublishedAt(), FeedItemType.NEWS, n.getId())));
-        merged.sort(FeedCursor.ORDER);
+        List<ContentCursor> merged = new ArrayList<>();
+        disclosures.forEach(d -> merged.add(ContentCursor.of(d)));
+        news.forEach(n -> merged.add(ContentCursor.of(n)));
+        merged.sort(ContentCursor.ORDER);
         boolean hasNext = merged.size() > size;
-        List<FeedCursor> page = hasNext ? merged.subList(0, size) : merged;
+        List<ContentCursor> page = hasNext ? merged.subList(0, size) : merged;
 
         List<FeedItem> items = toItems(leagueId, playerId, page, disclosures, news);
         String nextCursor = hasNext ? page.get(page.size() - 1).encode() : null;
@@ -105,7 +103,7 @@ public class FeedQueryService {
     }
 
     /** 페이지에 들어간 공시·뉴스만 종류별로 한 번에 목록 항목으로 바꾸고 피드 순서대로 놓는다. */
-    private List<FeedItem> toItems(long leagueId, long playerId, List<FeedCursor> page,
+    private List<FeedItem> toItems(long leagueId, long playerId, List<ContentCursor> page,
                                    List<Disclosure> disclosures, List<News> news) {
         List<Disclosure> pageDisclosures = pick(page, FeedItemType.DISCLOSURE, disclosures,
                 Disclosure::getId);
@@ -125,7 +123,7 @@ public class FeedQueryService {
     }
 
     /** 페이지에 들어간 {@code type} 항목을 피드 순서대로 고른다. */
-    private static <T> List<T> pick(List<FeedCursor> page, FeedItemType type, List<T> fetched,
+    private static <T> List<T> pick(List<ContentCursor> page, FeedItemType type, List<T> fetched,
                                     Function<T, Long> id) {
         Map<Long, T> byId = fetched.stream()
                 .collect(Collectors.toMap(id, Function.identity()));
