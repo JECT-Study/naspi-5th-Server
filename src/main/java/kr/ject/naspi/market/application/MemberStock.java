@@ -8,7 +8,8 @@ package kr.ject.naspi.market.application;
  * @param description 종목 소개
  * @param listerName 상장자 이름. 시작된 리그에서 탈퇴한 상장자면 '탈퇴한 사용자'
  * @param mine 조회한 회원 본인이 상장한 종목인지 여부
+ * @param quote 시세. 리그 시작 전(대기실)에는 {@code null}
  */
 public record MemberStock(long stockId, String name, String description, String listerName,
-        boolean mine) {
+        boolean mine, StockQuote quote) {
 }
