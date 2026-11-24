@@ -42,7 +42,7 @@ public class LeagueService {
      * @param inviteCode 입력한 초대 코드 (대소문자 구분 없음)
      * @return 입장한 리그
      * @throws NaspiBizException 초대 코드에 해당하는 리그가 없거나({@code INVITE_CODE_NOT_FOUND}),
-     *         삭제·만료된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그이거나
+     *         이미 시작·종료된 리그이거나
      *         ({@code LEAGUE_ALREADY_STARTED}), 이미 입장한 리그이거나, 이미 리그 5개에 참여 중이거나,
      *         리그 인원이 10명인 경우
      */

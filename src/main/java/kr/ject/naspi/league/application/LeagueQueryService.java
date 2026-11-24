@@ -49,8 +49,7 @@ public class LeagueQueryService {
      * @param inviteCode 입력한 초대 코드 (대소문자 구분 없음)
      * @return 리그 이름, 상태, 입장 인원, 참여자 수
      * @throws NaspiBizException 초대 코드에 해당하는 리그가 없거나 형식이 틀렸거나
-     *         ({@code INVITE_CODE_NOT_FOUND}), 삭제·만료된 대기실이거나({@code LEAGUE_NOT_FOUND}),
-     *         이미 시작·종료된 리그인 경우({@code LEAGUE_ALREADY_STARTED})
+     *         ({@code INVITE_CODE_NOT_FOUND}), 이미 시작·종료된 리그인 경우({@code LEAGUE_ALREADY_STARTED})
      */
     public LeagueSummary getSummary(String inviteCode) {
         League league = leagueRepository.findByInviteCode(InviteCode.of(inviteCode))
