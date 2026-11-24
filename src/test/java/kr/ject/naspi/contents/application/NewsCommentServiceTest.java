@@ -111,7 +111,7 @@ class NewsCommentServiceTest {
     }
 
     @Test
-    @DisplayName("댓글 목록은 페이징 없이 전체를 최신순으로 주고 작성자 이름과 내 댓글 여부를 표시한다")
+    @DisplayName("댓글 목록은 페이징 없이 전체를 오래된 순으로 주고 작성자 이름과 내 댓글 여부를 표시한다")
     void list() {
         long news = publishedNews(STOCK_ID);
         long first = comment(news, ME_PLAYER, "1");
@@ -121,10 +121,10 @@ class NewsCommentServiceTest {
         List<CommentItem> comments = service.findByTarget(ME, LEAGUE_ID, STOCK_ID, news);
 
         assertThat(comments).extracting(CommentItem::commentId)
-                .containsExactly(third, second, first);
+                .containsExactly(first, second, third);
         assertThat(comments).extracting(CommentItem::authorName)
-                .containsExactly("탈퇴한 사용자", "상대", "나");
-        assertThat(comments).extracting(CommentItem::mine).containsExactly(false, false, true);
+                .containsExactly("나", "상대", "탈퇴한 사용자");
+        assertThat(comments).extracting(CommentItem::mine).containsExactly(true, false, false);
     }
 
     @Test
@@ -180,13 +180,13 @@ class NewsCommentServiceTest {
     }
 
     @Test
-    @DisplayName("목록용 미리보기는 뉴스별 댓글 수와 가장 최근 댓글 1개를 주고, 삭제된 댓글은 빼며, 댓글이 없으면 0개다")
+    @DisplayName("목록용 미리보기는 뉴스별 댓글 수와 가장 먼저 등록된 댓글 1개를 주고, 삭제된 댓글은 빼며, 댓글이 없으면 0개다")
     void previews() {
         long news = publishedNews(STOCK_ID);
         final long empty = publishedNews(STOCK_ID);
-        comment(news, ME_PLAYER, "처음");
-        final long latest = comment(news, OTHER_PLAYER, "최근");
         long deleted = comment(news, ME_PLAYER, "삭제");
+        final long first = comment(news, OTHER_PLAYER, "처음");
+        comment(news, ME_PLAYER, "나중");
         service.delete(ME, LEAGUE_ID, STOCK_ID, news, deleted);
         entityManager.flush();
 
@@ -194,9 +194,9 @@ class NewsCommentServiceTest {
                 ME_PLAYER);
 
         assertThat(previews.get(news).commentCount()).isEqualTo(2);
-        assertThat(previews.get(news).latestComment().commentId()).isEqualTo(latest);
-        assertThat(previews.get(news).latestComment().authorName()).isEqualTo("상대");
-        assertThat(previews.get(news).latestComment().mine()).isFalse();
+        assertThat(previews.get(news).previewComment().commentId()).isEqualTo(first);
+        assertThat(previews.get(news).previewComment().authorName()).isEqualTo("상대");
+        assertThat(previews.get(news).previewComment().mine()).isFalse();
         assertThat(previews.get(empty)).isEqualTo(new CommentPreview(0, null));
     }
 

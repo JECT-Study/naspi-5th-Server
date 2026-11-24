@@ -111,13 +111,13 @@ class DisclosureQueryServiceTest {
     }
 
     @Test
-    @DisplayName("공시 목록은 공시마다 댓글 수와 가장 최근 댓글을, 상세는 댓글 전체를 주고, 연결된 뉴스는 상세에만 준다")
+    @DisplayName("공시 목록은 공시마다 댓글 수와 가장 먼저 등록된 댓글을, 상세는 댓글 전체를 주고, 연결된 뉴스는 상세에만 준다")
     void comments() {
         long withComments = publish(STOCK_ID, "댓글 있음", 2);
         long withoutComments = publish(STOCK_ID, "댓글 없음", 2);
         requestNews(withComments);
-        long first = comment(withComments, AUTHOR_PLAYER_ID, "처음");
-        long latest = comment(withComments, VIEWER_PLAYER_ID, "최근");
+        long first = comment(withComments, VIEWER_PLAYER_ID, "처음");
+        long latest = comment(withComments, AUTHOR_PLAYER_ID, "나중");
 
         DisclosurePage page = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
                 null, 20);
@@ -127,12 +127,12 @@ class DisclosureQueryServiceTest {
         assertThat(page.items().get(0).comments()).isEqualTo(new CommentPreview(0, null));
         CommentPreview preview = page.items().get(1).comments();
         assertThat(preview.commentCount()).isEqualTo(2);
-        assertThat(preview.latestComment().commentId()).isEqualTo(latest);
-        assertThat(preview.latestComment().mine()).isTrue();
+        assertThat(preview.previewComment().commentId()).isEqualTo(first);
+        assertThat(preview.previewComment().mine()).isTrue();
         DisclosureDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
                 withComments);
         assertThat(detail.comments()).extracting(CommentItem::commentId)
-                .containsExactly(latest, first);
+                .containsExactly(first, latest);
         assertThat(detail.news()).isNotNull();
     }
 

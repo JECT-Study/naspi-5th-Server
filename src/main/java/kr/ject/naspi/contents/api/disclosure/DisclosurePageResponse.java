@@ -36,13 +36,13 @@ record DisclosurePageResponse(List<Item> items, Long nextCursor) {
      * @param dislikeCount 싫어요(악재) 수
      * @param myReaction 내 반응. 없으면 null
      * @param commentCount 댓글 수
-     * @param latestComment 가장 최근 댓글. 없으면 null
+     * @param previewComment 미리보기 댓글 (가장 먼저 등록된 댓글). 없으면 null
      */
     record Item(long disclosureId, long stockId, String title, String body, int tradingDay,
                 LocalDateTime createdAt, long authorPlayerId, boolean mine,
                 List<DisclosureImageResponse> images, long likeCount, long dislikeCount,
                 DisclosureReactionType myReaction, long commentCount,
-                CommentResponse latestComment) {
+                CommentResponse previewComment) {
 
         static Item from(DisclosureListItem item) {
             return new Item(item.disclosureId(), item.stockId(), item.title(), item.body(),
@@ -50,7 +50,7 @@ record DisclosurePageResponse(List<Item> items, Long nextCursor) {
                     item.images().stream().map(DisclosureImageResponse::from).toList(),
                     item.reaction().likeCount(), item.reaction().dislikeCount(),
                     item.reaction().myReaction(), item.comments().commentCount(),
-                    CommentResponse.from(item.comments().latestComment()));
+                    CommentResponse.from(item.comments().previewComment()));
         }
     }
 }

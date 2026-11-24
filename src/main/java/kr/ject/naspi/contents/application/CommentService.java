@@ -91,13 +91,13 @@ public abstract class CommentService<T extends Comment, S> {
     }
 
     /**
-     * 대상의 댓글을 최신순으로 모두 조회한다. 삭제된 댓글은 빠진다. 댓글이 많지 않아 페이징하지 않는다.
+     * 대상의 댓글을 오래된 순으로 모두 조회한다. 삭제된 댓글은 빠진다. 댓글이 많지 않아 페이징하지 않는다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
      * @param stockId 대상이 속한 종목 ID
      * @param targetId 대상 ID
-     * @return 댓글 목록 (최신순)
+     * @return 댓글 목록 (오래된 순)
      * @throws NaspiBizException 리그에 입장하지 않았거나, 대상이 없는 경우
      */
     @Transactional(readOnly = true)
@@ -110,13 +110,13 @@ public abstract class CommentService<T extends Comment, S> {
     }
 
     /**
-     * 상세 화면에 보여 줄 대상의 댓글을 최신순으로 모두 조회한다. 조회 권한과 대상 상태는 호출하는 쪽이
+     * 상세 화면에 보여 줄 대상의 댓글을 오래된 순으로 모두 조회한다. 조회 권한과 대상 상태는 호출하는 쪽이
      * 확인한다.
      *
      * @param leagueId 리그 ID
      * @param targetId 대상 ID
      * @param viewerPlayerId 조회하는 플레이어 ID (내 댓글 여부 표시)
-     * @return 댓글 목록 (최신순)
+     * @return 댓글 목록 (오래된 순)
      */
     @Transactional(readOnly = true)
     public List<CommentItem> findAll(long leagueId, long targetId, long viewerPlayerId) {
@@ -146,7 +146,7 @@ public abstract class CommentService<T extends Comment, S> {
     }
 
     /**
-     * 대상들의 댓글 수와 가장 최근 댓글을 한 번에 조회한다. 목록·상세 조회에서 대상마다 따로 조회하지 않도록
+     * 대상들의 댓글 수와 가장 먼저 등록된 댓글을 한 번에 조회한다. 목록·상세 조회에서 대상마다 따로 조회하지 않도록
      * 쓴다. 조회 권한과 대상 상태는 호출하는 쪽이 확인한다.
      *
      * @param leagueId 리그 ID
@@ -158,15 +158,15 @@ public abstract class CommentService<T extends Comment, S> {
     public Map<Long, CommentPreview> previews(long leagueId, Collection<Long> targetIds,
                                               long viewerPlayerId) {
         Map<Long, Long> counts = commentRepository.countActiveByTargets(targetIds);
-        List<T> latest = commentRepository.findLatestActiveByTargets(targetIds);
-        List<CommentItem> latestItems = toItems(leagueId, latest, viewerPlayerId);
+        List<T> earliest = commentRepository.findEarliestActiveByTargets(targetIds);
+        List<CommentItem> earliestItems = toItems(leagueId, earliest, viewerPlayerId);
 
         Map<Long, CommentPreview> result = new HashMap<>();
         targetIds.forEach(id -> result.put(id, CommentPreview.EMPTY));
-        for (int i = 0; i < latest.size(); i++) {
-            long targetId = latest.get(i).getTargetId();
+        for (int i = 0; i < earliest.size(); i++) {
+            long targetId = earliest.get(i).getTargetId();
             result.put(targetId, new CommentPreview(counts.getOrDefault(targetId, 0L),
-                    latestItems.get(i)));
+                    earliestItems.get(i)));
         }
         return result;
     }
