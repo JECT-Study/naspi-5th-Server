@@ -2,9 +2,11 @@ package kr.ject.naspi.contents.application;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
 import kr.ject.naspi.contents.domain.NewsRepository;
+import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -30,6 +32,13 @@ public class DisclosureQueryService {
 
     /** 한 페이지 최대 개수. */
     public static final int MAX_PAGE_SIZE = 50;
+
+    /**
+     * 공시 상세에 주는 뉴스 상태. 생성 중(PENDING)·미생성(SKIPPED) 뉴스는 주지 않는다. 생성 실패(FAILED)는 작성자가
+     * 수동 재생성할 수 있도록 준다.
+     */
+    private static final Set<NewsStatus> SHOWN_NEWS_STATUSES =
+            Set.of(NewsStatus.PUBLISHED, NewsStatus.FAILED);
 
     private final DisclosureRepository disclosureRepository;
     private final ImageService imageService;
@@ -118,7 +127,7 @@ public class DisclosureQueryService {
     }
 
     /**
-     * 공시 상세를 조회한다. 공시로 만든 AI 뉴스를 생성 상태와 함께 준다.
+     * 공시 상세를 조회한다. 공시로 만든 AI 뉴스는 발행됐거나 생성에 실패한 경우에만 생성 상태와 함께 준다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -142,7 +151,9 @@ public class DisclosureQueryService {
                 imageService.issueUrls(d.getId()),
                 reactionService.summarizeAll(List.of(d.getId()), playerId).get(d.getId()),
                 commentService.findAll(leagueId, d.getId(), playerId),
-                newsRepository.findByDisclosureId(d.getId()).map(DisclosureNews::from)
+                newsRepository.findByDisclosureId(d.getId())
+                        .filter(news -> SHOWN_NEWS_STATUSES.contains(news.getStatus()))
+                        .map(DisclosureNews::from)
                         .orElse(null));
     }
 

@@ -118,11 +118,10 @@ public class DisclosureLookupController {
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 공시 상세. 목록 항목과 같은 필드에서 \
                     `previewComment` 대신 `comments`를 주고 `news`가 더해진다.
                     - `images`: 첨부 순서대로 전체 이미지 (없으면 빈 배열).
-                    - `news`: 공시로 만든 AI 뉴스. `status`가 `PENDING`(생성 중), `PUBLISHED`(발행), \
-                    `SKIPPED`(기사로 쓸 내용이 없어 미생성), `FAILED`(생성 실패) 중 하나다. \
-                    `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재)는 \
-                    `PUBLISHED`일 때만 있고 나머지 상태에서는 `null`이다. \
-                    뉴스가 없는 공시는 `news`가 `null`이다.
+                    - `news`: 공시로 만든 AI 뉴스. `status`가 `PUBLISHED`(발행) 또는 `FAILED`(생성 실패)일 때만 \
+                    준다. `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재)는 \
+                    `PUBLISHED`일 때만 있고 `FAILED`면 `null`이다. 생성 중이거나 기사로 쓸 내용이 없어 생성하지 않은 뉴스는 주지 않아 \
+                    `news`가 `null`이다.
                     """ + FIELDS + """
 
                     **실패 응답** (`code`는 3자리 문자열)

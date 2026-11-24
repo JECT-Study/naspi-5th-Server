@@ -115,7 +115,6 @@ class DisclosureQueryServiceTest {
     void comments() {
         long withComments = publish(STOCK_ID, "댓글 있음", 2);
         long withoutComments = publish(STOCK_ID, "댓글 없음", 2);
-        requestNews(withComments);
         long first = comment(withComments, VIEWER_PLAYER_ID, "처음");
         long latest = comment(withComments, AUTHOR_PLAYER_ID, "나중");
 
@@ -133,7 +132,6 @@ class DisclosureQueryServiceTest {
                 withComments);
         assertThat(detail.comments()).extracting(CommentItem::commentId)
                 .containsExactly(first, latest);
-        assertThat(detail.news()).isNotNull();
     }
 
     @Test
@@ -243,18 +241,28 @@ class DisclosureQueryServiceTest {
     }
 
     @Test
-    @DisplayName("AI 뉴스가 발행되기 전에는 생성 상태만 확인할 수 있고 제목·본문·호재/악재는 없다")
-    void getDetailWithUnpublishedNews() {
+    @DisplayName("공시 상세는 생성 중이거나 생성하지 않은(기사로 쓸 내용이 없는) AI 뉴스를 주지 않는다")
+    void getDetailHidesPendingAndSkippedNews() {
         long pending = publish(STOCK_ID, "생성 중", 1);
-        News pendingNews = requestNews(pending);
+        requestNews(pending);
+        long skipped = publish(STOCK_ID, "미생성", 1);
+        requestNews(skipped).complete(new NewsGenerationResult.Skipped("내용 없음"), NOW);
+        entityManager.flush();
+
+        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, pending).news())
+                .isNull();
+        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, skipped).news())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("AI 뉴스 생성에 실패하면 공시 상세에서 실패 상태만 확인할 수 있고 제목·본문·호재/악재는 없다")
+    void getDetailWithFailedNews() {
         long failed = publish(STOCK_ID, "실패", 1);
         News failedNews = requestNews(failed);
         failedNews.complete(new NewsGenerationResult.Failed("오류"), NOW);
         entityManager.flush();
 
-        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, pending).news())
-                .isEqualTo(new DisclosureNews(pendingNews.getId(), NewsStatus.PENDING, null, null,
-                        null));
         assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, failed).news())
                 .isEqualTo(new DisclosureNews(failedNews.getId(), NewsStatus.FAILED, null, null,
                         null));
