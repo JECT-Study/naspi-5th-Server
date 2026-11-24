@@ -1,11 +1,13 @@
 package kr.ject.naspi.common.config;
 
+import kr.ject.naspi.common.security.MockLoginBlockFilter;
 import kr.ject.naspi.common.security.SessionCookieRefreshFilter;
 import kr.ject.naspi.global.logging.WebLoggingFilter;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.env.Environment;
 import org.springframework.session.web.http.CookieSerializer;
 import org.springframework.session.web.http.SessionRepositoryFilter;
 import tools.jackson.databind.json.JsonMapper;
@@ -21,11 +23,13 @@ import tools.jackson.databind.json.JsonMapper;
  * 2. WebLoggingFilter            여기서 등록 (관측 필터 바로 뒤)
  *                                요청 메서드·URI·본문을 로그로 남긴다. 인증 실패 등으로 막힌 요청도 남도록
  *                                세션·보안 필터보다 앞에 둔다
- * 3. SessionRepositoryFilter     Spring Session 자동 등록 (SessionRepositoryFilter.DEFAULT_ORDER)
+ * 3. MockLoginBlockFilter        여기서 등록 (WebLoggingFilter 바로 뒤, 모킹 로그인 경로에만)
+ *                                허용 프로필이 아니면 세션을 만들기 전에 404로 끝낸다
+ * 4. SessionRepositoryFilter     Spring Session 자동 등록 (SessionRepositoryFilter.DEFAULT_ORDER)
  *                                Redis에서 세션을 꺼내고, 응답할 때 저장한다
- * 4. SessionCookieRefreshFilter  여기서 등록 (DEFAULT_ORDER + 1)
+ * 5. SessionCookieRefreshFilter  여기서 등록 (DEFAULT_ORDER + 1)
  *                                유효한 세션이면 쿠키를 다시 내려보내 만료 시각을 연장한다
- * 5. Spring Security 필터 체인   SecurityConfig ({@code spring.security.filter.order}, 기본 -100)
+ * 6. Spring Security 필터 체인   SecurityConfig ({@code spring.security.filter.order}, 기본 -100)
  *                                인증 정보 로드, 카카오 로그인, 인가
  * </pre>
  */
@@ -48,6 +52,23 @@ public class FilterConfig {
         FilterRegistrationBean<WebLoggingFilter> registration =
                 new FilterRegistrationBean<>(new WebLoggingFilter(jsonMapper));
         registration.setOrder(OBSERVATION_FILTER_ORDER + 1);
+        return registration;
+    }
+
+    /**
+     * 모킹 로그인 차단 필터를 요청 로그 필터 바로 뒤에, 모킹 로그인 경로에만 등록한다.
+     *
+     * @param environment 활성 프로필
+     * @param jsonMapper 404 응답 본문 변환
+     * @return 필터 등록 정보
+     */
+    @Bean
+    public FilterRegistrationBean<MockLoginBlockFilter> mockLoginBlockFilter(
+            Environment environment, JsonMapper jsonMapper) {
+        FilterRegistrationBean<MockLoginBlockFilter> registration =
+                new FilterRegistrationBean<>(new MockLoginBlockFilter(environment, jsonMapper));
+        registration.addUrlPatterns(MockLoginBlockFilter.PATH, MockLoginBlockFilter.PATH + "/*");
+        registration.setOrder(OBSERVATION_FILTER_ORDER + 2);
         return registration;
     }
 

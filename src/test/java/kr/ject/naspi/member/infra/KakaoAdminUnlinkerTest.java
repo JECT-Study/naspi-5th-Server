@@ -72,4 +72,14 @@ class KakaoAdminUnlinkerTest {
 
         server.verify();
     }
+
+    @Test
+    @DisplayName("모킹 로그인으로 가입한 회원(음수 카카오 회원 번호)이면 카카오를 호출하지 않는다")
+    void skipMockMember() {
+        server.expect(never(), requestTo(URL));
+
+        new KakaoAdminUnlinker(builder.build(), true).unlink(-1L);
+
+        server.verify();
+    }
 }
