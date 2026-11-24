@@ -15,6 +15,9 @@ import java.util.TreeMap;
  */
 public final class OrderBook {
 
+    /** 호가 조회에서 매도·매수 각각 제공하는 최대 가격 단계 수. */
+    public static final int DISPLAY_DEPTH = 5;
+
     private final long stockId;
     private final List<Order> bids;
     private final List<Order> asks;
@@ -100,5 +103,21 @@ public final class OrderBook {
         byPrice.forEach((price, sum) ->
                 levels.add(new OrderBookLevel(price, sum[0], (int) sum[1])));
         return List.copyOf(levels);
+    }
+
+    /**
+     * 주어진 방향의 가격 단계별 잔여 수량을 최우선 호가부터 최대 {@code maxLevels}단계까지 반환한다.
+     *
+     * @param side 매매 구분
+     * @param maxLevels 최대 단계 수 (1 이상)
+     * @return 최우선 호가부터 나열한 가격 단계. 주문이 없으면 빈 목록
+     * @throws IllegalArgumentException 최대 단계 수가 1 미만인 경우
+     */
+    public List<OrderBookLevel> levels(OrderSide side, int maxLevels) {
+        if (maxLevels <= 0) {
+            throw new IllegalArgumentException("최대 단계 수는 1 이상이어야 합니다: " + maxLevels);
+        }
+        List<OrderBookLevel> all = levels(side);
+        return all.size() <= maxLevels ? all : List.copyOf(all.subList(0, maxLevels));
     }
 }

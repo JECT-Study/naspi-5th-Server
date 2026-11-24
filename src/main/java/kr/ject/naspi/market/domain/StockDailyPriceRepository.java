@@ -41,4 +41,12 @@ public interface StockDailyPriceRepository {
      * @return 거래일 시세 (리그당 최대 10행)
      */
     List<StockDailyPrice> findAllByLeagueIdAndTradingDay(long leagueId, int tradingDay);
+
+    /**
+     * 리그의 모든 거래일 시세를 조회한다.
+     *
+     * @param leagueId 리그 ID
+     * @return 리그의 모든 종목·거래일 시세 (리그당 최대 70행)
+     */
+    List<StockDailyPrice> findAllByLeagueId(long leagueId);
 }

@@ -63,4 +63,19 @@ class StockDailyPriceJpaRepositoryTest {
         assertThat(repository.findAllByLeagueIdAndTradingDay(1L, 1)).hasSize(2);
         assertThat(repository.findAllByLeagueIdAndTradingDay(1L, 3)).isEmpty();
     }
+
+    @Test
+    @DisplayName("리그의 모든 거래일 시세를 조회하고 다른 리그는 제외한다")
+    void findAllByLeagueId() {
+        repository.saveAll(java.util.List.of(
+                StockDailyPrice.open(1L, 10L, 1, 10_000),
+                StockDailyPrice.open(1L, 10L, 2, 10_000),
+                StockDailyPrice.open(1L, 11L, 1, 10_000),
+                StockDailyPrice.open(2L, 20L, 1, 10_000)));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findAllByLeagueId(1L)).hasSize(3);
+        assertThat(repository.findAllByLeagueId(3L)).isEmpty();
+    }
 }
