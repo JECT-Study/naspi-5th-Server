@@ -106,22 +106,34 @@ class LeagueQueryServiceTest {
     }
 
     @Test
-    @DisplayName("생성 후 7일이 지난 대기실은 초대 코드로 조회하면 삭제된 대기실임을 알린다")
-    void getSummaryOfExpiredWaitingRoom() {
+    @DisplayName("생성 후 7일이 지났어도 만료 처리 전인 대기실은 초대 코드로 조회할 수 있다")
+    void getSummaryOfOverdueWaitingRoom() {
         CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         clock.advance(League.WAITING_ROOM_LIFETIME);
 
-        assertThatThrownBy(() -> queryService.getSummary(league.inviteCode()))
-                .isInstanceOf(NaspiBizException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+        assertThat(queryService.getSummary(league.inviteCode()).leagueId())
+                .isEqualTo(league.leagueId());
     }
 
     @Test
-    @DisplayName("만료된 대기실에는 참여했던 회원도 접근할 수 없다")
+    @DisplayName("만료 처리된 대기실은 초대 코드로 조회할 수 없다")
+    void getSummaryOfExpiredWaitingRoom() {
+        CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
+        clock.advance(League.WAITING_ROOM_LIFETIME);
+        expire(league.leagueId());
+
+        assertThatThrownBy(() -> queryService.getSummary(league.inviteCode()))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("만료 처리된 대기실에는 참여했던 회원도 접근할 수 없다")
     void getPlayersOfExpiredWaitingRoom() {
         long host = member("방장");
         CreatedLeague league = useCase.create(host, "리그", "나스피", "소개");
         clock.advance(League.WAITING_ROOM_LIFETIME);
+        expire(league.leagueId());
 
         assertThatThrownBy(() -> queryService.getPlayers(host, league.leagueId()))
                 .isInstanceOf(NaspiBizException.class)
@@ -635,5 +647,10 @@ class LeagueQueryServiceTest {
         Member member = entityManager.persist(
                 Member.join(kakaoId++, MemberName.of(name), LocalDateTime.now()));
         return member.getId();
+    }
+
+    private void expire(long leagueId) {
+        entityManager.find(League.class, leagueId).expire(LocalDateTime.now(clock));
+        entityManager.flush();
     }
 }

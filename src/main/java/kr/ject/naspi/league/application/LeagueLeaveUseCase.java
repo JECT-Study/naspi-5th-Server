@@ -1,7 +1,5 @@
 package kr.ject.naspi.league.application;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import kr.ject.naspi.global.exception.ErrorCode;
@@ -32,7 +30,6 @@ public class LeagueLeaveUseCase {
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
     private final StockListingService stockListingService;
-    private final Clock clock;
 
     /**
      * 회원이 리그 대기실을 나간다. 나간 회원은 플레이어에서 빠지므로 초대 코드로 다시 입장할 수 있다.
@@ -48,11 +45,10 @@ public class LeagueLeaveUseCase {
      */
     @Transactional
     public LeftLeague leave(long memberId, long leagueId) {
-        LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findWithLockById(leagueId)
-                .filter(found -> !found.isUnavailable(now))
+                .filter(found -> !found.isUnavailable())
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
-        return leaveLocked(league, memberId, now);
+        return leaveLocked(league, memberId);
     }
 
     /**
@@ -65,15 +61,14 @@ public class LeagueLeaveUseCase {
      */
     @Transactional
     public void leaveAllWaitingRooms(long memberId) {
-        LocalDateTime now = LocalDateTime.now(clock);
         playerRepository.findLeagueIdsByMemberIdAndLeagueStatus(memberId, LeagueStatus.WAITING)
                 .forEach(leagueId -> leagueRepository.findWithLockById(leagueId)
                         // 잠그기 전에 시작·만료됐을 수 있으므로 잠근 뒤 다시 확인한다.
-                        .filter(league -> league.isOpenForInvitation(now))
-                        .ifPresent(league -> leaveLocked(league, memberId, now)));
+                        .filter(League::isOpenForInvitation)
+                        .ifPresent(league -> leaveLocked(league, memberId)));
     }
 
-    private LeftLeague leaveLocked(League league, long memberId, LocalDateTime now) {
+    private LeftLeague leaveLocked(League league, long memberId) {
         long leagueId = league.getId();
         List<Player> players = playerRepository.findAllByLeagueId(leagueId);
         Player leaver = players.stream()
@@ -81,7 +76,7 @@ public class LeagueLeaveUseCase {
                 .findFirst()
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
 
-        boolean waitingRoomDeleted = league.leave(leaver, players, now);
+        boolean waitingRoomDeleted = league.leave(leaver, players);
         stockListingService.delist(leagueId, leaver.getId());
         playerRepository.delete(leaver);
         return new LeftLeague(leagueId, waitingRoomDeleted);

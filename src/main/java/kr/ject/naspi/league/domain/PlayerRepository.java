@@ -1,6 +1,5 @@
 package kr.ject.naspi.league.domain;
 
-import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -76,16 +75,13 @@ public interface PlayerRepository {
     List<Player> findAllByLeagueId(Long leagueId);
 
     /**
-     * 회원이 입장한 리그 중 주어진 상태인 리그 수를 센다. 대기실({@link LeagueStatus#WAITING})은
-     * 기준 일시보다 뒤에 생성된 것만 세어, 7일이 지났지만 아직 만료 처리되지 않은 대기실을 제외한다.
+     * 회원이 입장한 리그 중 주어진 상태인 리그 수를 센다.
      *
      * @param memberId 회원 ID
      * @param statuses 셀 리그 상태
-     * @param waitingCreatedAfter 셀 대기실의 생성 일시 하한 (이 시각에 생성된 대기실은 제외)
      * @return 리그 수
      */
-    long countLeaguesByMemberIdAndStatusIn(Long memberId, Collection<LeagueStatus> statuses,
-            LocalDateTime waitingCreatedAfter);
+    long countLeaguesByMemberIdAndStatusIn(Long memberId, Collection<LeagueStatus> statuses);
 
     /**
      * 회원이 입장한 리그 중 주어진 상태인 리그의 ID를 찾는다.

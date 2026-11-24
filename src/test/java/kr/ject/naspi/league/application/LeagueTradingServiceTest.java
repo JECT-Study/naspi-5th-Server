@@ -75,11 +75,13 @@ class LeagueTradingServiceTest {
     }
 
     @Test
-    @DisplayName("만료된 대기실은 없는 리그로 거절한다")
+    @DisplayName("만료 처리된 대기실은 없는 리그로 거절한다")
     void expiredWaitingRoomIsNotFound() {
         League league = entityManager.persistAndFlush(
                 League.create(LeagueName.of("리그"), InviteCode.of("AAAAAAA"), NOW));
         clock.setTo(NOW.plusDays(7));
+        league.expire(NOW.plusDays(7));
+        entityManager.flush();
 
         assertThatThrownBy(() -> service.lockForTrading(league.getId()))
                 .isInstanceOfSatisfying(NaspiBizException.class, e ->

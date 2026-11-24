@@ -1,7 +1,5 @@
 package kr.ject.naspi.league.application;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import kr.ject.naspi.global.exception.ErrorCode;
@@ -33,7 +31,6 @@ public class LeagueHostUseCase {
     private final LeagueRepository leagueRepository;
     private final PlayerRepository playerRepository;
     private final StockListingService stockListingService;
-    private final Clock clock;
 
     /**
      * 방장이 리그 이름을 바꾼다.
@@ -49,9 +46,8 @@ public class LeagueHostUseCase {
      */
     @Transactional
     public RenamedLeague rename(long memberId, long leagueId, String name) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        HostContext context = loadAsHost(memberId, leagueId, now);
-        context.league().rename(LeagueName.of(name), now);
+        HostContext context = loadAsHost(memberId, leagueId);
+        context.league().rename(LeagueName.of(name));
         return new RenamedLeague(leagueId, context.league().getName().getValue());
     }
 
@@ -66,8 +62,7 @@ public class LeagueHostUseCase {
      */
     @Transactional
     public void delete(long memberId, long leagueId) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        loadAsHost(memberId, leagueId, now).league().delete(now);
+        loadAsHost(memberId, leagueId).league().delete();
     }
 
     /**
@@ -85,14 +80,13 @@ public class LeagueHostUseCase {
      */
     @Transactional
     public void kick(long memberId, long leagueId, long playerId) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        HostContext context = loadAsHost(memberId, leagueId, now);
+        HostContext context = loadAsHost(memberId, leagueId);
         Player target = context.players().stream()
                 .filter(player -> player.getId() == playerId)
                 .findFirst()
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.PLAYER_NOT_FOUND));
 
-        context.league().kick(target, now);
+        context.league().kick(target);
         stockListingService.delist(leagueId, target.getId());
         playerRepository.delete(target);
     }
@@ -101,9 +95,9 @@ public class LeagueHostUseCase {
      * 리그 행을 잠그고, 요청한 회원이 대기실의 방장인지 확인한다. 잠근 채 처리하므로 그사이 리그가 시작되거나
      * 방장이 바뀌지 않는다.
      */
-    private HostContext loadAsHost(long memberId, long leagueId, LocalDateTime now) {
+    private HostContext loadAsHost(long memberId, long leagueId) {
         League league = leagueRepository.findWithLockById(leagueId)
-                .filter(found -> !found.isUnavailable(now))
+                .filter(found -> !found.isUnavailable())
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
 
         List<Player> players = playerRepository.findAllByLeagueId(leagueId);
