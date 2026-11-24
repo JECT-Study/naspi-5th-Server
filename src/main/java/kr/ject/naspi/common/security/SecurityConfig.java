@@ -66,8 +66,8 @@ public class SecurityConfig {
         "/login/oauth2/code/**",
         "/api/members/signup",
         "/api/auth/logout",
-        // 테스트 전용. 허용 프로필이 아니면 MockLoginBlockFilter가 먼저 404로 끝낸다.
-        MockLoginBlockFilter.PATH,
+        // 테스트 전용. 허용 프로필이 아니면 컨트롤러가 등록되지 않아 404가 된다.
+        "/api/auth/mock-login",
         "/error",
     };
 

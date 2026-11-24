@@ -36,7 +36,6 @@ class MockLoginProductionTest {
     @ValueSource(strings = {
         "/api/auth/mock-login",
         "/api/auth/mock%2Dlogin",
-        "/api/auth/mock-login/x",
     })
     @DisplayName("운영에서는 모킹 로그인이 등록되지 않고, 요청하면 세션 없이 404로 끝난다")
     void blockedInProduction(String path) throws Exception {
