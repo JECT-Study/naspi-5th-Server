@@ -59,6 +59,10 @@ class KakaoAdminUnlinker implements KakaoAccountUnlinker {
 
     @Override
     public void unlink(long kakaoId) {
+        // 모킹 로그인(테스트 전용)으로 가입한 회원은 카카오 회원 번호가 음수이고 연결된 카카오 계정이 없다.
+        if (kakaoId < 0) {
+            return;
+        }
         if (!enabled) {
             log.warn("카카오 어드민 키가 없어 연결 끊기를 건너뜀: kakaoId={}", kakaoId);
             return;
