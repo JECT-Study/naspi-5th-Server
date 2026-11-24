@@ -78,6 +78,7 @@ class DisclosureLookupControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
                 .andExpect(jsonPath("$.data.nextCursor").value(30))
+                .andExpect(jsonPath("$.data.items[0].type").value("DISCLOSURE"))
                 .andExpect(jsonPath("$.data.items[0].disclosureId").value(30))
                 .andExpect(jsonPath("$.data.items[0].title").value("제목"))
                 .andExpect(jsonPath("$.data.items[0].tradingDay").value(2))

@@ -70,18 +70,30 @@ public class NewsQueryService {
                 size + 1);
         boolean hasNext = fetched.size() > size;
         List<News> news = hasNext ? fetched.subList(0, size) : fetched;
+        List<NewsListItem> items = toListItems(leagueId, playerId, news);
+        Long nextCursor = hasNext ? news.get(news.size() - 1).getId() : null;
+        return new NewsPage(items, nextCursor);
+    }
+
+    /**
+     * 뉴스를 목록 항목으로 바꾼다. 통합 피드({@link FeedQueryService})도 같은 항목을 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 조회하는 플레이어 ID
+     * @param news 뉴스 목록
+     * @return 목록 항목 (뉴스 순서 유지)
+     */
+    List<NewsListItem> toListItems(long leagueId, long playerId, List<News> news) {
         List<Long> ids = news.stream().map(News::getId).toList();
 
         // 댓글은 뉴스마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
         Map<Long, CommentPreview> comments = commentService.previews(leagueId, ids, playerId);
 
-        List<NewsListItem> items = news.stream()
+        return news.stream()
                 .map(n -> new NewsListItem(n.getId(), n.getStockId(), n.getTitle(), n.getBody(),
                         n.getSentiment(), n.getTradingDay(), n.getCreatedAt(),
                         n.getPublishedAt(), comments.get(n.getId())))
                 .toList();
-        Long nextCursor = hasNext ? ids.get(ids.size() - 1) : null;
-        return new NewsPage(items, nextCursor);
     }
 
     /**

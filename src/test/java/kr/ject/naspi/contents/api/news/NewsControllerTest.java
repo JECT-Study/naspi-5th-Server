@@ -75,6 +75,7 @@ class NewsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
                 .andExpect(jsonPath("$.data.nextCursor").value(30))
+                .andExpect(jsonPath("$.data.items[0].type").value("NEWS"))
                 .andExpect(jsonPath("$.data.items[0].newsId").value(30))
                 .andExpect(jsonPath("$.data.items[0].sentiment").value("POSITIVE"))
                 .andExpect(jsonPath("$.data.items[0].commentCount").value(3))

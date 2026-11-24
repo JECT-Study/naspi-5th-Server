@@ -81,6 +81,21 @@ public class DisclosureQueryService {
                 cursor, size + 1);
         boolean hasNext = fetched.size() > size;
         List<Disclosure> disclosures = hasNext ? fetched.subList(0, size) : fetched;
+        List<DisclosureListItem> items = toListItems(leagueId, playerId, disclosures);
+        Long nextCursor = hasNext ? disclosures.get(disclosures.size() - 1).getId() : null;
+        return new DisclosurePage(items, nextCursor);
+    }
+
+    /**
+     * 공시를 목록 항목으로 바꾼다. 통합 피드({@link FeedQueryService})도 같은 항목을 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 조회하는 플레이어 ID
+     * @param disclosures 공시 목록
+     * @return 목록 항목 (공시 순서 유지)
+     */
+    List<DisclosureListItem> toListItems(long leagueId, long playerId,
+                                         List<Disclosure> disclosures) {
         List<Long> ids = disclosures.stream().map(Disclosure::getId).toList();
 
         // 이미지·반응·댓글은 공시마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
@@ -89,7 +104,7 @@ public class DisclosureQueryService {
                 reactionService.summarizeAll(ids, playerId);
         Map<Long, CommentPreview> comments = commentService.previews(leagueId, ids, playerId);
 
-        List<DisclosureListItem> items = disclosures.stream()
+        return disclosures.stream()
                 .map(d -> new DisclosureListItem(d.getId(), d.getStockId(),
                         d.getTitle().getValue(), d.getBody().getValue(), d.getTradingDay(),
                         d.getCreatedAt(), d.getAuthorPlayerId(),
@@ -97,8 +112,6 @@ public class DisclosureQueryService {
                         images.getOrDefault(d.getId(), List.of()),
                         reactions.get(d.getId()), comments.get(d.getId())))
                 .toList();
-        Long nextCursor = hasNext ? ids.get(ids.size() - 1) : null;
-        return new DisclosurePage(items, nextCursor);
     }
 
     /**

@@ -11,9 +11,15 @@ import kr.ject.naspi.contents.application.ImageUrl;
  * @param expiresAt 서명 URL 만료 일시 (KST). 이미지 저장 기간이 아니라 이 URL로 접근할 수 있는 마지막 시각이다.
  *                  지나면 URL이 403을 돌려주므로 공시를 다시 조회해 새 URL을 받는다 (이미지 파일은 그대로 남아 있다)
  */
-record DisclosureImageResponse(long imageId, String signedUrl, LocalDateTime expiresAt) {
+public record DisclosureImageResponse(long imageId, String signedUrl, LocalDateTime expiresAt) {
 
-    static DisclosureImageResponse from(ImageUrl url) {
+    /**
+     * 이미지 서명 URL을 응답으로 바꾼다.
+     *
+     * @param url 이미지 서명 URL
+     * @return 응답. url이 null이면 null
+     */
+    public static DisclosureImageResponse from(ImageUrl url) {
         return url == null ? null
                 : new DisclosureImageResponse(url.imageId(), url.signedUrl(), url.expiresAt());
     }
