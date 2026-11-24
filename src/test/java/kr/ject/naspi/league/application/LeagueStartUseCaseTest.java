@@ -234,10 +234,24 @@ class LeagueStartUseCaseTest {
     }
 
     @Test
-    @DisplayName("생성 후 7일이 지나 만료된 대기실은 시작할 수 없다")
+    @DisplayName("생성 후 7일이 지났어도 만료 처리 전인 대기실은 시작할 수 있다")
+    void startOverdueWaitingRoomBeforeExpiration() {
+        CreatedLeague created = leagueWithParticipants(3);
+        clock.advance(League.WAITING_ROOM_LIFETIME);
+
+        useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId());
+
+        assertThat(entityManager.find(League.class, created.leagueId()).getStatus())
+                .isEqualTo(LeagueStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("만료 처리된 대기실은 시작할 수 없다")
     void expiredWaitingRoom() {
         CreatedLeague created = leagueWithParticipants(3);
         clock.advance(League.WAITING_ROOM_LIFETIME);
+        entityManager.find(League.class, created.leagueId()).expire(LocalDateTime.now(clock));
+        entityManager.flush();
 
         assertStartFails(HOST_MEMBER_ID, created, ErrorCode.LEAGUE_NOT_FOUND);
     }

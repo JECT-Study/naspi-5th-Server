@@ -126,15 +126,27 @@ class LeagueServiceTest {
     }
 
     @Test
-    @DisplayName("생성 후 7일이 지난 대기실의 초대 코드로는 입장할 수 없고, 삭제된 대기실임을 알린다 (만료 처리 전이어도)")
-    void joinExpiredWaitingRoom() {
+    @DisplayName("생성 후 7일이 지났어도 만료 처리 전인 대기실에는 초대 코드로 입장할 수 있다")
+    void joinOverdueWaitingRoomBeforeExpiration() {
         League overdue = entityManager.persistAndFlush(League.create(LeagueName.of("리그"),
                 InviteCode.of("AAAAAAA"), NOW.minusDays(7)));
 
+        JoinedLeague joined = service.join(GUEST_MEMBER_ID, "AAAAAAA");
+
+        assertThat(joined.leagueId()).isEqualTo(overdue.getId());
+    }
+
+    @Test
+    @DisplayName("만료 처리된 대기실의 초대 코드로는 입장할 수 없다")
+    void joinExpiredWaitingRoom() {
+        League expired = entityManager.persistAndFlush(League.create(LeagueName.of("리그"),
+                InviteCode.of("AAAAAAA"), NOW.minusDays(7)));
+        expired.expire(NOW);
+        entityManager.flush();
+
         assertThatThrownBy(() -> service.join(GUEST_MEMBER_ID, "AAAAAAA"))
                 .isInstanceOf(NaspiBizException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
-        assertThat(overdue.getStatus()).isEqualTo(LeagueStatus.WAITING);
+                .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
     }
 
     @Test

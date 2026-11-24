@@ -19,22 +19,21 @@ class LeagueTest {
     private static final LocalDateTime STARTED_AT = CREATED_AT.plusDays(1);
 
     @Test
-    @DisplayName("대기실은 생성 시점으로부터 7일이 지나는 순간 만료된다")
+    @DisplayName("대기실의 만료 기한은 생성 시점으로부터 7일 뒤다")
     void expiresSevenDaysAfterCreation() {
         League league = newLeague();
 
         assertThat(league.waitingRoomExpiresAt()).isEqualTo(EXPIRES_AT);
-        assertThat(league.isExpired(EXPIRES_AT.minusNanos(1))).isFalse();
-        assertThat(league.isExpired(EXPIRES_AT)).isTrue();
     }
 
     @Test
-    @DisplayName("7일이 지나지 않은 대기실만 초대 코드로 입장할 수 있다")
+    @DisplayName("만료 기한이 지났어도 만료 처리 전인 대기실은 만료되지 않고 초대 코드로 입장할 수 있다")
     void openForInvitationUntilExpired() {
         League league = newLeague();
 
-        assertThat(league.isOpenForInvitation(EXPIRES_AT.minusNanos(1))).isTrue();
-        assertThat(league.isOpenForInvitation(EXPIRES_AT)).isFalse();
+        assertThat(league.isExpired()).isFalse();
+        assertThat(league.isUnavailable()).isFalse();
+        assertThat(league.isOpenForInvitation()).isTrue();
     }
 
     @Test
@@ -46,8 +45,9 @@ class LeagueTest {
 
         assertThat(league.getStatus()).isEqualTo(LeagueStatus.EXPIRED);
         assertThat(league.getInviteCode()).isNull();
-        assertThat(league.isExpired(EXPIRES_AT)).isTrue();
-        assertThat(league.isOpenForInvitation(EXPIRES_AT)).isFalse();
+        assertThat(league.isExpired()).isTrue();
+        assertThat(league.isUnavailable()).isTrue();
+        assertThat(league.isOpenForInvitation()).isFalse();
     }
 
     @Test
@@ -66,7 +66,7 @@ class LeagueTest {
         League league = newLeague();
         league.start(participants(3), STARTED_AT);
 
-        assertThat(league.isExpired(EXPIRES_AT.plusDays(1))).isFalse();
+        assertThat(league.isExpired()).isFalse();
         assertThatThrownBy(() -> league.expire(EXPIRES_AT))
                 .isInstanceOf(IllegalStateException.class);
     }
@@ -111,7 +111,7 @@ class LeagueTest {
         // 2026-11-02 21:30 시작 → 2026-11-09 09:00 종료
         assertThat(league.getEndsAt()).isEqualTo(LocalDateTime.of(2026, 11, 9, 9, 0));
         assertThat(league.getInviteCode()).isNotNull();
-        assertThat(league.isOpenForInvitation(STARTED_AT)).isFalse();
+        assertThat(league.isOpenForInvitation()).isFalse();
     }
 
     @Test
@@ -139,9 +139,20 @@ class LeagueTest {
     }
 
     @Test
-    @DisplayName("생성 후 7일이 지난 대기실은 시작할 수 없다")
+    @DisplayName("생성 후 7일이 지났어도 만료 처리 전인 대기실은 시작할 수 있다")
+    void startOverdueBeforeExpiration() {
+        League league = newLeague();
+
+        league.start(participants(3), EXPIRES_AT);
+
+        assertThat(league.getStatus()).isEqualTo(LeagueStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("만료 처리된 대기실은 시작할 수 없다")
     void startExpired() {
         League league = newLeague();
+        league.expire(EXPIRES_AT);
 
         assertThatThrownBy(() -> league.start(participants(3), EXPIRES_AT))
                 .isInstanceOf(NaspiBizException.class)
@@ -152,8 +163,11 @@ class LeagueTest {
     @DisplayName("대기실·진행 중 리그는 통과하고, 만료·삭제된 대기실은 리그 없음, 종료된 리그는 거절한다")
     void requireOngoing() {
         League waiting = newLeague();
-        waiting.requireOngoing(EXPIRES_AT.minusNanos(1));
-        assertThatThrownBy(() -> waiting.requireOngoing(EXPIRES_AT))
+        waiting.requireOngoing(EXPIRES_AT);
+
+        League expired = newLeague();
+        expired.expire(EXPIRES_AT);
+        assertThatThrownBy(() -> expired.requireOngoing(EXPIRES_AT))
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
 
         League deleted = newLeague();
@@ -206,10 +220,6 @@ class LeagueTest {
     @Test
     @DisplayName("만료·삭제된 대기실은 없는 리그로 거절한다")
     void requireTradableUnavailable() {
-        League waiting = newLeague();
-        assertThatThrownBy(() -> waiting.requireTradable(EXPIRES_AT))
-                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
-
         League expired = newLeague();
         ReflectionTestUtils.setField(expired, "status", LeagueStatus.EXPIRED);
         assertThatThrownBy(() -> expired.requireTradable(CREATED_AT))

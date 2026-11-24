@@ -63,7 +63,7 @@ public class LeagueStartUseCase {
     public StartedLeague start(long memberId, long leagueId) {
         LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findWithLockById(leagueId)
-                .filter(found -> !found.isUnavailable(now))
+                .filter(found -> !found.isUnavailable())
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
 
         List<Player> players = playerRepository.findAllByLeagueId(leagueId);
