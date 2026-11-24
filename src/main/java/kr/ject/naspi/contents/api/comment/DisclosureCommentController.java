@@ -79,19 +79,19 @@ public class DisclosureCommentController {
     }
 
     /**
-     * 공시의 댓글을 최신순으로 조회한다.
+     * 공시의 댓글을 오래된 순으로 조회한다.
      *
      * @param loginMember 로그인한 회원
      * @param leagueId 리그 ID
      * @param stockId 종목 ID
      * @param disclosureId 공시 ID
-     * @return 댓글 전체 (최신순)
+     * @return 댓글 전체 (오래된 순)
      * @throws NaspiBizException 리그에 입장하지 않았거나 공시가 없거나 삭제된 경우
      */
     @Operation(
             summary = "공시 댓글 목록",
             description = """
-                    공시의 댓글을 최신순으로 모두 조회한다. 삭제된 댓글은 나오지 않는다. 페이징하지 않는다. \
+                    공시의 댓글을 오래된 순으로 모두 조회한다. 삭제된 댓글은 나오지 않는다. 페이징하지 않는다. \
                     공시 상세의 `comments`와 같은 목록이므로 댓글 작성·삭제 후 다시 불러올 때 쓴다.
 
                     **요청**
@@ -99,7 +99,7 @@ public class DisclosureCommentController {
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
                     - 리그에 입장한 회원만 조회할 수 있다. 종료된 리그도 조회할 수 있다.
 
-                    **성공 시** HTTP 200, `code` `"000"`, `data`에 댓글 배열 (최신순, 없으면 빈 배열).
+                    **성공 시** HTTP 200, `code` `"000"`, `data`에 댓글 배열 (오래된 순, 없으면 빈 배열).
                     - `authorName`: 작성자 계정 이름. 탈퇴한 작성자는 `"탈퇴한 사용자"`.
                     - `mine`이 `true`이면 내가 쓴 댓글이다 (삭제 버튼 노출).
 

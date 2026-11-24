@@ -30,7 +30,7 @@ public interface CommentRepository<T extends Comment> {
     Optional<T> findById(Long id);
 
     /**
-     * 대상의 삭제되지 않은 댓글을 모두 최신순(ID 내림차순)으로 찾는다.
+     * 대상의 삭제되지 않은 댓글을 모두 오래된 순(ID 오름차순)으로 찾는다.
      *
      * @param targetId 대상(공시·뉴스) ID
      * @return 댓글 목록
@@ -46,10 +46,10 @@ public interface CommentRepository<T extends Comment> {
     Map<Long, Long> countActiveByTargets(Collection<Long> targetIds);
 
     /**
-     * 대상별 삭제되지 않은 가장 최근 댓글을 찾는다.
+     * 대상별 삭제되지 않은 가장 먼저 등록된 댓글을 찾는다.
      *
      * @param targetIds 대상 ID 목록
      * @return 대상마다 최대 1개의 댓글. 댓글이 없는 대상은 빠진다
      */
-    List<T> findLatestActiveByTargets(Collection<Long> targetIds);
+    List<T> findEarliestActiveByTargets(Collection<Long> targetIds);
 }

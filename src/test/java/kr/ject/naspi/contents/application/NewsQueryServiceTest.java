@@ -165,12 +165,12 @@ class NewsQueryServiceTest {
     }
 
     @Test
-    @DisplayName("뉴스 목록은 뉴스마다 댓글 수와 가장 최근 댓글을 함께 준다")
+    @DisplayName("뉴스 목록은 뉴스마다 댓글 수와 가장 먼저 등록된 댓글을 함께 준다")
     void listWithComments() {
         long withComments = published(LEAGUE_ID, STOCK_ID, NewsSentiment.POSITIVE);
         long withoutComments = published(LEAGUE_ID, STOCK_ID, NewsSentiment.POSITIVE);
-        comment(withComments, 70L, "처음");
-        long latest = comment(withComments, VIEWER_PLAYER_ID, "최근");
+        final long first = comment(withComments, VIEWER_PLAYER_ID, "처음");
+        comment(withComments, 70L, "나중");
 
         NewsPage page = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 20);
 
@@ -178,7 +178,7 @@ class NewsQueryServiceTest {
                 .containsExactly(withoutComments, withComments);
         assertThat(page.items().get(0).comments()).isEqualTo(new CommentPreview(0, null));
         assertThat(page.items().get(1).comments().commentCount()).isEqualTo(2);
-        assertThat(page.items().get(1).comments().latestComment().commentId()).isEqualTo(latest);
+        assertThat(page.items().get(1).comments().previewComment().commentId()).isEqualTo(first);
     }
 
     @Test

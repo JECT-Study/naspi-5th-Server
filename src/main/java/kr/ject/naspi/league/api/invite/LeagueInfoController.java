@@ -26,7 +26,7 @@ public class LeagueInfoController {
      *
      * @param inviteCode 초대 코드 (대소문자 구분 없음)
      * @return 리그 이름, 상태, 입장 인원, 참여자 수
-     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없는 경우
+     * @throws NaspiBizException 없는 코드이거나 삭제·만료된 대기실, 이미 시작된 리그인 경우
      */
     @Operation(
             summary = "초대 코드로 리그 정보 조회",
@@ -49,7 +49,9 @@ public class LeagueInfoController {
 
                     | HTTP | code | 상황 | 프론트 처리 |
                     |---|---|---|---|
-                    | 200 | `"201"` | 없는 코드이거나 이미 시작된 리그 | 메시지 표시 후 다시 입력 |
+                    | 200 | `"201"` | 없는 코드 (형식 오류, 삭제·만료·종료로 폐기된 코드 포함) | "유효하지 않은 코드" 표시 후 다시 입력 |
+                    | 200 | `"204"` | 7일이 지나 만료된 리그 | "유효하지 않은 코드" 표시 후 다시 입력 |
+                    | 200 | `"208"` | 이미 시작·종료된 리그 | "이미 시작된 리그" 표시 후 다시 입력 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
     @GetMapping("/api/leagues/invite-codes/{inviteCode}")

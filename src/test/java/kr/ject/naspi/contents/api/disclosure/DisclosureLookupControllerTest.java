@@ -92,8 +92,8 @@ class DisclosureLookupControllerTest {
                 .andExpect(jsonPath("$.data.items[0].dislikeCount").value(1))
                 .andExpect(jsonPath("$.data.items[0].myReaction").value("LIKE"))
                 .andExpect(jsonPath("$.data.items[0].commentCount").value(3))
-                .andExpect(jsonPath("$.data.items[0].latestComment.content").value("댓글"))
-                .andExpect(jsonPath("$.data.items[0].latestComment.authorName").value("상대"))
+                .andExpect(jsonPath("$.data.items[0].previewComment.content").value("댓글"))
+                .andExpect(jsonPath("$.data.items[0].previewComment.authorName").value("상대"))
                 .andExpect(jsonPath("$.data.items[0].news").doesNotExist());
     }
 
@@ -141,7 +141,7 @@ class DisclosureLookupControllerTest {
                 .andExpect(jsonPath("$.data.dislikeCount").value(2))
                 .andExpect(jsonPath("$.data.myReaction").doesNotExist())
                 .andExpect(jsonPath("$.data.commentCount").value(1))
-                .andExpect(jsonPath("$.data.latestComment").doesNotExist())
+                .andExpect(jsonPath("$.data.previewComment").doesNotExist())
                 .andExpect(jsonPath("$.data.comments[0].content").value("댓글"))
                 .andExpect(jsonPath("$.data.comments.length()").value(1))
                 .andExpect(jsonPath("$.data.news.newsId").value(40))

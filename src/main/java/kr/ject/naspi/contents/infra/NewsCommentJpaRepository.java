@@ -32,17 +32,17 @@ interface NewsCommentJpaRepository extends Repository<NewsComment, Long>, NewsCo
     }
 
     @Override
-    default List<NewsComment> findLatestActiveByTargets(Collection<Long> targetIds) {
+    default List<NewsComment> findEarliestActiveByTargets(Collection<Long> targetIds) {
         if (targetIds.isEmpty()) {
             return List.of();
         }
-        return findLatestByStatus(targetIds, CommentStatus.ACTIVE);
+        return findEarliestByStatus(targetIds, CommentStatus.ACTIVE);
     }
 
     @Query("""
             select c from NewsComment c
             where c.newsId = :newsId and c.status = :status
-            order by c.id desc
+            order by c.id asc
             """)
     List<NewsComment> findByStatus(@Param("newsId") long newsId,
                                    @Param("status") CommentStatus status);
@@ -55,14 +55,14 @@ interface NewsCommentJpaRepository extends Repository<NewsComment, Long>, NewsCo
     List<CommentCount> countByStatus(@Param("newsIds") Collection<Long> newsIds,
                                      @Param("status") CommentStatus status);
 
-    // ID는 작성 순서대로 증가하므로 대상별 가장 큰 ID가 가장 최근 댓글이다
+    // ID는 작성 순서대로 증가하므로 대상별 가장 작은 ID가 가장 먼저 등록된 댓글이다
     @Query("""
             select c from NewsComment c
             where c.id in (
-                select max(c2.id) from NewsComment c2
+                select min(c2.id) from NewsComment c2
                 where c2.newsId in :newsIds and c2.status = :status
                 group by c2.newsId)
             """)
-    List<NewsComment> findLatestByStatus(@Param("newsIds") Collection<Long> newsIds,
+    List<NewsComment> findEarliestByStatus(@Param("newsIds") Collection<Long> newsIds,
                                          @Param("status") CommentStatus status);
 }

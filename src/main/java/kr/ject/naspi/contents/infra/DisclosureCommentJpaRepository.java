@@ -33,17 +33,17 @@ interface DisclosureCommentJpaRepository extends Repository<DisclosureComment, L
     }
 
     @Override
-    default List<DisclosureComment> findLatestActiveByTargets(Collection<Long> targetIds) {
+    default List<DisclosureComment> findEarliestActiveByTargets(Collection<Long> targetIds) {
         if (targetIds.isEmpty()) {
             return List.of();
         }
-        return findLatestByStatus(targetIds, CommentStatus.ACTIVE);
+        return findEarliestByStatus(targetIds, CommentStatus.ACTIVE);
     }
 
     @Query("""
             select c from DisclosureComment c
             where c.disclosureId = :disclosureId and c.status = :status
-            order by c.id desc
+            order by c.id asc
             """)
     List<DisclosureComment> findByStatus(@Param("disclosureId") long disclosureId,
                                          @Param("status") CommentStatus status);
@@ -56,15 +56,15 @@ interface DisclosureCommentJpaRepository extends Repository<DisclosureComment, L
     List<CommentCount> countByStatus(@Param("disclosureIds") Collection<Long> disclosureIds,
                                      @Param("status") CommentStatus status);
 
-    // ID는 작성 순서대로 증가하므로 대상별 가장 큰 ID가 가장 최근 댓글이다
+    // ID는 작성 순서대로 증가하므로 대상별 가장 작은 ID가 가장 먼저 등록된 댓글이다
     @Query("""
             select c from DisclosureComment c
             where c.id in (
-                select max(c2.id) from DisclosureComment c2
+                select min(c2.id) from DisclosureComment c2
                 where c2.disclosureId in :disclosureIds and c2.status = :status
                 group by c2.disclosureId)
             """)
-    List<DisclosureComment> findLatestByStatus(
+    List<DisclosureComment> findEarliestByStatus(
             @Param("disclosureIds") Collection<Long> disclosureIds,
             @Param("status") CommentStatus status);
 }

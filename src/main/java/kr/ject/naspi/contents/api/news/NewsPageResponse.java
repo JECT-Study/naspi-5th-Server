@@ -32,17 +32,17 @@ record NewsPageResponse(List<Item> items, Long nextCursor) {
      * @param createdAt 뉴스 생성 요청 일시 (KST)
      * @param publishedAt 발행 일시 (KST)
      * @param commentCount 댓글 수
-     * @param latestComment 가장 최근 댓글. 없으면 null
+     * @param previewComment 미리보기 댓글 (가장 먼저 등록된 댓글). 없으면 null
      */
     record Item(long newsId, long stockId, String title, String body, NewsSentiment sentiment,
                 int tradingDay, LocalDateTime createdAt, LocalDateTime publishedAt,
-                long commentCount, CommentResponse latestComment) {
+                long commentCount, CommentResponse previewComment) {
 
         static Item from(NewsListItem item) {
             return new Item(item.newsId(), item.stockId(), item.title(), item.body(),
                     item.sentiment(), item.tradingDay(), item.createdAt(), item.publishedAt(),
                     item.comments().commentCount(),
-                    CommentResponse.from(item.comments().latestComment()));
+                    CommentResponse.from(item.comments().previewComment()));
         }
     }
 }

@@ -14,7 +14,7 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
  * @param tradingDay 원본 공시를 작성한 거래일 번호 (1~7)
  * @param createdAt 뉴스 생성을 요청한 일시 (공시 작성 일시, KST)
  * @param publishedAt 발행 일시 (KST)
- * @param comments 댓글 수와 가장 최근 댓글
+ * @param comments 댓글 수와 가장 먼저 등록된 댓글
  */
 public record NewsListItem(long newsId, long stockId, String title, String body,
                            NewsSentiment sentiment, int tradingDay, LocalDateTime createdAt,

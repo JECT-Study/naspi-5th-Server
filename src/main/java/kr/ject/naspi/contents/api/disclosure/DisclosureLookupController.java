@@ -35,8 +35,8 @@ public class DisclosureLookupController {
             - 이미지 `expiresAt`은 이미지 저장 만료가 아니라 **`signedUrl`의 만료 일시**다 (발급 후 5분). \
             지나면 그 URL은 403을 돌려주므로 목록·상세를 다시 조회해 새 URL을 받는다. \
             이미 화면에 그려진 이미지는 계속 보이고, 이미지 파일도 그대로 남아 있다.
-            - 댓글: `commentCount`(삭제되지 않은 댓글 수). 목록은 `latestComment`(가장 최근 댓글 1개, \
-            없으면 `null`), 상세는 `latestComment` 대신 `comments`(댓글 전체 배열, 최신순, 페이징 없음)를 \
+            - 댓글: `commentCount`(삭제되지 않은 댓글 수). 목록은 `previewComment`(가장 먼저 등록된 댓글 1개, \
+            없으면 `null`), 상세는 `previewComment` 대신 `comments`(댓글 전체 배열, 오래된 순, 페이징 없음)를 \
             준다. 댓글 항목은 댓글 목록 API의 항목과 같은 모양이다.
             """;
 
@@ -114,7 +114,7 @@ public class DisclosureLookupController {
                     - 리그에 입장한 회원만 조회할 수 있다. 종료된 리그도 조회할 수 있다.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 공시 상세. 목록 항목과 같은 필드에서 \
-                    `latestComment` 대신 `comments`를 주고 `news`가 더해진다.
+                    `previewComment` 대신 `comments`를 주고 `news`가 더해진다.
                     - `images`: 첨부 순서대로 전체 이미지 (없으면 빈 배열).
                     - `news`: 공시로 만든 AI 뉴스. `status`가 `PENDING`(생성 중), `PUBLISHED`(발행), \
                     `SKIPPED`(기사로 쓸 내용이 없어 미생성), `FAILED`(생성 실패) 중 하나다. \

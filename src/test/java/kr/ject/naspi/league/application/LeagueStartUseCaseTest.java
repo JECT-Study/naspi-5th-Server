@@ -74,7 +74,7 @@ class LeagueStartUseCaseTest {
         assertThat(league.getStatus()).isEqualTo(LeagueStatus.STARTED);
         assertThat(league.getStartedAt()).isEqualTo(now);
         assertThat(league.getEndsAt()).isEqualTo(endsAt);
-        assertThat(league.getInviteCode()).isNull();
+        assertThat(league.getInviteCode()).isNotNull();
     }
 
     @Test
@@ -176,14 +176,14 @@ class LeagueStartUseCaseTest {
     }
 
     @Test
-    @DisplayName("리그 시작 이후에는 기존 초대 코드로 추가 참여할 수 없다")
+    @DisplayName("리그 시작 이후에는 기존 초대 코드로 추가 참여할 수 없고, 이미 시작된 리그임을 알린다")
     void cannotJoinAfterStart() {
         CreatedLeague created = leagueWithParticipants(3);
         useCaseUnderTest.start(HOST_MEMBER_ID, created.leagueId());
 
         assertThatThrownBy(() -> leagueService.join(nextMemberId++, created.inviteCode()))
                 .isInstanceOf(NaspiBizException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_STARTED);
     }
 
     @Test

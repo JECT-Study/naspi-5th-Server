@@ -99,7 +99,7 @@ class DisclosureCommentServiceTest {
     }
 
     @Test
-    @DisplayName("공시 댓글 목록은 페이징 없이 전체를 최신순으로 주고 작성자 이름과 내 댓글 여부를 표시하며, 종료된 리그에서도 볼 수 있다")
+    @DisplayName("공시 댓글 목록은 페이징 없이 전체를 오래된 순으로 주고 작성자 이름과 내 댓글 여부를 표시하며, 종료된 리그에서도 볼 수 있다")
     void list() {
         long disclosure = disclosure(STOCK_ID);
         long first = comment(disclosure, ME_PLAYER, "1");
@@ -108,9 +108,9 @@ class DisclosureCommentServiceTest {
 
         List<CommentItem> comments = service.findByTarget(ME, LEAGUE_ID, STOCK_ID, disclosure);
 
-        assertThat(comments).extracting(CommentItem::commentId).containsExactly(second, first);
-        assertThat(comments).extracting(CommentItem::authorName).containsExactly("상대", "나");
-        assertThat(comments).extracting(CommentItem::mine).containsExactly(false, true);
+        assertThat(comments).extracting(CommentItem::commentId).containsExactly(first, second);
+        assertThat(comments).extracting(CommentItem::authorName).containsExactly("나", "상대");
+        assertThat(comments).extracting(CommentItem::mine).containsExactly(true, false);
     }
 
     @Test
@@ -172,19 +172,19 @@ class DisclosureCommentServiceTest {
     }
 
     @Test
-    @DisplayName("목록용 미리보기는 공시별 댓글 수와 가장 최근 댓글 1개를 주고, 댓글이 없으면 0개다")
+    @DisplayName("목록용 미리보기는 공시별 댓글 수와 가장 먼저 등록된 댓글 1개를 주고, 댓글이 없으면 0개다")
     void previews() {
         long disclosure = disclosure(STOCK_ID);
         long empty = disclosure(STOCK_ID);
-        comment(disclosure, OTHER_PLAYER, "처음");
-        long latest = comment(disclosure, ME_PLAYER, "최근");
+        long first = comment(disclosure, ME_PLAYER, "처음");
+        comment(disclosure, OTHER_PLAYER, "나중");
 
         Map<Long, CommentPreview> previews = service.previews(LEAGUE_ID,
                 List.of(disclosure, empty), ME_PLAYER);
 
         assertThat(previews.get(disclosure).commentCount()).isEqualTo(2);
-        assertThat(previews.get(disclosure).latestComment().commentId()).isEqualTo(latest);
-        assertThat(previews.get(disclosure).latestComment().mine()).isTrue();
+        assertThat(previews.get(disclosure).previewComment().commentId()).isEqualTo(first);
+        assertThat(previews.get(disclosure).previewComment().mine()).isTrue();
         assertThat(previews.get(empty)).isEqualTo(new CommentPreview(0, null));
     }
 

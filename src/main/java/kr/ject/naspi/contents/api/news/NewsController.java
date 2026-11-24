@@ -32,8 +32,8 @@ public class NewsController {
             - 뉴스: `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재).
             - 일시(KST): `tradingDay`(원본 공시를 작성한 거래일 1~7), `createdAt`(뉴스 생성 요청 일시), \
             `publishedAt`(발행 일시).
-            - 댓글: `commentCount`(삭제되지 않은 댓글 수). 목록은 `latestComment`(가장 최근 댓글 1개, \
-            없으면 `null`), 상세는 `latestComment` 대신 `comments`(댓글 전체 배열, 최신순, 페이징 없음)를 \
+            - 댓글: `commentCount`(삭제되지 않은 댓글 수). 목록은 `previewComment`(가장 먼저 등록된 댓글 1개, \
+            없으면 `null`), 상세는 `previewComment` 대신 `comments`(댓글 전체 배열, 오래된 순, 페이징 없음)를 \
             준다. 댓글 항목은 댓글 목록 API의 항목과 같은 모양이다.
             """;
 
@@ -110,7 +110,7 @@ public class NewsController {
                     - 리그에 입장한 회원만 조회할 수 있다. 종료된 리그도 조회할 수 있다.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 뉴스 상세. 목록 항목과 같은 필드에서 \
-                    `latestComment` 대신 `comments`를 주고 `disclosure`가 더해진다.
+                    `previewComment` 대신 `comments`를 주고 `disclosure`가 더해진다.
                     - `disclosure`: 원본 공시 (`disclosureId`, `title`, `body`, `createdAt`). \
                     공시 없이 만든 뉴스이거나 원본 공시가 삭제됐으면 `null`이다.
                     """ + FIELDS + """

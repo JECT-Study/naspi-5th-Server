@@ -16,7 +16,7 @@ import java.util.List;
  * @param mine 조회한 플레이어가 작성자인지 (삭제 버튼 표시용)
  * @param images 첨부 이미지의 서명 URL (첨부 순서). 이미지가 없으면 빈 목록
  * @param reaction 반응 집계와 내 반응
- * @param comments 댓글 수와 가장 최근 댓글
+ * @param comments 댓글 수와 가장 먼저 등록된 댓글
  */
 public record DisclosureListItem(long disclosureId, long stockId, String title, String body,
                                  int tradingDay, LocalDateTime createdAt, long authorPlayerId,

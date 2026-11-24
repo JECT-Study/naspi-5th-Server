@@ -100,7 +100,7 @@ class LeagueTest {
     }
 
     @Test
-    @DisplayName("리그를 시작하면 시작 상태가 되고 시작 일시와 종료 일시(시작 KST 날짜 + 7일, 09:00)가 기록되며 초대 코드가 폐기된다")
+    @DisplayName("리그를 시작하면 시작 상태가 되고 시작 일시와 종료 일시(시작 KST 날짜 + 7일, 09:00)가 기록되며 초대 코드는 유지된다")
     void start() {
         League league = newLeague();
 
@@ -110,7 +110,7 @@ class LeagueTest {
         assertThat(league.getStartedAt()).isEqualTo(STARTED_AT);
         // 2026-11-02 21:30 시작 → 2026-11-09 09:00 종료
         assertThat(league.getEndsAt()).isEqualTo(LocalDateTime.of(2026, 11, 9, 9, 0));
-        assertThat(league.getInviteCode()).isNull();
+        assertThat(league.getInviteCode()).isNotNull();
         assertThat(league.isOpenForInvitation(STARTED_AT)).isFalse();
     }
 

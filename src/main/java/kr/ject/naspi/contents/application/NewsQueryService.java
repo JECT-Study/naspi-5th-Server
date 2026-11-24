@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
  *
  * <p>정책 (docs/policies/v1/domain/contents.md "뉴스 - 공시 기반 AI 뉴스"): 뉴스는 종목에 연결되고 삭제할 수
  * 없으며, 공시가 삭제돼도 발행된 뉴스는 유지된다. 발행(PUBLISHED)된 뉴스만 보이고, 리그 참여자만 볼 수 있으며
- * 종료된 리그도 조회할 수 있다. 결정 (docs/issues/v1/contents.md CNT-08): 목록에는 댓글 수와 가장 최근 댓글을,
+ * 종료된 리그도 조회할 수 있다. 결정 (docs/issues/v1/contents.md CNT-08): 목록에는 댓글 수와 가장 먼저 등록된 댓글을,
  * 상세에는 댓글 전체를 주고, 원본 공시는 상세에만 준다. 삭제된 공시 원문은 조회할 수 없으므로
  * 원본 공시가 삭제됐으면 공시 없이 만든 뉴스처럼 비워 둔다.
  */

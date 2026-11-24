@@ -94,7 +94,7 @@ class LeagueQueryServiceTest {
     }
 
     @Test
-    @DisplayName("초대가 마감된(시작·만료된) 리그는 초대 코드로 조회할 수 없다")
+    @DisplayName("초대 코드가 폐기된(삭제·만료·종료된) 리그는 없는 코드로 안내한다")
     void getSummaryWithClosedCode() {
         CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         entityManager.find(League.class, league.leagueId()).closeInvitation();
@@ -106,14 +106,14 @@ class LeagueQueryServiceTest {
     }
 
     @Test
-    @DisplayName("생성 후 7일이 지난 대기실은 초대 코드로 조회할 수 없다")
+    @DisplayName("생성 후 7일이 지난 대기실은 초대 코드로 조회하면 삭제된 대기실임을 알린다")
     void getSummaryOfExpiredWaitingRoom() {
         CreatedLeague league = useCase.create(member("방장"), "리그", "나스피", "소개");
         clock.advance(League.WAITING_ROOM_LIFETIME);
 
         assertThatThrownBy(() -> queryService.getSummary(league.inviteCode()))
                 .isInstanceOf(NaspiBizException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.INVITE_CODE_NOT_FOUND);
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
     }
 
     @Test

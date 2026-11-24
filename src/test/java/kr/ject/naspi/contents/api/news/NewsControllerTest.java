@@ -78,7 +78,7 @@ class NewsControllerTest {
                 .andExpect(jsonPath("$.data.items[0].newsId").value(30))
                 .andExpect(jsonPath("$.data.items[0].sentiment").value("POSITIVE"))
                 .andExpect(jsonPath("$.data.items[0].commentCount").value(3))
-                .andExpect(jsonPath("$.data.items[0].latestComment.content").value("댓글"))
+                .andExpect(jsonPath("$.data.items[0].previewComment.content").value("댓글"))
                 .andExpect(jsonPath("$.data.items[0].disclosure").doesNotExist());
     }
 
@@ -111,7 +111,7 @@ class NewsControllerTest {
                 .andExpect(jsonPath("$.data.createdAt").exists())
                 .andExpect(jsonPath("$.data.publishedAt").exists())
                 .andExpect(jsonPath("$.data.commentCount").value(1))
-                .andExpect(jsonPath("$.data.latestComment").doesNotExist())
+                .andExpect(jsonPath("$.data.previewComment").doesNotExist())
                 .andExpect(jsonPath("$.data.comments[0].authorName").value("나"))
                 .andExpect(jsonPath("$.data.comments.length()").value(1))
                 .andExpect(jsonPath("$.data.disclosure.disclosureId").value(20))

@@ -48,14 +48,16 @@ public class LeagueQueryService {
      *
      * @param inviteCode 입력한 초대 코드 (대소문자 구분 없음)
      * @return 리그 이름, 상태, 입장 인원, 참여자 수
-     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없는 경우
-     *         (형식 오류, 이미 시작된 리그, 만료된 대기실 포함)
+     * @throws NaspiBizException 초대 코드에 해당하는 리그가 없거나 형식이 틀렸거나
+     *         ({@code INVITE_CODE_NOT_FOUND}), 삭제·만료된 대기실이거나({@code LEAGUE_NOT_FOUND}),
+     *         이미 시작·종료된 리그인 경우({@code LEAGUE_ALREADY_STARTED})
      */
     public LeagueSummary getSummary(String inviteCode) {
         LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findByInviteCode(InviteCode.of(inviteCode))
-                .filter(found -> found.isOpenForInvitation(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INVITE_CODE_NOT_FOUND));
+        // 시작된 리그는 코드를 유지하므로 이미 시작된 리그임을 구분해 알린다.
+        league.requireWaitingRoom(now);
         return new LeagueSummary(league.getId(), league.getName().getValue(),
                 league.getStatus().name(),
                 playerRepository.countByLeagueId(league.getId()),
@@ -100,9 +102,9 @@ public class LeagueQueryService {
         // 이미 시작된 리그는 다시 시작할 수 없으므로 대기실일 때만 시작 가능으로 본다.
         boolean waiting = league.getStatus() == LeagueStatus.WAITING;
         boolean startable = waiting && League.canStart(players);
-        InviteCode inviteCode = league.getInviteCode();
+        // 시작된 리그도 초대 코드를 유지하지만 응답에는 대기실일 때만 내보낸다.
         return new LeaguePlayers(league.getId(), league.getName().getValue(),
-                inviteCode == null ? null : inviteCode.getValue(),
+                waiting ? league.getInviteCode().getValue() : null,
                 waiting ? league.waitingRoomExpiresAt() : null, startable, tradingDayOf(league),
                 result);
     }
