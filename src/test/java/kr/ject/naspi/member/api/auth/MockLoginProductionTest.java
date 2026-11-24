@@ -42,6 +42,8 @@ class MockLoginProductionTest {
         HttpRequest request = HttpRequest.newBuilder(
                         URI.create("http://localhost:" + port + path))
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                // 키가 맞아도 막혀야 한다
+                .header("X-Mock-Login-Key", "mock-login-test-key")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"userNo\": 1}"))
                 .build();
 
