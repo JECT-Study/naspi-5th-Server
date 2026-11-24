@@ -129,18 +129,19 @@ class StockListingServiceTest {
     }
 
     @Test
-    @DisplayName("생성 후 7일이 지난 대기실에는 상장할 수 없다 (만료 처리 전이라도 요청 시점에 다시 검증)")
+    @DisplayName("생성 후 7일이 지났어도 만료 처리 전인 대기실에는 상장할 수 있고, 만료 처리된 대기실에는 상장할 수 없다")
     void rejectExpiredWaitingRoom() {
-        League justBefore = waitingRoom(NOW.minusDays(7).plusNanos(1));
-        enter(justBefore, 10L);
+        League overdue = waitingRoom(NOW.minusDays(7));
+        enter(overdue, 10L);
         League expired = waitingRoom(NOW.minusDays(7));
         enter(expired, 11L);
+        expired.expire(NOW);
+        entityManager.flush();
 
-        assertThat(service.list(justBefore.getId(), 10L, "나스피", "소개")).isPositive();
+        assertThat(service.list(overdue.getId(), 10L, "나스피", "소개")).isPositive();
         assertThatThrownBy(() -> service.list(expired.getId(), 11L, "다른종목", "소개"))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
-        assertThat(expired.getStatus()).isEqualTo(LeagueStatus.WAITING);
     }
 
     @Test

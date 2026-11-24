@@ -114,22 +114,10 @@ class LeagueJoinLimitTest {
     }
 
     @Test
-    @DisplayName("생성 후 7일이 지난 대기실은 만료 처리 전이어도 참여 개수에서 제외된다")
-    void overdueWaitingRoomExcluded() {
-        useCase.create(MEMBER_ID, "만료될 리그", "나스피", "소개");
-        clock.advance(League.WAITING_ROOM_LIFETIME);
-        joinLeagues(LeagueJoinLimit.MAX_JOINED_LEAGUES - 1);
-
-        CreatedLeague created = useCase.create(MEMBER_ID, "리그", "나스피", "소개");
-
-        assertThat(created.leagueId()).isNotZero();
-    }
-
-    @Test
-    @DisplayName("생성 후 7일이 지나지 않은 대기실은 참여 개수에 포함된다")
-    void waitingRoomBeforeExpiryCounted() {
+    @DisplayName("생성 후 7일이 지났어도 만료 처리 전인 대기실은 참여 개수에 포함된다")
+    void overdueWaitingRoomBeforeExpirationCounted() {
         useCase.create(MEMBER_ID, "리그", "나스피", "소개");
-        clock.advance(League.WAITING_ROOM_LIFETIME.minusSeconds(1));
+        clock.advance(League.WAITING_ROOM_LIFETIME);
         joinLeagues(LeagueJoinLimit.MAX_JOINED_LEAGUES - 1);
 
         assertThatThrownBy(() -> useCase.create(MEMBER_ID, "리그", "나스피", "소개"))

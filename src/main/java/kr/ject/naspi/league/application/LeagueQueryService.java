@@ -53,11 +53,10 @@ public class LeagueQueryService {
      *         이미 시작·종료된 리그인 경우({@code LEAGUE_ALREADY_STARTED})
      */
     public LeagueSummary getSummary(String inviteCode) {
-        LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findByInviteCode(InviteCode.of(inviteCode))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INVITE_CODE_NOT_FOUND));
         // 시작된 리그는 코드를 유지하므로 이미 시작된 리그임을 구분해 알린다.
-        league.requireWaitingRoom(now);
+        league.requireWaitingRoom();
         return new LeagueSummary(league.getId(), league.getName().getValue(),
                 league.getStatus().name(),
                 playerRepository.countByLeagueId(league.getId()),
@@ -261,9 +260,8 @@ public class LeagueQueryService {
 
     /** 리그를 찾는다. 만료·삭제된 대기실은 접근할 수 없으므로 없는 리그로 취급한다. */
     private League getLeague(long leagueId) {
-        LocalDateTime now = LocalDateTime.now(clock);
         return leagueRepository.findById(leagueId)
-                .filter(found -> !found.isUnavailable(now))
+                .filter(found -> !found.isUnavailable())
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
     }
 }

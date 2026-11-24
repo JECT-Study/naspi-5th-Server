@@ -41,7 +41,7 @@ public class League {
     /** 리그를 시작하려면 필요한 최소 참여자 수. */
     public static final int MIN_PARTICIPANTS_TO_START = 3;
 
-    /** 대기실 유효 기간. 생성 후 이 기간 안에 시작하지 않으면 대기실과 초대 코드가 만료된다. */
+    /** 대기실 유효 기간. 생성 후 이 기간 안에 시작하지 않으면 만료 처리 대상이 된다. */
     public static final Duration WAITING_ROOM_LIFETIME = Duration.ofDays(7);
 
     @Id
@@ -144,7 +144,7 @@ public class League {
      */
     public void start(Collection<Player> players, LocalDateTime now) {
         // 만료·삭제된 대기실
-        if (isUnavailable(now)) {
+        if (isUnavailable()) {
             throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
         }
         // 이미 시작한 리그 (멱등 보장)
@@ -175,23 +175,21 @@ public class League {
     }
 
     /**
-     * 대기실이 만료되는 시각. 생성 후 7일이 지나는 순간부터 만료로 본다.
+     * 대기실의 만료 기한. 이 시각 이후 만료 처리가 실행되면 만료된다. 만료 처리 전까지는 대기실로 유지된다.
      *
-     * @return 만료 일시
+     * @return 만료 기한
      */
     public LocalDateTime waitingRoomExpiresAt() {
         return createdAt.plus(WAITING_ROOM_LIFETIME);
     }
 
     /**
-     * 만료된 대기실인지 확인한다. 만료 처리가 아직 저장되지 않았더라도 7일이 지났으면 만료로 본다.
+     * 만료 처리된 대기실인지 확인한다. 기한이 지났어도 만료 처리 전이면 대기실로 본다.
      *
-     * @param now 현재 일시
      * @return 만료 여부
      */
-    public boolean isExpired(LocalDateTime now) {
-        return status == LeagueStatus.EXPIRED
-                || (status == LeagueStatus.WAITING && !now.isBefore(waitingRoomExpiresAt()));
+    public boolean isExpired() {
+        return status == LeagueStatus.EXPIRED;
     }
 
     /**
@@ -207,11 +205,10 @@ public class League {
     /**
      * 접근할 수 없는 리그인지 확인한다. 만료된 대기실과 삭제된 대기실은 없는 리그로 취급한다.
      *
-     * @param now 현재 일시
      * @return 만료되었거나 삭제된 대기실이면 true
      */
-    public boolean isUnavailable(LocalDateTime now) {
-        return status == LeagueStatus.DELETED || isExpired(now);
+    public boolean isUnavailable() {
+        return status == LeagueStatus.DELETED || isExpired();
     }
 
     /**
@@ -225,14 +222,13 @@ public class League {
      *
      * @param leaver 나가는 플레이어
      * @param players 리그에 입장한 플레이어 전원 (나가는 플레이어 포함)
-     * @param now 현재 일시
      * @return 대기실이 삭제되었으면 true
      * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그인 경우
      *         ({@code LEAGUE_ALREADY_STARTED})
      */
-    public boolean leave(Player leaver, Collection<Player> players, LocalDateTime now) {
+    public boolean leave(Player leaver, Collection<Player> players) {
         // 리그 시작 이후에는 나갈 수 없다.
-        requireWaitingRoom(now);
+        requireWaitingRoom();
         if (!isHost(leaver)) {
             return false;
         }
@@ -268,12 +264,11 @@ public class League {
      * 방장인지는 호출하는 쪽에서 먼저 확인한다.
      *
      * @param newName 새 리그 이름
-     * @param now 현재 일시
      * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그인 경우
      *         ({@code LEAGUE_ALREADY_STARTED})
      */
-    public void rename(LeagueName newName, LocalDateTime now) {
-        requireWaitingRoom(now);
+    public void rename(LeagueName newName) {
+        requireWaitingRoom();
         this.name = Objects.requireNonNull(newName, "newName");
     }
 
@@ -283,12 +278,11 @@ public class League {
      * <p>정책 (docs/policies/v1/domain/league.md "대기실"): 리그 삭제는 대기실의 방장만 할 수 있다.
      * 방장인지는 호출하는 쪽에서 먼저 확인한다.
      *
-     * @param now 현재 일시
      * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그인 경우
      *         ({@code LEAGUE_ALREADY_STARTED})
      */
-    public void delete(LocalDateTime now) {
-        requireWaitingRoom(now);
+    public void delete() {
+        requireWaitingRoom();
         markDeleted();
     }
 
@@ -301,12 +295,11 @@ public class League {
      * 방장인지는 호출하는 쪽에서 먼저 확인한다.
      *
      * @param target 추방할 플레이어
-     * @param now 현재 일시
      * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그이거나
      *         ({@code LEAGUE_ALREADY_STARTED}), 방장 자신을 추방하려는 경우({@code LEAGUE_HOST_NOT_KICKABLE})
      */
-    public void kick(Player target, LocalDateTime now) {
-        requireWaitingRoom(now);
+    public void kick(Player target) {
+        requireWaitingRoom();
         if (isHost(target)) {
             throw new NaspiBizException(ErrorCode.LEAGUE_HOST_NOT_KICKABLE);
         }
@@ -315,12 +308,11 @@ public class League {
     /**
      * 대기실 상태인지 확인한다. 시작 이후에는 방장·참여자 권한이 나뉘지 않는다.
      *
-     * @param now 현재 일시
      * @throws NaspiBizException 만료·삭제된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그인 경우
      *         ({@code LEAGUE_ALREADY_STARTED})
      */
-    public void requireWaitingRoom(LocalDateTime now) {
-        if (isUnavailable(now)) {
+    public void requireWaitingRoom() {
+        if (isUnavailable()) {
             throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
         }
         if (status != LeagueStatus.WAITING) {
@@ -336,7 +328,7 @@ public class League {
      *         ({@code LEAGUE_ALREADY_ENDED})
      */
     public void requireOngoing(LocalDateTime now) {
-        if (isUnavailable(now)) {
+        if (isUnavailable()) {
             throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
         }
         if (isEnded(now)) {
@@ -353,7 +345,7 @@ public class League {
      *         경우({@code LEAGUE_ALREADY_ENDED}), 아직 시작하지 않은 경우({@code LEAGUE_NOT_TRADABLE})
      */
     public void requireTradable(LocalDateTime now) {
-        if (isUnavailable(now)) {
+        if (isUnavailable()) {
             throw new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND);
         }
         if (isEnded(now)) {
@@ -376,13 +368,12 @@ public class League {
     }
 
     /**
-     * 초대 코드로 입장할 수 있는 대기실인지 확인한다.
+     * 초대 코드로 입장할 수 있는 대기실인지 확인한다. 기한이 지났어도 만료 처리 전이면 입장할 수 있다.
      *
-     * @param now 현재 일시
-     * @return 시작 전이고 만료되지 않았으면 true
+     * @return 시작 전이고 만료·삭제되지 않았으면 true
      */
-    public boolean isOpenForInvitation(LocalDateTime now) {
-        return status == LeagueStatus.WAITING && !isExpired(now);
+    public boolean isOpenForInvitation() {
+        return status == LeagueStatus.WAITING;
     }
 
     /**
@@ -390,10 +381,10 @@ public class League {
      * 폐기된 코드는 다른 리그에 다시 발급될 수 있다.
      *
      * @param now 현재 일시
-     * @throws IllegalStateException 대기실이 아니거나 아직 만료 시각이 되지 않은 경우
+     * @throws IllegalStateException 대기실이 아니거나 아직 만료 기한이 되지 않은 경우
      */
     public void expire(LocalDateTime now) {
-        if (status != LeagueStatus.WAITING || !isExpired(now)) {
+        if (status != LeagueStatus.WAITING || now.isBefore(waitingRoomExpiresAt())) {
             throw new IllegalStateException(
                     "만료할 수 없는 리그입니다. id=" + id + ", status=" + status);
         }

@@ -186,11 +186,13 @@ class StockEditServiceTest {
     }
 
     @Test
-    @DisplayName("만료된 대기실에서는 종목을 수정할 수 없다")
+    @DisplayName("만료 처리된 대기실에서는 종목을 수정할 수 없다")
     void rejectEditInExpiredLobby() {
         League expired = createLeague(NOW.minusDays(7), "BBBBBBB");
         long player = enter(expired, OWNER_MEMBER).getId();
         long expiredStock = save(expired.getId(), player, "만료종목", "소개").getId();
+        expired.expire(NOW);
+        entityManager.flush();
 
         assertThatThrownBy(() -> service.editInLobby(
                 expired.getId(), OWNER_MEMBER, expiredStock, "새이름", "소개"))

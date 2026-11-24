@@ -3,6 +3,7 @@ package kr.ject.naspi.league.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDateTime;
 import kr.ject.naspi.asset.application.InitialAssetAllocationService;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
@@ -283,10 +284,23 @@ class LeagueHostUseCaseTest {
     }
 
     @Test
-    @DisplayName("생성 후 7일이 지나 만료된 대기실에서는 방장 기능을 쓸 수 없다")
+    @DisplayName("생성 후 7일이 지났어도 만료 처리 전인 대기실에서는 방장 기능을 쓸 수 있다")
+    void overdueWaitingRoomBeforeExpiration() {
+        CreatedLeague created = createLeague();
+        clock.advance(League.WAITING_ROOM_LIFETIME);
+
+        RenamedLeague renamed = useCaseUnderTest.rename(HOST_MEMBER_ID, created.leagueId(), "이름");
+
+        assertThat(renamed.name()).isEqualTo("이름");
+    }
+
+    @Test
+    @DisplayName("만료 처리된 대기실에서는 방장 기능을 쓸 수 없다")
     void expiredWaitingRoom() {
         CreatedLeague created = createLeague();
         clock.advance(League.WAITING_ROOM_LIFETIME);
+        entityManager.find(League.class, created.leagueId()).expire(LocalDateTime.now(clock));
+        entityManager.flush();
 
         assertFails(() -> useCaseUnderTest.rename(HOST_MEMBER_ID, created.leagueId(), "이름"),
                 ErrorCode.LEAGUE_NOT_FOUND);

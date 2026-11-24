@@ -50,11 +50,10 @@ public class LeagueService {
     public JoinedLeague join(long memberId, String inviteCode) {
 
         // 초대 코드로 리그를 찾고 유효한 초대 코드인지 검증한다.
-        LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findWithLockByInviteCode(InviteCode.of(inviteCode))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INVITE_CODE_NOT_FOUND));
         // 시작된 리그는 코드를 유지하므로 이미 시작된 리그임을 구분해 알린다.
-        league.requireWaitingRoom(now);
+        league.requireWaitingRoom();
 
         // 이미 참여중인 리그인지 확인
         if (playerRepository.existsByLeagueIdAndMemberId(league.getId(), memberId)) {
@@ -121,7 +120,7 @@ public class LeagueService {
     public void lockWaitingRoom(long leagueId) {
         League league = leagueRepository.findWithLockById(leagueId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
-        league.requireWaitingRoom(LocalDateTime.now(clock));
+        league.requireWaitingRoom();
     }
 
     /**

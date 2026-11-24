@@ -46,8 +46,8 @@ public class LeagueDetailController {
                     - `name`: 리그 이름
                     - `inviteCode`: 대기실 초대 코드 (영문 대문자·숫자 7자리). \
                     리그가 시작되었거나 대기실이 만료되었으면 `null`
-                    - `waitingRoomExpiresAt`: 대기실 만료 일시 (KST, 생성 후 7일). \
-                    대기실이 아니면 `null`
+                    - `waitingRoomExpiresAt`: 대기실 만료 기한 (KST, 생성 후 7일). \
+                    기한 이후 매일 09:00 만료 처리 전까지는 대기실로 유지된다. 대기실이 아니면 `null`
                     - `startable`: 리그 시작 가능 여부 (참여자 3명 이상, 대기자 0명)
                     - `tradingDay`: 현재 거래일과 리그 운영 기간 (KST). 대기실이면 `null`
                       - `dayNumber`: 현재 거래일차 (1~7). 매일 09:00에 1씩 늘고, \
