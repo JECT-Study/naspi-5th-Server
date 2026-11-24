@@ -35,10 +35,9 @@ public class StockLookupController {
      * @throws NaspiBizException 리그에 입장하지 않은 회원인 경우
      */
     @Operation(
-            summary = "리그 종목 목록 조회 (이름·소개)",
+            summary = "리그 종목 목록 조회 (이름·소개·시세)",
             description = """
-                    리그에 상장된 종목의 이름과 소개를 종목 ID 순으로 조회한다. \
-                    시세(현재가 등)는 포함하지 않는다.
+                    리그에 상장된 종목의 이름·소개·시세를 종목 ID 순으로 조회한다.
 
                     **요청**
                     - 로그인 세션 쿠키가 필요하다. \
@@ -46,11 +45,15 @@ public class StockLookupController {
                     - 해당 리그에 입장한 회원(대기자 포함)만 조회할 수 있다.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 종목 배열 \
-                    (`stockId`, `name`, `description`, `listerName`, `mine`). \
+                    (`stockId`, `name`, `description`, `listerName`, `mine`, 시세 필드). \
                     `mine`이 `true`인 항목이 로그인한 회원 본인의 종목이다 \
                     ("내 종목"/"친구 종목" 구분, 소개 수정 아이콘 노출에 쓴다). \
                     `listerName`은 상장자 이름이고, 시작된 리그에서 탈퇴한 상장자면 `"탈퇴한 사용자"`다. 종목 이름·소개는 탈퇴 후에도 그대로다. \
                     상장된 종목이 없으면 빈 배열.
+                    시세 필드는 `currentPrice`(현재가), `basePrice`(기준가: 직전 거래일 종가, 첫 거래일은 시초가), \
+                    `upperLimitPrice`(상한가), `lowerLimitPrice`(하한가), `changeAmount`(기준가 대비 등락액), \
+                    `changeRate`(등락률 %, 소수점 첫째 자리 숫자, 예: `25.0`), `volume`(현재 거래일 거래량)이다. \
+                    리그 시작 전(대기실)에는 시세 필드가 모두 `null`이고, 종료된 리그는 마지막 거래일 값이다.
 
                     **실패 응답** (`code`는 3자리 문자열)
 
@@ -80,9 +83,9 @@ public class StockLookupController {
      * @throws NaspiBizException 리그에 입장하지 않은 회원이거나, 리그에 해당 종목이 없는 경우
      */
     @Operation(
-            summary = "리그 종목 개별 조회 (이름·소개)",
+            summary = "리그 종목 개별 조회 (이름·소개·시세)",
             description = """
-                    리그에 상장된 종목 하나의 이름과 소개를 조회한다. 시세는 포함하지 않는다.
+                    리그에 상장된 종목 하나의 이름·소개·시세를 조회한다.
 
                     **요청**
                     - 로그인 세션 쿠키가 필요하다. \
@@ -90,9 +93,13 @@ public class StockLookupController {
                     - 해당 리그에 입장한 회원(대기자 포함)만 조회할 수 있다.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 종목 \
-                    (`stockId`, `name`, `description`, `listerName`, `mine`). \
+                    (`stockId`, `name`, `description`, `listerName`, `mine`, 시세 필드). \
                     `mine`이 `true`이면 로그인한 회원 본인의 종목이다 (소개 수정 아이콘 노출에 쓴다). \
                     `listerName`은 상장자 이름이고, 시작된 리그에서 탈퇴한 상장자면 `"탈퇴한 사용자"`다. 종목 이름·소개는 탈퇴 후에도 그대로다.
+                    시세 필드는 `currentPrice`(현재가), `basePrice`(기준가: 직전 거래일 종가, 첫 거래일은 시초가), \
+                    `upperLimitPrice`(상한가), `lowerLimitPrice`(하한가), `changeAmount`(기준가 대비 등락액), \
+                    `changeRate`(등락률 %, 소수점 첫째 자리 숫자, 예: `25.0`), `volume`(현재 거래일 거래량)이다. \
+                    리그 시작 전(대기실)에는 시세 필드가 모두 `null`이고, 종료된 리그는 마지막 거래일 값이다.
 
                     **실패 응답** (`code`는 3자리 문자열)
 

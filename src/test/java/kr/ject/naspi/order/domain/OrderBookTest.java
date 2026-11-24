@@ -81,4 +81,57 @@ class OrderBookTest {
         assertThat(book.bestBid()).isEmpty();
         assertThat(book.bestAsk()).isEmpty();
     }
+
+    @Test
+    @DisplayName("호가는 매도·매수 각각 최대 5단계까지 최우선 호가부터 제공한다")
+    void levelsLimitedToDisplayDepth() {
+        List<Order> orders = new java.util.ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            orders.add(limit(i + 1, OrderSide.SELL, 10_100 + i * 100L, 1));
+            orders.add(limit(i + 11, OrderSide.BUY, 9_900 - i * 100L, 1));
+        }
+        OrderBook book = OrderBook.of(STOCK_ID, orders);
+
+        assertThat(book.levels(OrderSide.SELL, OrderBook.DISPLAY_DEPTH))
+                .extracting(OrderBookLevel::price)
+                .containsExactly(10_100L, 10_200L, 10_300L, 10_400L, 10_500L);
+        assertThat(book.levels(OrderSide.BUY, OrderBook.DISPLAY_DEPTH))
+                .extracting(OrderBookLevel::price)
+                .containsExactly(9_900L, 9_800L, 9_700L, 9_600L, 9_500L);
+    }
+
+    @Test
+    @DisplayName("같은 가격의 미체결 잔여 수량은 주문자와 관계없이 합산한다")
+    void levelsSumAcrossPlayers() {
+        Order partial = limit(1, OrderSide.SELL, 10_100, 10);
+        partial.fill(4);
+        OrderBook book = OrderBook.of(STOCK_ID, List.of(partial,
+                limit(2, OrderSide.SELL, 10_100, 3)));
+
+        assertThat(book.levels(OrderSide.SELL, OrderBook.DISPLAY_DEPTH))
+                .extracting(OrderBookLevel::price, OrderBookLevel::quantity)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(10_100L, 9L));
+    }
+
+    @Test
+    @DisplayName("주문이 없는 쪽은 빈 목록이다")
+    void levelsFewerThanDepth() {
+        OrderBook book = OrderBook.of(STOCK_ID, List.of(
+                limit(1, OrderSide.BUY, 9_900, 1),
+                limit(2, OrderSide.BUY, 9_800, 1),
+                limit(3, OrderSide.BUY, 9_700, 1)));
+
+        assertThat(book.levels(OrderSide.SELL, OrderBook.DISPLAY_DEPTH)).isEmpty();
+        assertThat(book.levels(OrderSide.BUY, OrderBook.DISPLAY_DEPTH)).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("최대 단계 수는 1 이상이어야 한다")
+    void invalidMaxLevels() {
+        OrderBook book = OrderBook.of(STOCK_ID, List.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> book.levels(OrderSide.BUY, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

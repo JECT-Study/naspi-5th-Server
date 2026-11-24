@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.BDDMockito.given;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -14,6 +15,7 @@ import kr.ject.naspi.league.application.LeaguePlayers;
 import kr.ject.naspi.league.application.LeaguePlayers.LeaguePlayer;
 import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.market.domain.Stock;
+import kr.ject.naspi.market.domain.StockDailyPrice;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.market.domain.StockRepository;
@@ -100,7 +102,7 @@ class LeagueStockLookupServiceTest {
         long other = list(1L, 11L, "남종목", "남 소개");
 
         assertThat(service.findOne(MEMBER_ID, 1L, mine))
-                .isEqualTo(new MemberStock(mine, "내종목", "내 소개", "나", true));
+                .isEqualTo(new MemberStock(mine, "내종목", "내 소개", "나", true, null));
         assertThat(service.findOne(MEMBER_ID, 1L, other).mine()).isFalse();
     }
 
@@ -124,6 +126,101 @@ class LeagueStockLookupServiceTest {
         assertThatThrownBy(() -> service.findOne(MEMBER_ID, 1L, stockId))
                 .isInstanceOfSatisfying(NaspiBizException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    @DisplayName("최초 거래일의 기준가는 시초가이고 상·하한가는 기준가 ±30%다")
+    void quoteOnFirstTradingDay() {
+        joined();
+        long id = openedStock(1L, PLAYER_ID);
+        entityManager.persist(StockDailyPrice.open(1L, id, 1, 10_000));
+
+        StockQuote quote = service.findOne(MEMBER_ID, 1L, id).quote();
+
+        assertThat(quote).isEqualTo(new StockQuote(10_000, 10_000, 13_000, 7_000, 0,
+                new BigDecimal("0.0"), 0));
+    }
+
+    @Test
+    @DisplayName("현재가는 최신 체결가이고 거래량은 체결 수량의 합계다")
+    void quoteAfterExecution() {
+        joined();
+        long id = openedStock(1L, PLAYER_ID);
+        StockDailyPrice day1 = entityManager.persist(StockDailyPrice.open(1L, id, 1, 10_000));
+        entityManager.find(Stock.class, id).applyTrade(12_000);
+        day1.addVolume(3);
+        entityManager.find(Stock.class, id).applyTrade(12_500);
+        day1.addVolume(2);
+
+        StockQuote quote = service.findAll(MEMBER_ID, 1L).get(0).quote();
+
+        assertThat(quote).isEqualTo(new StockQuote(12_500, 10_000, 13_000, 7_000, 2_500,
+                new BigDecimal("25.0"), 5));
+    }
+
+    @Test
+    @DisplayName("거래일이 바뀌면 직전 거래일 종가가 기준가가 되고 거래량은 0부터 다시 센다")
+    void quoteAfterTradingDayChange() {
+        joined();
+        long id = openedStock(1L, PLAYER_ID);
+        StockDailyPrice day1 = entityManager.persist(StockDailyPrice.open(1L, id, 1, 10_000));
+        entityManager.find(Stock.class, id).applyTrade(12_500);
+        day1.addVolume(5);
+        day1.close(12_500);
+        entityManager.persist(StockDailyPrice.open(1L, id, 2, 12_500));
+
+        StockQuote quote = service.findOne(MEMBER_ID, 1L, id).quote();
+
+        assertThat(quote).isEqualTo(new StockQuote(12_500, 12_500, 16_200, 8_800, 0,
+                new BigDecimal("0.0"), 0));
+    }
+
+    @Test
+    @DisplayName("거래일 전환 처리 전에는 직전 거래일 시세를 보여 준다")
+    void quoteBeforeTradingDayChangeProcessed() {
+        joined();
+        long id = openedStock(1L, PLAYER_ID);
+        StockDailyPrice day1 = entityManager.persist(StockDailyPrice.open(1L, id, 1, 10_000));
+        entityManager.find(Stock.class, id).applyTrade(11_000);
+        day1.addVolume(4);
+
+        StockQuote quote = service.findOne(MEMBER_ID, 1L, id).quote();
+
+        assertThat(quote.basePrice()).isEqualTo(10_000);
+        assertThat(quote.volume()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("대기실에서는 시세가 없다")
+    void noQuoteInWaitingRoom() {
+        joined();
+        long id = list(1L, PLAYER_ID, "내종목", "내 소개");
+
+        assertThat(service.findOne(MEMBER_ID, 1L, id).quote()).isNull();
+    }
+
+    @Test
+    @DisplayName("종료된 리그는 마지막 거래일의 시세를 그대로 보여 준다")
+    void quoteInEndedLeague() {
+        joined();
+        long id = openedStock(1L, PLAYER_ID);
+        entityManager.persist(StockDailyPrice.open(1L, id, 1, 10_000));
+        StockDailyPrice day2 = entityManager.persist(StockDailyPrice.open(1L, id, 2, 10_000));
+        entityManager.find(Stock.class, id).applyTrade(9_000);
+        day2.addVolume(7);
+
+        StockQuote quote = service.findOne(MEMBER_ID, 1L, id).quote();
+
+        assertThat(quote.currentPrice()).isEqualTo(9_000);
+        assertThat(quote.changeRate()).isEqualTo(new BigDecimal("-10.0"));
+        assertThat(quote.volume()).isEqualTo(7);
+    }
+
+    private long openedStock(long leagueId, long listerPlayerId) {
+        long id = list(leagueId, listerPlayerId, "내종목", "내 소개");
+        entityManager.find(Stock.class, id).open();
+        entityManager.flush();
+        return id;
     }
 
     private void joined() {
