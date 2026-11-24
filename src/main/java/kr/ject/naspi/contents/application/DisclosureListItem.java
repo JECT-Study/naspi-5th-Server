@@ -21,5 +21,11 @@ import java.util.List;
 public record DisclosureListItem(long disclosureId, long stockId, String title, String body,
                                  int tradingDay, LocalDateTime createdAt, long authorPlayerId,
                                  boolean mine, List<ImageUrl> images,
-                                 DisclosureReactionSummary reaction, CommentPreview comments) {
+                                 DisclosureReactionSummary reaction, CommentPreview comments)
+        implements FeedItem {
+
+    @Override
+    public FeedItemType type() {
+        return FeedItemType.DISCLOSURE;
+    }
 }

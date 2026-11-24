@@ -18,5 +18,11 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
  */
 public record NewsListItem(long newsId, long stockId, String title, String body,
                            NewsSentiment sentiment, int tradingDay, LocalDateTime createdAt,
-                           LocalDateTime publishedAt, CommentPreview comments) {
+                           LocalDateTime publishedAt, CommentPreview comments)
+        implements FeedItem {
+
+    @Override
+    public FeedItemType type() {
+        return FeedItemType.NEWS;
+    }
 }

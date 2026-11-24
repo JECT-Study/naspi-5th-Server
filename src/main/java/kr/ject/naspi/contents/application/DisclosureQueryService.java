@@ -2,9 +2,11 @@ package kr.ject.naspi.contents.application;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
 import kr.ject.naspi.contents.domain.NewsRepository;
+import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -30,6 +32,13 @@ public class DisclosureQueryService {
 
     /** 한 페이지 최대 개수. */
     public static final int MAX_PAGE_SIZE = 50;
+
+    /**
+     * 공시 상세에 주는 뉴스 상태. 생성 중(PENDING)·미생성(SKIPPED) 뉴스는 주지 않는다. 생성 실패(FAILED)는 작성자가
+     * 수동 재생성할 수 있도록 준다.
+     */
+    private static final Set<NewsStatus> SHOWN_NEWS_STATUSES =
+            Set.of(NewsStatus.PUBLISHED, NewsStatus.FAILED);
 
     private final DisclosureRepository disclosureRepository;
     private final ImageService imageService;
@@ -63,7 +72,7 @@ public class DisclosureQueryService {
     }
 
     /**
-     * 종목의 공시를 최신순으로 한 페이지 조회한다. 삭제된 공시는 빠진다.
+     * 종목의 공시를 작성 일시 최신순(같으면 ID 내림차순)으로 한 페이지 조회한다. 삭제된 공시는 빠진다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -71,16 +80,34 @@ public class DisclosureQueryService {
      * @param cursor 이전 페이지의 {@link DisclosurePage#nextCursor()}. 첫 페이지면 null
      * @param size 한 페이지 개수 (1~{@value #MAX_PAGE_SIZE})
      * @return 공시 목록 한 페이지
-     * @throws NaspiBizException 리그에 입장하지 않은 회원인 경우
+     * @throws NaspiBizException 리그에 입장하지 않았거나 커서 형식이 올바르지 않은 경우
      */
-    public DisclosurePage findByStock(long memberId, long leagueId, long stockId, Long cursor,
+    public DisclosurePage findByStock(long memberId, long leagueId, long stockId, String cursor,
                                       int size) {
         long playerId = viewerPlayerId(memberId, leagueId);
+        ContentCursor after = ContentCursor.decode(cursor, FeedItemType.DISCLOSURE);
         // 다음 페이지가 있는지 알기 위해 1개 더 읽는다
-        List<Disclosure> fetched = disclosureRepository.findPublishedByStock(leagueId, stockId,
-                cursor, size + 1);
+        List<Disclosure> fetched = disclosureRepository.findPublishedInLeague(leagueId, stockId,
+                after == null ? null : after.at(), after == null ? Long.MAX_VALUE : after.id(),
+                size + 1);
         boolean hasNext = fetched.size() > size;
         List<Disclosure> disclosures = hasNext ? fetched.subList(0, size) : fetched;
+        List<DisclosureListItem> items = toListItems(leagueId, playerId, disclosures);
+        String nextCursor = hasNext
+                ? ContentCursor.of(disclosures.get(disclosures.size() - 1)).encode() : null;
+        return new DisclosurePage(items, nextCursor);
+    }
+
+    /**
+     * 공시를 목록 항목으로 바꾼다. 통합 피드({@link FeedQueryService})도 같은 항목을 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 조회하는 플레이어 ID
+     * @param disclosures 공시 목록
+     * @return 목록 항목 (공시 순서 유지)
+     */
+    List<DisclosureListItem> toListItems(long leagueId, long playerId,
+                                         List<Disclosure> disclosures) {
         List<Long> ids = disclosures.stream().map(Disclosure::getId).toList();
 
         // 이미지·반응·댓글은 공시마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
@@ -89,7 +116,7 @@ public class DisclosureQueryService {
                 reactionService.summarizeAll(ids, playerId);
         Map<Long, CommentPreview> comments = commentService.previews(leagueId, ids, playerId);
 
-        List<DisclosureListItem> items = disclosures.stream()
+        return disclosures.stream()
                 .map(d -> new DisclosureListItem(d.getId(), d.getStockId(),
                         d.getTitle().getValue(), d.getBody().getValue(), d.getTradingDay(),
                         d.getCreatedAt(), d.getAuthorPlayerId(),
@@ -97,12 +124,10 @@ public class DisclosureQueryService {
                         images.getOrDefault(d.getId(), List.of()),
                         reactions.get(d.getId()), comments.get(d.getId())))
                 .toList();
-        Long nextCursor = hasNext ? ids.get(ids.size() - 1) : null;
-        return new DisclosurePage(items, nextCursor);
     }
 
     /**
-     * 공시 상세를 조회한다. 공시로 만든 AI 뉴스를 생성 상태와 함께 준다.
+     * 공시 상세를 조회한다. 공시로 만든 AI 뉴스는 발행됐거나 생성에 실패한 경우에만 생성 상태와 함께 준다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -126,7 +151,9 @@ public class DisclosureQueryService {
                 imageService.issueUrls(d.getId()),
                 reactionService.summarizeAll(List.of(d.getId()), playerId).get(d.getId()),
                 commentService.findAll(leagueId, d.getId(), playerId),
-                newsRepository.findByDisclosureId(d.getId()).map(DisclosureNews::from)
+                newsRepository.findByDisclosureId(d.getId())
+                        .filter(news -> SHOWN_NEWS_STATUSES.contains(news.getStatus()))
+                        .map(DisclosureNews::from)
                         .orElse(null));
     }
 

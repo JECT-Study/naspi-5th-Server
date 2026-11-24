@@ -69,12 +69,13 @@ class NewsControllerTest {
     @DisplayName("커서와 개수를 생략하면 첫 페이지를 기본 20개로 조회하고 뉴스 목록과 다음 커서를 준다")
     void defaultPage() throws Exception {
         given(newsQueryService.findByStock(MEMBER_ID, 3L, 11L, null, 20))
-                .willReturn(new NewsPage(List.of(item()), 30L));
+                .willReturn(new NewsPage(List.of(item()), "next"));
 
         mockMvc.perform(get(URL).with(loginMember()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
-                .andExpect(jsonPath("$.data.nextCursor").value(30))
+                .andExpect(jsonPath("$.data.nextCursor").value("next"))
+                .andExpect(jsonPath("$.data.items[0].type").value("NEWS"))
                 .andExpect(jsonPath("$.data.items[0].newsId").value(30))
                 .andExpect(jsonPath("$.data.items[0].sentiment").value("POSITIVE"))
                 .andExpect(jsonPath("$.data.items[0].commentCount").value(3))

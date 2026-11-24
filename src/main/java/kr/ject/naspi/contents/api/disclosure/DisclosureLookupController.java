@@ -56,14 +56,15 @@ public class DisclosureLookupController {
     @Operation(
             summary = "종목별 공시 목록",
             description = """
-                    종목에 등록된 공시를 최신순으로 조회한다. 삭제된 공시는 나오지 않는다. \
+                    종목에 등록된 공시를 작성 일시(`createdAt`) 최신순으로 조회한다. 삭제된 공시는 나오지 않는다. \
                     무한 스크롤용 커서 페이징이다.
 
                     **요청**
                     - 로그인 세션 쿠키가 필요하다. \
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
                     - 리그에 입장한 회원만 조회할 수 있다. 종료된 리그도 조회할 수 있다.
-                    - `cursor`: 첫 페이지는 생략, 다음 페이지는 이전 응답의 `nextCursor`.
+                    - `cursor`: 첫 페이지는 생략, 다음 페이지는 이전 응답의 `nextCursor`를 그대로 보낸다 \
+                    (문자열, 뉴스 목록·통합 피드와 같은 형식).
                     - `size`: 1~50, 기본 20. 범위를 벗어나면 HTTP 400.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data.items`에 공시 목록, \
@@ -77,6 +78,7 @@ public class DisclosureLookupController {
                     | HTTP | code | 상황 | 프론트 처리 |
                     |---|---|---|---|
                     | 200 | `"004"` | 리그에 입장하지 않은 회원 (리그가 없는 경우 포함) | 안내 후 홈으로 |
+                    | 200 | `"002"` | `cursor` 형식이 올바르지 않음 | 첫 페이지부터 다시 조회 |
                     | 400 | `"002"` | `size`가 1~50을 벗어남 | 요청 값 확인 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
@@ -85,7 +87,7 @@ public class DisclosureLookupController {
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId,
             @PathVariable long stockId,
-            @RequestParam(required = false) Long cursor,
+            @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "" + DisclosureQueryService.DEFAULT_PAGE_SIZE)
             @Min(1) @Max(DisclosureQueryService.MAX_PAGE_SIZE) int size) {
         return Result.success(DisclosurePageResponse.from(disclosureQueryService.findByStock(
@@ -116,11 +118,10 @@ public class DisclosureLookupController {
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 공시 상세. 목록 항목과 같은 필드에서 \
                     `previewComment` 대신 `comments`를 주고 `news`가 더해진다.
                     - `images`: 첨부 순서대로 전체 이미지 (없으면 빈 배열).
-                    - `news`: 공시로 만든 AI 뉴스. `status`가 `PENDING`(생성 중), `PUBLISHED`(발행), \
-                    `SKIPPED`(기사로 쓸 내용이 없어 미생성), `FAILED`(생성 실패) 중 하나다. \
-                    `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재)는 \
-                    `PUBLISHED`일 때만 있고 나머지 상태에서는 `null`이다. \
-                    뉴스가 없는 공시는 `news`가 `null`이다.
+                    - `news`: 공시로 만든 AI 뉴스. `status`가 `PUBLISHED`(발행) 또는 `FAILED`(생성 실패)일 때만 \
+                    준다. `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재)는 \
+                    `PUBLISHED`일 때만 있고 `FAILED`면 `null`이다. 생성 중이거나 기사로 쓸 내용이 없어 생성하지 않은 뉴스는 주지 않아 \
+                    `news`가 `null`이다.
                     """ + FIELDS + """
 
                     **실패 응답** (`code`는 3자리 문자열)

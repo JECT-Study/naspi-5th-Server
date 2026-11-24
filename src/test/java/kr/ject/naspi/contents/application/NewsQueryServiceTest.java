@@ -76,12 +76,42 @@ class NewsQueryServiceTest {
         assertThat(page1.items()).extracting(NewsListItem::newsId).containsExactly(third, second);
         assertThat(page1.items()).extracting(NewsListItem::sentiment)
                 .containsExactly(NewsSentiment.POSITIVE, NewsSentiment.NEGATIVE);
-        assertThat(page1.nextCursor()).isEqualTo(second);
+        assertThat(page1.nextCursor()).isNotNull();
 
         NewsPage page2 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
                 page1.nextCursor(), 2);
         assertThat(page2.items()).extracting(NewsListItem::newsId).containsExactly(first);
         assertThat(page2.nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("종목별 뉴스 목록은 생성 순서가 아니라 발행 일시 최신순이고, 커서로 이어 받아도 빠지거나 겹치지 않는다")
+    void publishedOrder() {
+        // 먼저 생성된 뉴스가 재생성 등으로 더 늦게 발행됐다
+        long latePublished = publishedAt(PUBLISHED_AT.plusMinutes(30));
+        long early = publishedAt(PUBLISHED_AT);
+        long middle = publishedAt(PUBLISHED_AT.plusMinutes(10));
+
+        NewsPage page1 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 2);
+        assertThat(page1.items()).extracting(NewsListItem::newsId)
+                .containsExactly(latePublished, middle);
+        assertThat(page1.nextCursor()).isNotNull();
+
+        NewsPage page2 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
+                page1.nextCursor(), 2);
+        assertThat(page2.items()).extracting(NewsListItem::newsId).containsExactly(early);
+        assertThat(page2.nextCursor()).isNull();
+    }
+
+    @Test
+    @DisplayName("형식이 올바르지 않거나 공시 커서를 보내면 거절한다")
+    void invalidCursor() {
+        String disclosureCursor = new ContentCursor(NOW, FeedItemType.DISCLOSURE, 1L).encode();
+
+        for (String cursor : new String[] {"not-a-cursor", "30", disclosureCursor}) {
+            assertBiz(() -> queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
+                    cursor, 20), ErrorCode.INVALID_INPUT);
+        }
     }
 
     @Test
@@ -195,6 +225,16 @@ class NewsQueryServiceTest {
     private long published(long leagueId, long stockId, NewsSentiment sentiment) {
         return news(leagueId, stockId, new NewsGenerationResult.Generated("뉴스 제목", "뉴스 본문",
                 sentiment, "요약"));
+    }
+
+    /** 종목에 발행 일시를 지정한 뉴스를 만든다. */
+    private long publishedAt(LocalDateTime publishedAt) {
+        Disclosure disclosure = entityManager.persistAndFlush(Disclosure.publish(LEAGUE_ID,
+                STOCK_ID, 70L, DisclosureTitle.of("공시"), DisclosureBody.of("본문"), 2, NOW));
+        News news = News.requestFrom(disclosure, NOW);
+        news.complete(new NewsGenerationResult.Generated("뉴스 제목", "뉴스 본문",
+                NewsSentiment.POSITIVE, "요약"), publishedAt);
+        return entityManager.persistAndFlush(news).getId();
     }
 
     /** 공시와 뉴스를 만든다. result가 null이면 생성 중(PENDING)으로 둔다. */

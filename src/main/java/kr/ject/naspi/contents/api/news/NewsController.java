@@ -54,14 +54,16 @@ public class NewsController {
     @Operation(
             summary = "종목별 뉴스 목록",
             description = """
-                    종목의 발행된 뉴스를 최신순으로 조회한다. 생성 중·미생성·실패한 뉴스는 나오지 않는다. \
+                    종목의 발행된 뉴스를 발행 일시(`publishedAt`) 최신순으로 조회한다. \
+                    생성 중·미생성·실패한 뉴스는 나오지 않는다. \
                     무한 스크롤용 커서 페이징이다.
 
                     **요청**
                     - 로그인 세션 쿠키가 필요하다. \
                     `credentials: 'include'`(axios: `withCredentials: true`)로 호출한다.
                     - 리그에 입장한 회원만 조회할 수 있다. 종료된 리그도 조회할 수 있다.
-                    - `cursor`: 첫 페이지는 생략, 다음 페이지는 이전 응답의 `nextCursor`.
+                    - `cursor`: 첫 페이지는 생략, 다음 페이지는 이전 응답의 `nextCursor`를 그대로 보낸다 \
+                    (문자열, 공시 목록·통합 피드와 같은 형식).
                     - `size`: 1~50, 기본 20. 범위를 벗어나면 HTTP 400.
 
                     **성공 시** HTTP 200, `code` `"000"`, `data.items`에 뉴스 목록, \
@@ -74,6 +76,7 @@ public class NewsController {
                     | HTTP | code | 상황 | 프론트 처리 |
                     |---|---|---|---|
                     | 200 | `"004"` | 리그에 입장하지 않은 회원 (리그가 없는 경우 포함) | 안내 후 홈으로 |
+                    | 200 | `"002"` | `cursor` 형식이 올바르지 않음 | 첫 페이지부터 다시 조회 |
                     | 400 | `"002"` | `size`가 1~50을 벗어남 | 요청 값 확인 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
@@ -82,7 +85,7 @@ public class NewsController {
             @Parameter(hidden = true) @AuthenticationPrincipal LoginMember loginMember,
             @PathVariable long leagueId,
             @PathVariable long stockId,
-            @RequestParam(required = false) Long cursor,
+            @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "" + NewsQueryService.DEFAULT_PAGE_SIZE)
             @Min(1) @Max(NewsQueryService.MAX_PAGE_SIZE) int size) {
         return Result.success(NewsPageResponse.from(newsQueryService.findByStock(

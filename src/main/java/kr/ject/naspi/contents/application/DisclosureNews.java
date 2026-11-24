@@ -5,13 +5,14 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
 import kr.ject.naspi.contents.domain.NewsStatus;
 
 /**
- * 공시로 만든 AI 뉴스. 제목·본문·호재/악재는 발행된({@link NewsStatus#PUBLISHED}) 뉴스에만 있다.
+ * 공시로 만든 AI 뉴스. 발행({@link NewsStatus#PUBLISHED})·생성 실패({@link NewsStatus#FAILED}) 뉴스만 담고,
+ * 제목·본문·호재/악재는 발행된 뉴스에만 있다.
  *
  * @param newsId 뉴스 ID
- * @param status 생성 상태
- * @param title 제목. 발행 전이면 null
- * @param body 본문. 발행 전이면 null
- * @param sentiment 호재·악재. 발행 전이면 null
+ * @param status 생성 상태 (PUBLISHED, FAILED)
+ * @param title 제목. 생성 실패면 null
+ * @param body 본문. 생성 실패면 null
+ * @param sentiment 호재·악재. 생성 실패면 null
  */
 public record DisclosureNews(long newsId, NewsStatus status, String title, String body,
                              NewsSentiment sentiment) {

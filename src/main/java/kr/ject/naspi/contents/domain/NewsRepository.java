@@ -1,5 +1,6 @@
 package kr.ject.naspi.contents.domain;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,13 +42,16 @@ public interface NewsRepository {
     Optional<News> findById(Long id);
 
     /**
-     * 종목의 발행된(PUBLISHED) 뉴스를 최신순(ID 내림차순)으로 찾는다.
+     * 리그의 발행된(PUBLISHED) 뉴스를 발행 일시 최신순(같으면 ID 내림차순)으로 기준 위치 다음부터 찾는다.
+     * 발행 일시가 {@code before}보다 이르거나, 같으면서 ID가 {@code idBefore}보다 작은 뉴스만 찾는다.
      *
      * @param leagueId 리그 ID
-     * @param stockId 종목 ID
-     * @param cursor 이 ID보다 작은 뉴스만 찾는다. 첫 페이지면 null
+     * @param stockId 종목 ID. null이면 리그의 모든 종목
+     * @param before 기준 발행 일시. 첫 페이지면 null
+     * @param idBefore 발행 일시가 기준과 같은 뉴스의 ID 상한 (이 값 미만). 첫 페이지면 쓰지 않는다
      * @param limit 최대 개수
-     * @return 뉴스 목록
+     * @return 뉴스 목록 (발행 일시 내림차순, ID 내림차순)
      */
-    List<News> findPublishedByStock(long leagueId, long stockId, Long cursor, int limit);
+    List<News> findPublishedInLeague(long leagueId, Long stockId, LocalDateTime before,
+                                     long idBefore, int limit);
 }

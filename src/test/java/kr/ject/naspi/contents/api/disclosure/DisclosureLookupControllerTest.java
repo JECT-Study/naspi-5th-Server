@@ -64,7 +64,7 @@ class DisclosureLookupControllerTest {
     @Test
     @DisplayName("종목별 공시 목록을 커서·개수로 조회하면 공시 목록과 다음 커서를 돌려준다")
     void findByStock() throws Exception {
-        given(disclosureQueryService.findByStock(MEMBER_ID, 3L, 11L, 40L, 2))
+        given(disclosureQueryService.findByStock(MEMBER_ID, 3L, 11L, "prev", 2))
                 .willReturn(new DisclosurePage(List.of(new DisclosureListItem(30L, 11L, "제목",
                         "본문", 2, CREATED_AT, 70L, false,
                         List.of(new ImageUrl(100L, "https://signed/a", EXPIRES_AT),
@@ -72,12 +72,13 @@ class DisclosureLookupControllerTest {
                         new DisclosureReactionSummary(30L, 4, 1,
                                 DisclosureReactionType.LIKE),
                         new CommentPreview(3, new CommentItem(9L, "댓글", 71L, "상대", false,
-                                CREATED_AT)))), 30L));
+                                CREATED_AT)))), "next"));
 
-        mockMvc.perform(get(URL).param("cursor", "40").param("size", "2").with(loginMember()))
+        mockMvc.perform(get(URL).param("cursor", "prev").param("size", "2").with(loginMember()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("000"))
-                .andExpect(jsonPath("$.data.nextCursor").value(30))
+                .andExpect(jsonPath("$.data.nextCursor").value("next"))
+                .andExpect(jsonPath("$.data.items[0].type").value("DISCLOSURE"))
                 .andExpect(jsonPath("$.data.items[0].disclosureId").value(30))
                 .andExpect(jsonPath("$.data.items[0].title").value("제목"))
                 .andExpect(jsonPath("$.data.items[0].tradingDay").value(2))

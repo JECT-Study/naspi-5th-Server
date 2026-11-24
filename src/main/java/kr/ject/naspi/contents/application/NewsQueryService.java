@@ -52,7 +52,7 @@ public class NewsQueryService {
     }
 
     /**
-     * 종목의 발행된 뉴스를 최신순으로 한 페이지 조회한다.
+     * 종목의 발행된 뉴스를 발행 일시 최신순(같으면 ID 내림차순)으로 한 페이지 조회한다.
      *
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
@@ -60,28 +60,42 @@ public class NewsQueryService {
      * @param cursor 이전 페이지의 {@link NewsPage#nextCursor()}. 첫 페이지면 null
      * @param size 한 페이지 개수 (1~{@value #MAX_PAGE_SIZE})
      * @return 뉴스 목록 한 페이지
-     * @throws NaspiBizException 리그에 입장하지 않은 회원인 경우
+     * @throws NaspiBizException 리그에 입장하지 않았거나 커서 형식이 올바르지 않은 경우
      */
-    public NewsPage findByStock(long memberId, long leagueId, long stockId, Long cursor,
+    public NewsPage findByStock(long memberId, long leagueId, long stockId, String cursor,
                                 int size) {
         long playerId = viewerPlayerId(memberId, leagueId);
+        ContentCursor after = ContentCursor.decode(cursor, FeedItemType.NEWS);
         // 다음 페이지가 있는지 알기 위해 1개 더 읽는다
-        List<News> fetched = newsRepository.findPublishedByStock(leagueId, stockId, cursor,
+        List<News> fetched = newsRepository.findPublishedInLeague(leagueId, stockId,
+                after == null ? null : after.at(), after == null ? Long.MAX_VALUE : after.id(),
                 size + 1);
         boolean hasNext = fetched.size() > size;
         List<News> news = hasNext ? fetched.subList(0, size) : fetched;
+        List<NewsListItem> items = toListItems(leagueId, playerId, news);
+        String nextCursor = hasNext ? ContentCursor.of(news.get(news.size() - 1)).encode() : null;
+        return new NewsPage(items, nextCursor);
+    }
+
+    /**
+     * 뉴스를 목록 항목으로 바꾼다. 통합 피드({@link FeedQueryService})도 같은 항목을 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 조회하는 플레이어 ID
+     * @param news 뉴스 목록
+     * @return 목록 항목 (뉴스 순서 유지)
+     */
+    List<NewsListItem> toListItems(long leagueId, long playerId, List<News> news) {
         List<Long> ids = news.stream().map(News::getId).toList();
 
         // 댓글은 뉴스마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
         Map<Long, CommentPreview> comments = commentService.previews(leagueId, ids, playerId);
 
-        List<NewsListItem> items = news.stream()
+        return news.stream()
                 .map(n -> new NewsListItem(n.getId(), n.getStockId(), n.getTitle(), n.getBody(),
                         n.getSentiment(), n.getTradingDay(), n.getCreatedAt(),
                         n.getPublishedAt(), comments.get(n.getId())))
                 .toList();
-        Long nextCursor = hasNext ? ids.get(ids.size() - 1) : null;
-        return new NewsPage(items, nextCursor);
     }
 
     /**

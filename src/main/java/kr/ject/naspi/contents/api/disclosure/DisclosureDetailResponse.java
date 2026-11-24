@@ -23,7 +23,7 @@ import kr.ject.naspi.contents.domain.DisclosureReactionType;
  * @param myReaction 내 반응. 없으면 null
  * @param commentCount 댓글 수
  * @param comments 댓글 전체 (오래된 순). 댓글이 없으면 빈 목록
- * @param news 공시로 만든 AI 뉴스. 없으면 null
+ * @param news 공시로 만든 AI 뉴스. 발행·생성 실패일 때만 있고, 생성 중·미생성이면 null
  */
 record DisclosureDetailResponse(long disclosureId, long stockId, String title, String body,
                                 int tradingDay, LocalDateTime createdAt, long authorPlayerId,
