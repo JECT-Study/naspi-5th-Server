@@ -41,8 +41,10 @@ public class LeagueService {
      * @param memberId 입장할 회원 ID
      * @param inviteCode 입력한 초대 코드 (대소문자 구분 없음)
      * @return 입장한 리그
-     * @throws NaspiBizException 초대 코드에 해당하는 대기실이 없거나 (이미 시작된 리그, 만료된 대기실 포함),
-     *         이미 입장한 리그이거나, 이미 리그 5개에 참여 중이거나, 리그 인원이 10명인 경우
+     * @throws NaspiBizException 초대 코드에 해당하는 리그가 없거나({@code INVITE_CODE_NOT_FOUND}),
+     *         삭제·만료된 대기실이거나({@code LEAGUE_NOT_FOUND}), 이미 시작·종료된 리그이거나
+     *         ({@code LEAGUE_ALREADY_STARTED}), 이미 입장한 리그이거나, 이미 리그 5개에 참여 중이거나,
+     *         리그 인원이 10명인 경우
      */
     @Transactional
     public JoinedLeague join(long memberId, String inviteCode) {
@@ -50,8 +52,9 @@ public class LeagueService {
         // 초대 코드로 리그를 찾고 유효한 초대 코드인지 검증한다.
         LocalDateTime now = LocalDateTime.now(clock);
         League league = leagueRepository.findWithLockByInviteCode(InviteCode.of(inviteCode))
-                .filter(found -> found.isOpenForInvitation(now))
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INVITE_CODE_NOT_FOUND));
+        // 시작된 리그는 코드를 유지하므로 이미 시작된 리그임을 구분해 알린다.
+        league.requireWaitingRoom(now);
 
         // 이미 참여중인 리그인지 확인
         if (playerRepository.existsByLeagueIdAndMemberId(league.getId(), memberId)) {

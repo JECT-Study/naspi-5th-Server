@@ -51,7 +51,10 @@ public class League {
     @Embedded
     private LeagueName name;
 
-    /** 대기실 초대 코드. 리그가 시작되거나 대기실이 만료되면 비어 있다. */
+    /**
+     * 대기실 초대 코드. 삭제·만료·종료된 리그는 비어 있다. 시작된 리그는 입장 시 '이미 시작된 리그'를
+     * 알리기 위해 코드를 유지한다 (리그 종료 처리에서 비운다).
+     */
     @Embedded
     private InviteCode inviteCode;
 
@@ -103,7 +106,7 @@ public class League {
 
     /**
      * 초대를 마감해 초대 코드를 비운다. 비워진 코드로는 입장할 수 없고, 다른 리그에 다시 발급될 수 있다.
-     * 리그가 시작되거나 대기실이 만료될 때 호출된다.
+     * 대기실이 삭제·만료되거나 리그가 종료될 때 호출된다.
      */
     public void closeInvitation() {
         this.inviteCode = null;
@@ -126,7 +129,8 @@ public class League {
     }
 
     /**
-     * 리그를 시작한다. 시작 일시와 종료 일시를 기록하고 초대 코드를 폐기하므로, 이후에는 아무도 새로 입장할 수 없다.
+     * 리그를 시작한다. 시작 일시와 종료 일시를 기록한다. 이후에는 아무도 새로 입장할 수 없지만, 초대 코드는
+     * 유지해 입장 시도에 '이미 시작된 리그'를 알린다.
      *
      * <p>정책 (docs/policies/v1/domain/league.md "리그 시작 및 운영"): 종료 일시는 시작의 KST 날짜 + 7일, 09:00 KST이며,
      * 종료일 변경과 조기 종료는 할 수 없다.
@@ -155,7 +159,6 @@ public class League {
         this.status = LeagueStatus.STARTED;
         this.startedAt = now;
         this.endsAt = new TradingSchedule(now).endsAt();
-        closeInvitation();
     }
 
     /**
