@@ -21,6 +21,9 @@ naspi:
   cors:
     # 첫 번째가 로그인 후 기본 이동 출처
     allowed-origins: https://front.test,https://local-front.test:5173
+  # 모킹 로그인 키 (테스트 전용 값)
+  mock-login:
+    key: mock-login-test-key
   # Swagger 접속 계정 (테스트 전용 값)
   swagger:
     username: swagger-test

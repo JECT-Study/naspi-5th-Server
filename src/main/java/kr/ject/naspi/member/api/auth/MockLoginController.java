@@ -10,11 +10,15 @@ import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.member.application.MemberAuthService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 카카오 인증 없이 테스트 회원으로 로그인한다 (E2E 테스트 전용).
@@ -23,15 +27,23 @@ import org.springframework.web.bind.annotation.RestController;
  * 실수로 열리지 않도록 "운영이 아니면 허용"이 아니라 허용할 프로필을 나열한다. 프로필을 지정하지 않으면
  * production으로 동작하므로({@code spring.profiles.default}) 막히고, production이 함께 지정된 경우도 막힌다.
  *
+ * <p>dev API는 공개 주소이므로 키({@code naspi.mock-login.key})를 아는 요청만 받는다. 키가 설정되지 않았거나 틀리면
+ * 404로 응답한다. 요청 로그에 본문이 남으므로 키는 헤더로 받는다.
+ *
  * <p>테스트 회원은 음수 카카오 회원 번호로 가입하므로 실제 카카오 회원으로는 로그인할 수 없다.
  */
 @Tag(name = "인증", description = "카카오 로그인과 회원가입")
 @RestController
 @RequestMapping("/api/auth")
 @Profile("(local | development | test) & !production")
+@EnableConfigurationProperties(MockLoginProperties.class)
 @RequiredArgsConstructor
 public class MockLoginController {
 
+    /** 모킹 로그인 키를 보내는 헤더. */
+    static final String KEY_HEADER = "X-Mock-Login-Key";
+
+    private final MockLoginProperties properties;
     private final MemberAuthService memberAuthService;
     private final LoginSession loginSession;
     private final SignupSession signupSession;
@@ -39,10 +51,12 @@ public class MockLoginController {
     /**
      * 테스트 회원으로 로그인한다. 처음 쓰는 번호면 가입한 뒤 로그인한다.
      *
+     * @param key 모킹 로그인 키
      * @param request 모킹 로그인 요청
      * @param httpRequest 요청
      * @param httpResponse 응답
      * @return 로그인한 회원 ID
+     * @throws ResponseStatusException 키가 없거나 틀린 경우 (404)
      * @throws NaspiBizException 처음 쓰는 번호인데 이름이 규칙에 맞지 않는 경우
      */
     @Operation(
@@ -51,6 +65,7 @@ public class MockLoginController {
                     카카오 인증 없이 테스트 회원으로 로그인한다. 운영(production)에는 없는 API다 (404).
 
                     **요청**
+                    - `X-Mock-Login-Key` 헤더: 모킹 로그인 키.
                     - `userNo`: 테스트 회원 번호 1~1000. 같은 번호는 항상 같은 회원이다. \
                     여러 명이 필요하면 번호를 다르게 보낸다.
                     - `name`: 처음 쓰는 번호로 가입할 때의 이름 (1~5자 한글, 생략하면 `테스터`). \
@@ -65,12 +80,18 @@ public class MockLoginController {
                     | HTTP | code | 상황 |
                     |---|---|---|
                     | 200 | `"101"` | 처음 쓰는 번호인데 이름이 규칙에 맞지 않음 |
+                    | 404 | `"005"` | 키가 없거나 틀림 |
                     | 400 | `"002"` | `userNo` 누락 또는 범위(1~1000) 밖 |
                     """)
     @PostMapping("/mock-login")
-    public Result<MockLoginResponse> login(@Valid @RequestBody MockLoginRequest request,
+    public Result<MockLoginResponse> login(@RequestHeader(name = KEY_HEADER, required = false)
+                                           String key,
+                                           @Valid @RequestBody MockLoginRequest request,
                                            HttpServletRequest httpRequest,
                                            HttpServletResponse httpResponse) {
+        if (!properties.matches(key)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
         long kakaoId = request.mockKakaoId();
         long memberId = memberAuthService.findMemberId(kakaoId).orElseGet(() ->
                 memberAuthService.joinWithInputName(kakaoId, request.nameOrDefault()));

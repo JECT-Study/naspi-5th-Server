@@ -100,6 +100,10 @@ naspi:
   swagger:
     username: ${SWAGGER_USERNAME:nspusr}
     password: ${SWAGGER_PASSWORD:}
+  # 모킹 로그인(E2E 테스트 전용) 키. dev 만 k8s Secret(naspi-mock-login)으로 주입한다. 비어 있으면 모든 요청을 거절한다.
+  # 운영은 MockLoginController 가 등록되지 않으므로(@Profile) 값이 있어도 쓰이지 않는다. 운영에는 넣지 않는다.
+  mock-login:
+    key: ${MOCK_LOGIN_KEY:}
   # 실시간 메시지 (STOMP over WebSocket, 엔드포인트 /ws). WebSocketProperties 참고
   websocket:
     # 서버·클라이언트 heartbeat 간격
@@ -207,6 +211,9 @@ naspi:
   cors:
     # 로컬 프론트 (Vite 기본 포트 5173)
     allowed-origins: http://localhost:5173
+  # 로컬 서버 전용 값
+  mock-login:
+    key: local
   # 로컬은 GCP 인증 없이 파일 시스템에 저장하고 /local-images/** 로 내려준다 (spring.web.resources 위 설정).
   # 실제 GCS 로 확인하려면 storage 를 gcs 로 바꾸고 서비스 계정 impersonation 으로 ADC 로그인한다
   # (gcloud auth application-default login --impersonate-service-account=naspi-gcs-sa@naspi-511311.iam.gserviceaccount.com).

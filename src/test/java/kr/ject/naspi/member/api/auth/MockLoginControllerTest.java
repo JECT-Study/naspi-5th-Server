@@ -20,6 +20,7 @@ import kr.ject.naspi.member.application.MemberAuthService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -34,6 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @ActiveProfiles("test")
 @WebMvcTest(MockLoginController.class)
@@ -115,8 +117,43 @@ class MockLoginControllerTest {
         then(memberAuthService).shouldHaveNoInteractions();
     }
 
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "wrong-key", "mock-login-test-key "})
+    @DisplayName("키가 없거나 틀리면 404로 응답하고 로그인되지 않는다")
+    void invalidKey(String key) throws Exception {
+        MockHttpServletRequestBuilder request = post("/api/auth/mock-login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userNo\": 1}");
+        if (key != null) {
+            request.header("X-Mock-Login-Key", key);
+        }
+
+        MvcResult result = mockMvc.perform(request)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.NOT_FOUND.getCode()))
+                .andReturn();
+
+        assertThat(result.getRequest().getSession(false)).isNull();
+        then(memberAuthService).shouldHaveNoInteractions();
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", " "})
+    @DisplayName("키가 설정되지 않았으면 어떤 키를 보내도 거절한다")
+    void rejectWhenKeyNotConfigured(String configured) {
+        MockLoginProperties properties = new MockLoginProperties(configured);
+
+        assertThat(properties.matches(null)).isFalse();
+        assertThat(properties.matches("")).isFalse();
+        assertThat(properties.matches(" ")).isFalse();
+        assertThat(properties.matches("any")).isFalse();
+    }
+
     private ResultActions mockLogin(String body) throws Exception {
         return mockMvc.perform(post("/api/auth/mock-login")
+                .header("X-Mock-Login-Key", "mock-login-test-key")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }
