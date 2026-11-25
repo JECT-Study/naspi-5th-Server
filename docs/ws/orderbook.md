@@ -1,4 +1,4 @@
-# 호가 (WebSocket)
+# 호가 토픽
 
 종목 하나의 매도·매수 호가(가격별 미체결 잔량)를 실시간으로 받습니다. 종목 상세 화면의 호가창에서 씁니다.
 
@@ -14,7 +14,8 @@
 | 구독 | `/topic/leagues/{leagueId}/stocks/{stockId}/orderbook` |
 | 구독 권한 | 로그인 회원 누구나 |
 | 메시지 종류 (`type`) | `ORDER_BOOK` |
-| 전달 주기 | 1초마다 (더미). 구독자가 없으면 보내지 않습니다 |
+| 전달 시점 | 1초마다 (더미). 구독자가 없으면 보내지 않습니다 |
+| 대응 REST | 없음 (TODO: 추가 예정) |
 | 발행 (클라이언트 → 서버) | 없음 |
 
 ---
@@ -69,7 +70,7 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 
 | **헤더** | **값** | **필수** | **비고** |
 | --- | --- | --- | --- |
-| destination | `/topic/leagues/{leagueId}/stocks/{stockId}/orderbook` | O | |
+| destination | `/topic/leagues/{leagueId}/stocks/{stockId}/orderbook` | O |  |
 | id | 구독 ID | O | 클라이언트가 정하는 값. STOMP 라이브러리가 자동으로 만듭니다 |
 
 ```
@@ -134,9 +135,10 @@ message-id:a1b2c3-0
 
 ### 메시지 처리 방법
 
-- 메시지는 바뀐 부분만이 아니라 **그 시점의 전체 상태**를 담습니다. 받은 값으로 화면 상태를 통째로 덮어씁니다.
+- 메시지는 바뀐 부분이 아니라 **그 시점의 상태**를 담습니다. 이전 메시지와 비교해 변경분을 계산하지 않습니다.
 - 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
-- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지로 덮어씁니다.
+- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
+- 받은 값으로 화면 상태를 통째로 덮어씁니다.
 - 호가창을 위에서 아래로 높은 가격부터 그린다면, `asks`는 **뒤집어서**(높은 가격부터) 위쪽에, `bids`는 그대로 아래쪽에 놓습니다.
 - 다른 종목으로 화면이 바뀌면 이전 종목 구독을 해지하고 새 종목을 구독합니다.
 
@@ -181,13 +183,13 @@ content-length:0
 1. **없는 리그·종목 ID로 구독한 경우:** 지금은 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
 2. **더미 응답:** 종목과 관계없이 항상 위 예시와 같은 매도·매수 5단계를 보냅니다. 값도 바뀌지 않습니다.
 3. **호가 단계 수:** 실제 구현에서는 미체결 주문이 있는 가격만 오므로 5단계보다 적거나 많을 수 있고, 빈 배열일 수도 있습니다.
-4. **연결이 끊긴 동안의 호가:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 호가를 받습니다. (TODO: 호가 조회 REST API 추가 예정)
+4. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 호가를 받습니다. (TODO: 호가 조회 REST API 추가 예정)
 
 ---
 
 ## 6. FE 연동 예시
 
-[`@stomp/stompjs`](https://stomp-js.github.io/) 7.x를 사용합니다.
+`@stomp/stompjs` 7.x를 사용합니다.
 
 ```bash
 npm install @stomp/stompjs
@@ -197,7 +199,7 @@ npm install @stomp/stompjs
 
 모든 토픽이 연결 하나를 같이 씁니다. 다른 토픽 문서에서 이미 만들었다면 그대로 재사용합니다.
 
-```ts
+```tsx
 import { Client, IMessage } from '@stomp/stompjs';
 
 /** 모든 토픽 메시지의 공통 형식. */
@@ -283,7 +285,9 @@ export type OrderBook = {
   asks: OrderBookLevel[]; // 낮은 가격부터
   bids: OrderBookLevel[]; // 높은 가격부터
 };
+```
 
+```tsx
 /** 종목 하나의 호가를 실시간으로 받는다. */
 export function useOrderBook(leagueId: number, stockId: number) {
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);

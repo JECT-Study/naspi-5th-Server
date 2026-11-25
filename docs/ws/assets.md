@@ -1,4 +1,4 @@
-# 내 자산 (WebSocket)
+# 내 자산 토픽
 
 리그에서 내 평가금·예수금·보유 종목을 실시간으로 받습니다. 내 자산 화면과 주문 화면(주문 가능 현금)에서 씁니다.
 
@@ -14,7 +14,8 @@
 | 구독 | `/topic/leagues/{leagueId}/players/{playerId}/assets` |
 | 구독 권한 | 본인만 (`playerId`가 로그인 회원의 해당 리그 플레이어 ID와 같아야 함) |
 | 메시지 종류 (`type`) | `ASSET` |
-| 전달 주기 | 1초마다 (더미). 구독자가 없으면 보내지 않습니다 |
+| 전달 시점 | 1초마다 (더미) ([전달 시점](#전달-시점)). 구독자가 없으면 보내지 않습니다 |
+| 대응 REST | `GET /api/leagues/{leagueId}/assets/me` |
 | 발행 (클라이언트 → 서버) | 없음 |
 
 ---
@@ -69,7 +70,7 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 
 | **헤더** | **값** | **필수** | **비고** |
 | --- | --- | --- | --- |
-| destination | `/topic/leagues/{leagueId}/players/{playerId}/assets` | O | |
+| destination | `/topic/leagues/{leagueId}/players/{playerId}/assets` | O |  |
 | id | 구독 ID | O | 클라이언트가 정하는 값. STOMP 라이브러리가 자동으로 만듭니다 |
 
 ```
@@ -79,6 +80,12 @@ destination:/topic/leagues/1/players/1/assets
 
 ^@
 ```
+
+### 전달 시점
+
+| **원인** | **받는 사람** |
+| --- | --- |
+| 1초마다 (더미) | 구독자 전원 |
 
 ### 받는 메시지
 
@@ -135,9 +142,10 @@ message-id:a1b2c3-0
 
 ### 메시지 처리 방법
 
-- 메시지는 바뀐 부분만이 아니라 **그 시점의 전체 상태**를 담습니다. 받은 값으로 화면 상태를 통째로 덮어씁니다.
+- 메시지는 바뀐 부분이 아니라 **그 시점의 상태**를 담습니다. 이전 메시지와 비교해 변경분을 계산하지 않습니다.
 - 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
-- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지로 덮어씁니다.
+- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
+- 받은 값으로 화면 상태를 통째로 덮어씁니다.
 - `holdings`는 **전체 보유 종목**입니다. 목록을 통째로 바꿉니다. 이전 메시지에 있던 종목이 없으면 모두 판 것입니다.
 
 ---
@@ -181,13 +189,13 @@ content-length:0
 1. **다른 사람의 `playerId`로 구독한 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 `playerId`를 꼭 확인합니다.
 2. **없는 리그 ID로 구독한 경우:** 지금은 리그 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
 3. **더미 응답:** 리그와 관계없이 항상 위 예시와 같은 값을 보냅니다. 값도 바뀌지 않습니다.
-4. **연결이 끊긴 동안의 자산 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API(`GET /api/leagues/{leagueId}/assets/me`)로 현재 자산을 받습니다.
+4. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API(`GET /api/leagues/{leagueId}/assets/me`)로 현재 자산을 받습니다.
 
 ---
 
 ## 6. FE 연동 예시
 
-[`@stomp/stompjs`](https://stomp-js.github.io/) 7.x를 사용합니다.
+`@stomp/stompjs` 7.x를 사용합니다.
 
 ```bash
 npm install @stomp/stompjs
@@ -197,7 +205,7 @@ npm install @stomp/stompjs
 
 모든 토픽이 연결 하나를 같이 씁니다. 다른 토픽 문서에서 이미 만들었다면 그대로 재사용합니다.
 
-```ts
+```tsx
 import { Client, IMessage } from '@stomp/stompjs';
 
 /** 모든 토픽 메시지의 공통 형식. */
@@ -291,7 +299,9 @@ export type Asset = {
   stockValuation: number;
   holdings: Holding[];
 };
+```
 
+```tsx
 /** 리그에서 내 자산을 실시간으로 받는다. playerId는 GET /api/leagues/{leagueId}/assets/me 응답의 playerId다. */
 export function useMyAsset(leagueId: number, playerId: number) {
   const [asset, setAsset] = useState<Asset | null>(null);
