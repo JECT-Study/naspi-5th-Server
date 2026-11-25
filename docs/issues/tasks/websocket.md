@@ -49,7 +49,7 @@
 - 목적: 종목 상세·주문 화면의 호가창이 주문 접수·취소·체결을 실시간으로 반영하게 한다
 - 작업 내용: `/topic/leagues/{leagueId}/stocks/{stockId}/orderbook` (`OrderBookTopic`)를 `GET /api/leagues/{leagueId}/stocks/{stockId}/orderbook` (`OrderBookController`, `OrderBookResponse`)와 같은 구조로 바꾼다. 선행: ORD-12, ORD-01·ORD-07
   - 값은 `OrderBookQueryService`(`OrderBookView`)에서 얻는다 (`currentPrice`, `asks[]`·`bids[]`의 `orderPrice`·`remainingQuantity`, 최대 5단계, 없으면 빈 배열)
-  - 호가가 바뀌는 시점(지정가 주문 접수, 주문 취소, 체결, 미체결 만료, 리그 종료 일괄 취소)에 해당 종목 구독 경로에만 발행한다. 체결은 `TradeExecuted`를 쓰고, 나머지는 order에 이벤트가 없으므로 추가한다
+  - 호가가 바뀌는 시점에 해당 종목 구독 경로에만 발행한다. 체결은 `TradeExecuted`, 지정가 접수는 `OrderPlaced`, 취소·만료·리그 종료 일괄 취소는 `OrderCanceled`(WS-03에서 추가)를 쓴다
   - 현재가는 캐시 값이라 늦게 바뀔 수 있으므로 `CurrentPricesChanged`에도 해당 리그의 구독 종목을 다시 발행한다
   - `OrderBookTopicAuthorizer`가 REST와 같은 조건(진행 중인 리그의 참여자)으로 구독을 허용하게 한다
 - 완료 조건 (확인 방법)
@@ -58,27 +58,25 @@
   - [ ] 다른 종목·다른 리그의 구독자에게는 발행되지 않는다 — 같은 테스트
   - [ ] 진행 중인 리그의 참여자가 아니면 구독할 수 없다 — 같은 테스트
   - [ ] `OrderBookTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO" src/main/java/kr/ject/naspi/websocket/application/topic/orderbook`
-- 결정 필요
-  - 주문 접수·취소 이벤트 이름과 위치 (`order/application`, 예: `OrderPlaced`, `OrderCanceled`). [WS-03](#ws-03-내-자산-토픽-실데이터-전환)의 예약 자산 즉시 발행도 같은 이벤트를 쓴다
-  - 체결이 몰릴 때 이벤트마다 발행할지, 종목별로 모아 짧은 주기로 한 번 발행할지
+- 결정 필요: 체결이 몰릴 때 이벤트마다 발행할지, 종목별로 모아 짧은 주기로 한 번 발행할지
 
 ### WS-03 내 자산 토픽 실데이터 전환
 - Jira: ND-109
 - 목적: 내 자산 화면이 현재가 변동과 내 체결·주문을 실시간으로 반영하게 한다 (정책 [asset.md#자산-조회](../../policies/v1/domain/asset.md#자산-조회) "본인 자산은 실시간 조회 가능")
-- 작업 내용: `/topic/leagues/{leagueId}/players/{playerId}/assets` (`AssetTopic`)를 `GET /api/leagues/{leagueId}/assets/me` (`MyAssetController`, `MyAssetResponse`)와 같은 구조로 바꾼다 ([asset-realtime.md 6장](../../design/asset-realtime.md#6-구현-순서) 3~5단계). 선행: AST-02, ORD-03, [WS-02](#ws-02-호가-토픽-실데이터-전환)의 주문 접수·취소 이벤트
-  - 메시지를 REST 응답 구조(`playerId`, `deposit`, `orderableDeposit`, `stockValuation`, `totalAsset`, `totalProfit`, `totalReturnRate`, `holdings[]`의 `treasuryStock`·`orderableQuantity`·`averagePrice`·`profit`·`returnRate` 등)로 바꾼다. 더미의 `reservedDeposit`은 `orderableDeposit`으로 맞춘다
-  - 계산 시각 `asOf`를 추가한다 (설계 5.3). REST 응답에도 같은 필드를 넣어 구조를 맞춘다
+- 작업 내용: `/topic/leagues/{leagueId}/players/{playerId}/assets` (`AssetTopic`)를 `GET /api/leagues/{leagueId}/assets/me` (`MyAssetController`, `MyAssetResponse`)와 같은 구조로 바꾼다 ([asset-realtime.md 6장](../../design/asset-realtime.md#6-구현-순서) 3~5단계). 선행: AST-02, ORD-03
+  - 메시지를 REST 응답 구조(`playerId`, `deposit`, `orderableDeposit`, `stockValuation`, `totalAsset`, `totalProfit`, `totalReturnRate`, `holdings[]` 등)로 바꾼다. 더미의 `reservedDeposit`은 `orderableDeposit`으로 맞춘다
+  - 계산 시각 `asOf`(설계 5.3)는 토픽 메시지에만 더한다. REST 응답은 바꾸지 않는다
   - 주기 더미 발행을 `CurrentPricesChanged` 구독(바뀐 리그만, `AssetQueryService.getPlayerAssets`로 리그당 한 번)으로 바꾼다
-  - `TradeExecuted` 커밋 후 매수자·매도자에게 즉시 발행한다
-  - 주문 접수·취소, 미체결 만료, 리그 종료 이벤트가 생기면 해당 플레이어(리그 이벤트는 리그 구독자 전원)에게 즉시 발행한다
+  - `TradeExecuted` 커밋 후 매수자·매도자에게, `OrderPlaced`·`OrderCanceled` 커밋 후 주문한 플레이어에게 즉시 발행한다
 - 완료 조건 (확인 방법)
-  - [ ] 토픽 메시지 JSON 필드가 `GET /api/leagues/{leagueId}/assets/me` 응답과 같다 (`asOf` 포함) — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.asset.*"`
-  - [ ] 현재가가 바뀐 리그의 구독자에게만 발행되고, 자산이 없는 플레이어(리그 시작 전)는 발행하지 않는다 — 같은 테스트
-  - [ ] 체결 커밋 후 매수자·매도자에게 즉시 발행되고, 롤백되면 발행되지 않는다 — 같은 테스트
-  - [ ] 즉시 발행도 현재가는 캐시 값을 쓴다 (설계 5.2) — 같은 테스트
-  - [ ] 한 리그의 조회 실패가 다른 리그 발행을 막지 않는다 — 같은 테스트
-  - [ ] `AssetTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO" src/main/java/kr/ject/naspi/websocket/application/topic/asset`
-  - [ ] [asset-realtime.md](../../design/asset-realtime.md) 상태·구현 순서를 갱신한다
+  - [x] 토픽 메시지 JSON 필드가 `GET /api/leagues/{leagueId}/assets/me` 응답에 `asOf`를 더한 것과 같다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.asset.*"`
+  - [x] 현재가가 바뀐 리그의 구독자에게만 발행되고, 자산이 없는 플레이어(리그 시작 전)는 발행하지 않는다 — 같은 테스트
+  - [x] 체결 커밋 후 매수자·매도자에게 즉시 발행되고, 롤백되면 발행되지 않는다 — 같은 테스트
+  - [x] 지정가 주문 접수, 취소·거래일 만료·일괄 취소 커밋 후 주문한 플레이어에게 즉시 발행된다 — 같은 테스트, `./gradlew test --tests "kr.ject.naspi.order.application.LimitOrderServiceTest"`
+  - [x] 즉시 발행도 현재가는 캐시 값을 쓴다 (설계 5.2) — 즉시·주기 발행 모두 `AssetQueryService`를 쓴다. `./gradlew test --tests "kr.ject.naspi.asset.application.AssetQueryServiceTest"`
+  - [x] 한 리그의 조회 실패가 다른 리그 발행을 막지 않는다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.asset.*"`
+  - [x] `AssetTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO" src/main/java/kr/ject/naspi/websocket/application/topic/asset`
+  - [x] [asset-realtime.md](../../design/asset-realtime.md) 상태·구현 순서를 갱신한다
 - 결정 필요: 프론트와 `asOf` 무시 규칙 합의 (표시 중인 값보다 이른 메시지 무시)
 
 ### WS-04 알림 토픽 실데이터 전환

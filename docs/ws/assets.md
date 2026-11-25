@@ -1,10 +1,6 @@
 # 내 자산 토픽
 
-리그에서 내 평가금·예수금·보유 종목을 실시간으로 받습니다. 내 자산 화면과 주문 화면(주문 가능 현금)에서 씁니다.
-
-> **⚠️ 더미 응답입니다.**
-> 지금은 실제 데이터 대신 더미 값을 1초마다 보냅니다. 구독 경로와 메시지 형식은 실제 구현에서도 유지할 예정이지만, 구현하면서 바뀔 수 있습니다.
-> 서버 코드: `websocket.application.topic.asset.AssetTopic`
+리그에서 내 보유 현금, 보유 종목별 평가 금액·손익, 총자산을 실시간으로 받습니다. 리그 화면의 "내 자산" 영역(보유 현금, 보유 주식 현황)에서 씁니다.
 
 | **항목** | **값** |
 | --- | --- |
@@ -12,9 +8,9 @@
 | 프로토콜 | STOMP 1.2 over WebSocket (SockJS 미사용) |
 | 인증 | 로그인 세션 쿠키 `SESSION` ([2. 연결 인증](#2-연결-인증)) |
 | 구독 | `/topic/leagues/{leagueId}/players/{playerId}/assets` |
-| 구독 권한 | 본인만 (`playerId`가 로그인 회원의 해당 리그 플레이어 ID와 같아야 함) |
+| 구독 권한 | 본인만 |
 | 메시지 종류 (`type`) | `ASSET` |
-| 전달 시점 | 1초마다 (더미) ([전달 시점](#전달-시점)). 구독자가 없으면 보내지 않습니다 |
+| 전달 시점 | 내 자산이 바뀔 때 ([전달 시점](#전달-시점)). 구독자가 없으면 보내지 않습니다 |
 | 대응 REST | `GET /api/leagues/{leagueId}/assets/me` |
 | 발행 (클라이언트 → 서버) | 없음 |
 
@@ -56,13 +52,11 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 | **변수** | **타입** | **설명** |
 | --- | --- | --- |
 | leagueId | Long | 리그 ID |
-| playerId | Long | 내 플레이어 ID. 회원 ID가 아닙니다. `GET /api/leagues/{leagueId}/assets/me` 응답의 `playerId`를 씁니다 |
+| playerId | Long | **내 플레이어 ID**. 회원 ID가 아닙니다. `GET /api/leagues/{leagueId}/assets/me` 응답의 `playerId`를 씁니다 |
 
 ### 구독 권한
 
-**본인만** 구독할 수 있습니다. 서버가 로그인 회원과 `leagueId`로 본인의 플레이어 ID를 찾아 경로의 `playerId`와 비교합니다. 다르거나 그 리그에 입장하지 않은 회원이면 구독이 거부됩니다.
-
-화면에 들어오면 먼저 `GET /api/leagues/{leagueId}/assets/me`로 현재 자산을 받고, 응답의 `playerId`로 구독합니다.
+로그인한 회원 **본인의 자산**만 구독할 수 있습니다.
 
 권한이 없으면 `ERROR` 프레임을 받고 **연결 전체가 끊깁니다**([5. 에러](#5-에러)).
 
@@ -76,7 +70,7 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 ```
 SUBSCRIBE
 id:sub-0
-destination:/topic/leagues/1/players/1/assets
+destination:/topic/leagues/1/players/12/assets
 
 ^@
 ```
@@ -85,7 +79,9 @@ destination:/topic/leagues/1/players/1/assets
 
 | **원인** | **받는 사람** |
 | --- | --- |
-| 1초마다 (더미) | 구독자 전원 |
+| 현재가 변경 | 그 리그의 구독자 전원 |
+| 체결 | 매수자·매도자 |
+| 주문 접수·취소·만료 (예약금·예약 수량 변동) | 주문한 플레이어 |
 
 ### 받는 메시지
 
@@ -99,26 +95,35 @@ destination:/topic/leagues/1/players/1/assets
 
 #### payload
 
-금액은 원, 수량은 주 단위입니다.
+금액은 원, 수량은 주 단위입니다. 수익률(%)은 소수점 첫째 자리까지 반올림합니다.
+
+REST `GET /assets/me`의 `data`와 같은 필드에 `asOf`만 더해 보냅니다.
 
 | **필드** | **타입** | **설명** | **비고** |
 | --- | --- | --- | --- |
-| totalAsset | Long | 평가금 | `deposit + stockValuation` |
-| deposit | Long | 예수금 | 예약금을 포함한 전체 현금 |
-| reservedDeposit | Long | 예약금 | 예수금 중 미체결 매수 주문에 묶인 현금 |
-| stockValuation | Long | 보유 주식 평가액 합계 | |
-| holdings | Array | 보유 종목 | 보유 종목이 없으면 빈 배열 |
-| holdings[].stockId | Long | 종목 ID | |
-| holdings[].stockName | String | 종목명 | |
-| holdings[].currentPrice | Long | 현재가 | |
-| holdings[].quantity | Long | 보유 수량 | |
-| holdings[].valuation | Long | 평가액 | `currentPrice × quantity` |
-
-> **주문 가능 현금** = `deposit - reservedDeposit`. 따로 필드가 없으니 프론트에서 계산합니다.
+| playerId | Long | 내 플레이어 ID |  |
+| deposit | Long | 보유 현금 (원) | 대기 중인 매수 주문에 묶인 예약금 포함 |
+| orderableDeposit | Long | 주문 가능 현금 (원) | `deposit - 매수 예약금` |
+| stockValuation | Long | 보유 주식 평가 금액 합계 (원) | `Σ holdings[].valuation` |
+| totalAsset | Long | 총자산 (원) | `deposit + stockValuation` |
+| totalProfit | Long | 총자산 평가 손익 (원) | `totalAsset - 100,000,000`. 음수 가능 |
+| totalReturnRate | Number | 총자산 수익률 (%) | `totalProfit ÷ 100,000,000 × 100`. 소수점 첫째 자리까지 (예: `0.6`, `-12.4`) |
+| asOf | String | 값을 계산한 시각 (KST) | REST와 같은 일시 형식 |
+| holdings | Array | 보유 종목 | **종목 ID 오름차순**. 보유 수량이 1주 이상인 종목만. 없으면 빈 배열 |
+| holdings[].stockId | Long | 종목 ID |  |
+| holdings[].stockName | String | 종목 이름 | 상장자 이름 |
+| holdings[].treasuryStock | Boolean | 자사주(내 종목) 여부 |  |
+| holdings[].quantity | Long | 보유 수량 (주) | 매도 주문에 묶인 수량 포함 |
+| holdings[].orderableQuantity | Long | 매도 가능 수량 (주) | 일반 종목: `quantity - 매도 예약 수량`. 자사주: `max(0, quantity - 매도 예약 수량 - 1,000)` |
+| holdings[].currentPrice | Long | 현재가 (원) |  |
+| holdings[].averagePrice | Long | 평균 매입가 (원) | 이동평균법, `매입 금액 ÷ quantity`, 원 미만 절사. 표시용 |
+| holdings[].valuation | Long | 평가 금액 (원) | `quantity × currentPrice` |
+| holdings[].profit | Long | 평가 손익 (원) | `valuation - 매입 금액`. 음수 가능 |
+| holdings[].returnRate | Number | 수익률 (%) | `profit ÷ 매입 금액 × 100`. 소수점 첫째 자리까지 |
 
 ```
 MESSAGE
-destination:/topic/leagues/1/players/1/assets
+destination:/topic/leagues/1/players/12/assets
 content-type:application/json
 subscription:sub-0
 message-id:a1b2c3-0
@@ -126,17 +131,33 @@ message-id:a1b2c3-0
 {
   "type": "ASSET",
   "payload": {
-    "totalAsset": 106900000,
-    "deposit": 52000000,
-    "reservedDeposit": 1250000,
-    "stockValuation": 54900000,
+    "playerId": 12,
+    "deposit": 49010000,
+    "orderableDeposit": 48040000,
+    "stockValuation": 51615000,
+    "totalAsset": 100625000,
+    "totalProfit": 625000,
+    "totalReturnRate": 0.6,
+    "asOf": "2026-11-25T21:30:01.123456",
     "holdings": [
-      { "stockId": 1, "stockName": "진영전자", "currentPrice": 12500, "quantity": 3000, "valuation": 37500000 },
-      { "stockId": 2, "stockName": "민영건설", "currentPrice": 12500, "quantity": 1000, "valuation": 12500000 },
-      { "stockId": 3, "stockName": "수진식품", "currentPrice": 9800, "quantity": 500, "valuation": 4900000 }
+      {
+        "stockId": 5, "stockName": "수빈", "treasuryStock": true,
+        "quantity": 2400, "orderableQuantity": 900, "currentPrice": 10300,
+        "averagePrice": 10000, "valuation": 24720000, "profit": 720000, "returnRate": 3.0
+      },
+      {
+        "stockId": 6, "stockName": "민준", "treasuryStock": false,
+        "quantity": 1250, "orderableQuantity": 1250, "currentPrice": 9800,
+        "averagePrice": 10000, "valuation": 12250000, "profit": -250000, "returnRate": -2.0
+      },
+      {
+        "stockId": 7, "stockName": "지아", "treasuryStock": false,
+        "quantity": 1450, "orderableQuantity": 1450, "currentPrice": 10100,
+        "averagePrice": 10027, "valuation": 14645000, "profit": 105000, "returnRate": 0.7
+      }
     ]
   },
-  "publishedAt": 1794202325123
+  "publishedAt": 1795609801125
 }^@
 ```
 
@@ -146,7 +167,9 @@ message-id:a1b2c3-0
 - 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
 - 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
 - 받은 값으로 화면 상태를 통째로 덮어씁니다.
-- `holdings`는 **전체 보유 종목**입니다. 목록을 통째로 바꿉니다. 이전 메시지에 있던 종목이 없으면 모두 판 것입니다.
+- `holdings`는 **전체 목록**입니다. 목록을 통째로 바꿉니다. 없어진 종목은 전량 매도한 것입니다.
+- **`asOf`가 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.** REST 응답에는 `asOf`가 없으므로 REST 값 다음에 오는 첫 메시지는 그대로 반영합니다.
+- 다른 리그로 화면이 바뀌면 이전 구독을 해지하고, 그 리그의 `playerId`로 새로 구독합니다.
 
 ---
 
@@ -167,7 +190,7 @@ STOMP 단계의 오류는 `ERROR` 프레임으로 옵니다. **`ERROR` 프레임
 
 ```
 ERROR
-message:토픽 구독 권한이 없습니다\c /topic/leagues/1/players/1/assets
+message:토픽 구독 권한이 없습니다\c /topic/leagues/1/players/13/assets
 content-length:0
 
 ^@
@@ -186,10 +209,11 @@ content-length:0
 
 ### 예외
 
-1. **다른 사람의 `playerId`로 구독한 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 `playerId`를 꼭 확인합니다.
-2. **없는 리그 ID로 구독한 경우:** 지금은 리그 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
-3. **더미 응답:** 리그와 관계없이 항상 위 예시와 같은 값을 보냅니다. 값도 바뀌지 않습니다.
-4. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API(`GET /api/leagues/{leagueId}/assets/me`)로 현재 자산을 받습니다.
+1. **구독 권한이 없는 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 `playerId`에 **회원 ID가 아니라 그 리그의 내 플레이어 ID**를 넣었는지 꼭 확인합니다.
+2. **없는 리그 ID, 입장하지 않은 리그로 구독한 경우:** 1과 같이 `ERROR` 후 연결이 끊깁니다.
+3. **리그 시작 전:** 구독은 되지만 자산이 없어 메시지가 오지 않습니다. 리그가 시작되면 REST로 다시 조회합니다.
+4. **리그 종료 후:** 메시지가 오지 않습니다. 최종 결과는 리그 결과 화면에서 받습니다.
+5. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 `GET /assets/me`로 현재 상태를 받습니다.
 
 ---
 
@@ -287,54 +311,81 @@ import { subscribeTopic } from './stompClient';
 export type Holding = {
   stockId: number;
   stockName: string;
-  currentPrice: number;
+  treasuryStock: boolean;
   quantity: number;
+  orderableQuantity: number;
+  currentPrice: number;
+  averagePrice: number;
   valuation: number;
+  profit: number;
+  returnRate: number;
 };
 
-export type Asset = {
-  totalAsset: number;
+/** REST GET /assets/me 응답(data). */
+export type MyAsset = {
+  playerId: number;
   deposit: number;
-  reservedDeposit: number;
+  orderableDeposit: number;
   stockValuation: number;
-  holdings: Holding[];
+  totalAsset: number;
+  totalProfit: number;
+  totalReturnRate: number;
+  holdings: Holding[]; // 종목 ID 오름차순
+};
+
+/** 토픽 메시지(payload). REST 응답에 계산 시각만 더한다. */
+export type MyAssetMessage = MyAsset & {
+  asOf: string;
 };
 ```
 
 ```tsx
-/** 리그에서 내 자산을 실시간으로 받는다. playerId는 GET /api/leagues/{leagueId}/assets/me 응답의 playerId다. */
-export function useMyAsset(leagueId: number, playerId: number) {
-  const [asset, setAsset] = useState<Asset | null>(null);
+/**
+ * 내 자산을 받는다. initial은 처음 접속할 때 REST(GET /assets/me)로 받은 값이다.
+ * asOf가 마지막으로 반영한 메시지보다 이른 메시지는 버린다.
+ */
+export function useMyAsset(leagueId: number, initial: MyAsset) {
+  const [asset, setAsset] = useState<MyAsset | MyAssetMessage>(initial);
 
-  useEffect(
-    () =>
-      subscribeTopic<Asset>(`/topic/leagues/${leagueId}/players/${playerId}/assets`, setAsset),
-    [leagueId, playerId],
-  );
+  useEffect(() => {
+    setAsset(initial);
+    return subscribeTopic<MyAssetMessage>(
+      `/topic/leagues/${leagueId}/players/${initial.playerId}/assets`,
+      (payload) =>
+        setAsset((prev) =>
+          'asOf' in prev && Date.parse(payload.asOf) < Date.parse(prev.asOf) ? prev : payload,
+        ),
+    );
+  }, [leagueId, initial]);
 
   return asset;
 }
 ```
 
-```tsx
-function MyAsset({ leagueId, playerId }: { leagueId: number; playerId: number }) {
-  const asset = useMyAsset(leagueId, playerId);
-  if (!asset) return null;
+> `initial`은 렌더링마다 새 객체를 만들지 않도록 `useMemo`나 상태로 넘깁니다. 매번 새 객체면 구독을 계속 다시 합니다.
 
-  const orderableCash = asset.deposit - asset.reservedDeposit; // 주문 가능 현금
+```tsx
+function MyAssetView({ leagueId, initial }: { leagueId: number; initial: MyAsset }) {
+  const asset = useMyAsset(leagueId, initial);
+
   return (
-    <div>
-      <p>평가금 {asset.totalAsset.toLocaleString()}원</p>
-      <p>주문 가능 {orderableCash.toLocaleString()}원</p>
+    <section>
+      <h2>내 자산</h2>
+      <p>
+        총자산 {asset.totalAsset.toLocaleString()}원 (
+        {asset.totalProfit >= 0 ? '+' : ''}
+        {asset.totalProfit.toLocaleString()}원, {asset.totalReturnRate}%)
+      </p>
+      <p>보유 현금 {asset.deposit.toLocaleString()}원 · 주식 평가 {asset.stockValuation.toLocaleString()}원</p>
       <ul>
         {asset.holdings.map((h) => (
           <li key={h.stockId}>
-            {h.stockName} {h.quantity}주 · {h.valuation.toLocaleString()}원
+            {h.stockName}
+            {h.treasuryStock && ' (내 종목)'} {h.quantity}주 · {h.returnRate}%
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   );
 }
 ```
-

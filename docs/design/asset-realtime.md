@@ -2,7 +2,7 @@
 
 > 대상 스토리: [AST-02](../issues/v1/asset.md#ast-02-참여자는-자신의-현금-보유-주식-예약-자산-총자산을-조회할-수-있다) (ND-10)
 > 정책: [asset.md#자산-조회](../policies/v1/domain/asset.md#자산-조회)
-> 상태: 설계 확정 (2026-11-12 개정: 현재가 캐시, 변경된 리그만 주기 발행), 구현 중 (market 현재가 갱신(MKT-04·05)과 order 체결(ORD-03)은 구현됨. 캐시 변경 이벤트 구독 발행과 `TradeExecuted` 즉시 발행 리스너는 아래 구현 순서 3·4 대기)
+> 상태: 구현 완료 (2026-11-25, WS-03). 2026-11-25 개정: 웹소켓 메시지에만 `asOf` 추가, 주문 접수·취소 이벤트 추가
 
 ## 1. 조회 경로
 
@@ -11,7 +11,8 @@
 | REST `GET /api/leagues/{leagueId}/assets/me` | 화면 첫 진입, 새로고침, 재접속 시 한 번 조회 |
 | 웹소켓 `/topic/leagues/{leagueId}/players/{playerId}/assets` | 화면을 보는 동안 변동 반영 |
 
-- 두 경로 모두 `AssetQueryService.getPlayerAsset`을 써서 계산 로직은 하나다. 계산은 항상 서버에서 하고 클라이언트는 받은 값을 표시만 한다.
+- 두 경로 모두 `AssetQueryService`(`getPlayerAsset`/`getPlayerAssets`)를 써서 계산 로직은 하나다. 계산은 항상 서버에서 하고 클라이언트는 받은 값을 표시만 한다.
+- 웹소켓 메시지는 REST 응답 필드에 계산 시각 `asOf`만 더한다 (`AssetMessageQuery`). REST 응답은 바꾸지 않는다.
 - 본인 확인은 서버가 세션의 `memberId`와 `leagueId`로 league에서 `playerId`를 조회해 한다. 클라이언트가 보낸 `playerId`를 믿지 않는다.
   - REST: 경로에 `playerId`를 받지 않는다 (`me`).
   - 웹소켓: `AssetTopicAuthorizer`가 구독 경로의 `playerId`가 조회한 본인 `playerId`와 같은지 확인한다.
@@ -26,10 +27,11 @@
 |---|---|---|---|
 | 현재가 변동 (다른 참여자의 체결 포함) | 현재가 캐시 갱신 (3장)이 이전 값과 비교 | 주기 발행: 현재가가 바뀐 종목이 있는 리그만 | 그 리그의 구독자 전원 |
 | 내 주문 체결 (현금·수량·매입 금액 변동) | `TradeExecuted` (커밋 이후) | 즉시 발행 | 매수자·매도자만 |
-| 내 주문 접수·취소 (예약 자산 변동) | 주문 접수·취소 이벤트 (커밋 이후) | 즉시 발행 | 주문한 플레이어만 |
-| 미체결 만료 (09:00), 리그 종료 (예약 해제) | `TradingDayChanged` 이후 만료 처리, 리그 종료 이벤트 (커밋 이후) | 즉시 발행 | 그 리그의 구독자 전원 |
+| 내 지정가 주문 접수 (예약 자산 변동) | `OrderPlaced` (커밋 이후) | 즉시 발행 | 주문한 플레이어만 |
+| 내 주문 취소, 미체결 만료 (09:00), 리그 종료·회원 탈퇴 일괄 취소 (예약 해제) | `OrderCanceled` (주문마다, 커밋 이후) | 즉시 발행 | 주문한 플레이어만 |
 
 - 구독자가 없는 토픽은 계산하지 않는다 (`TopicSubscriptions`).
+- 발행은 웹소켓 발행 스레드 풀(`topicTaskScheduler`)에서 비동기(`@Async`)로 한다. 현재가 갱신·주문 요청 스레드를 막지 않고, 커밋 직후 원래 트랜잭션의 DB 커넥션을 쥔 채 조회 커넥션을 하나 더 잡지 않기 위해서다. 순서가 바뀔 수 있으므로 클라이언트는 `asOf`로 이전 상태를 버린다.
 - 리그 단위 발행은 구독 경로를 리그별로 묶어 `AssetQueryService.getPlayerAssets(leagueId, playerIds)`를 리그당 한 번 호출한다.
   - 자산이 없는 플레이어(리그 시작 전 등)는 결과에서 빠지므로 발행하지 않는다.
 - 즉시 발행(매수자·매도자)은 `getPlayerAssets`로 두 명을 함께 조회한다.
@@ -119,6 +121,6 @@ Redis로 옮기면 네트워크 실패로 캐시 갱신이 빠질 수 있다. �
 
 1. ~~`memberId` + `leagueId` → `playerId` 조회 연결 (REST 컨트롤러, `AssetTopicAuthorizer`)~~ (구현 완료: `LeagueQueryService.findPlayerId`, `MyAssetQueryService`, `GET /api/leagues/{leagueId}/assets/me`. 응답의 `playerId`로 구독)
 2. ~~현재가 캐시 구현: 1초 갱신, 없을 때 DB 조회, 현재가 변경 리그 이벤트~~ (구현 완료. DB `current_price`는 리그 시작 시 시초가(MKT-04), 체결마다 최신 체결가(MKT-05)로 갱신된다)
-3. `AssetTopic`을 주기 더미 발행에서 현재가 변경 리그 이벤트 구독으로 바꾸고 `AssetQueryService` 호출로 교체. `AssetResponse`에 `asOf` 추가, 프론트와 무시 규칙 합의
-4. order 체결(ORD-03)의 `TradeExecuted` 확정 후 매수자·매도자 즉시 발행 리스너 추가
-5. 주문 접수·취소, 미체결 만료, 리그 종료 이벤트가 생기면 즉시 발행 리스너 추가
+3. ~~`AssetTopic`을 주기 더미 발행에서 현재가 변경 리그 이벤트 구독으로 바꾸고 `AssetQueryService` 호출로 교체. `AssetResponse`에 `asOf` 추가~~ (구현 완료. 프론트와 무시 규칙 합의는 남음)
+4. ~~order 체결(ORD-03)의 `TradeExecuted` 확정 후 매수자·매도자 즉시 발행 리스너 추가~~ (구현 완료)
+5. ~~주문 접수·취소, 미체결 만료, 리그 종료 이벤트가 생기면 즉시 발행 리스너 추가~~ (구현 완료: `OrderPlaced`, `OrderCanceled`)

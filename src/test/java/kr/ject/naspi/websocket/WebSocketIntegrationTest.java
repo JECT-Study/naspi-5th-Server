@@ -13,6 +13,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,17 +22,21 @@ import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.websocket.application.PeriodicTopic;
 import kr.ject.naspi.websocket.application.TopicMessagePublisher;
 import kr.ject.naspi.websocket.application.TopicSubscriptionAuthorizer;
+import kr.ject.naspi.websocket.application.topic.asset.AssetTopic;
 import kr.ject.naspi.websocket.domain.TopicMessage;
 import kr.ject.naspi.websocket.infra.TopicSubscriptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.BeanFactoryAnnotationUtils;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.Order;
@@ -91,6 +96,9 @@ class WebSocketIntegrationTest {
     @Autowired
     private TestTopics testTopics;
 
+    @Autowired
+    private ConfigurableApplicationContext context;
+
     private WebSocketStompClient stompClient;
     private StompSession session;
 
@@ -134,6 +142,14 @@ class WebSocketIntegrationTest {
         StompHeaders headers = connected.poll(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
         assertThat(headers).isNotNull();
         assertThat(headers.getHeartbeat()).containsExactly(10_000L, 10_000L);
+    }
+
+    @Test
+    @DisplayName("내 자산 토픽은 비동기 프록시이고, 지정한 발행 스레드 풀을 찾을 수 있다")
+    void assetTopicRunsOnTopicPool() {
+        assertThat(AopUtils.isAopProxy(context.getBean(AssetTopic.class))).isTrue();
+        assertThat(BeanFactoryAnnotationUtils.qualifiedBeanOfType(context.getBeanFactory(),
+                Executor.class, "topicTaskScheduler")).isNotNull();
     }
 
     @Test

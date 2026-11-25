@@ -17,6 +17,7 @@ import kr.ject.naspi.websocket.domain.TopicMessage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.MessageDeliveryException;
+import org.springframework.messaging.converter.MessageConversionException;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
 
 class StompTopicMessagePublisherTest {
@@ -41,6 +42,16 @@ class StompTopicMessagePublisherTest {
     @DisplayName("발행에 실패해도 예외를 던지지 않아 호출한 본 작업에 영향을 주지 않는다")
     void swallowsPublishFailure() {
         doThrow(new MessageDeliveryException("브로커 오류"))
+                .when(messagingTemplate).convertAndSend(anyString(), any(Object.class));
+
+        assertThatCode(() -> publisher.publish(new TopicMessage("/topic/a", "A", "data")))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("데이터를 JSON으로 바꾸지 못해도 예외를 던지지 않는다")
+    void swallowsConversionFailure() {
+        doThrow(new MessageConversionException("변환 실패"))
                 .when(messagingTemplate).convertAndSend(anyString(), any(Object.class));
 
         assertThatCode(() -> publisher.publish(new TopicMessage("/topic/a", "A", "data")))
