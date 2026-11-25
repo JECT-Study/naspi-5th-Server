@@ -13,6 +13,7 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
  * @param type 항목 종류. 항상 {@code NEWS}
  * @param newsId 뉴스 ID
  * @param stockId 종목 ID
+ * @param stockName 종목 이름
  * @param title 제목
  * @param body 본문
  * @param sentiment 호재(POSITIVE)·악재(NEGATIVE)
@@ -22,7 +23,8 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
  * @param commentCount 댓글 수
  * @param previewComment 미리보기 댓글 (가장 먼저 등록된 댓글). 없으면 null
  */
-public record NewsListItemResponse(FeedItemType type, long newsId, long stockId, String title,
+public record NewsListItemResponse(FeedItemType type, long newsId, long stockId,
+                                   String stockName, String title,
                                    String body, NewsSentiment sentiment, int tradingDay,
                                    LocalDateTime createdAt, LocalDateTime publishedAt,
                                    long commentCount, CommentResponse previewComment)
@@ -35,8 +37,9 @@ public record NewsListItemResponse(FeedItemType type, long newsId, long stockId,
      * @return 응답
      */
     public static NewsListItemResponse from(NewsListItem item) {
-        return new NewsListItemResponse(item.type(), item.newsId(), item.stockId(), item.title(),
-                item.body(), item.sentiment(), item.tradingDay(), item.createdAt(),
+        return new NewsListItemResponse(item.type(), item.newsId(), item.stockId(),
+                item.stockName(), item.title(), item.body(), item.sentiment(),
+                item.tradingDay(), item.createdAt(),
                 item.publishedAt(), item.comments().commentCount(),
                 CommentResponse.from(item.comments().previewComment()));
     }

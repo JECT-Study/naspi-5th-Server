@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.Disclosure;
@@ -29,6 +30,8 @@ import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
+import kr.ject.naspi.market.application.LeagueStock;
+import kr.ject.naspi.market.application.StockQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -70,8 +73,14 @@ class DisclosureQueryServiceTest {
     @MockitoBean
     private LeagueQueryService leagueQueryService;
 
+    @MockitoBean
+    private StockQueryService stockQueryService;
+
     @BeforeEach
     void setUp() {
+        given(stockQueryService.findAllByLeagueId(LEAGUE_ID)).willReturn(List.of(
+                new LeagueStock(STOCK_ID, "종목A", "소개", 70L, null),
+                new LeagueStock(OTHER_STOCK_ID, "종목B", "소개", 71L, null)));
         given(leagueQueryService.findPlayerId(AUTHOR_MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.of(AUTHOR_PLAYER_ID));
         given(leagueQueryService.findPlayerId(VIEWER_MEMBER_ID, LEAGUE_ID))

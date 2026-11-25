@@ -29,6 +29,8 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
+import kr.ject.naspi.market.application.LeagueStock;
+import kr.ject.naspi.market.application.StockQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -77,8 +79,14 @@ class FeedQueryServiceTest {
     @MockitoBean
     private LeagueQueryService leagueQueryService;
 
+    @MockitoBean
+    private StockQueryService stockQueryService;
+
     @BeforeEach
     void setUp() {
+        given(stockQueryService.findAllByLeagueId(LEAGUE_ID)).willReturn(List.of(
+                new LeagueStock(STOCK_ID, "종목A", "소개", 70L, null),
+                new LeagueStock(OTHER_STOCK_ID, "종목B", "소개", 71L, null)));
         given(leagueQueryService.findPlayerId(VIEWER_MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.of(VIEWER_PLAYER_ID));
         given(leagueQueryService.findPlayerId(OUTSIDER_MEMBER_ID, LEAGUE_ID))
@@ -152,6 +160,26 @@ class FeedQueryServiceTest {
                 FeedItemType.NEWS + ":" + mineNews);
         assertThat(keys(find(OTHER_STOCK_ID, FeedItemType.NEWS, null, 20)))
                 .containsExactly(FeedItemType.NEWS + ":" + otherNews);
+    }
+
+    @Test
+    @DisplayName("피드 항목마다 종목 ID와 종목 이름을 준다")
+    void stockInfo() {
+        Disclosure mine = disclosure(LEAGUE_ID, STOCK_ID, NOW);
+        long otherNews = publishedNews(disclosure(LEAGUE_ID, OTHER_STOCK_ID, NOW.plusMinutes(1)),
+                NOW.plusMinutes(2));
+
+        FeedPage page = find(null, null, null, 20);
+
+        assertThat(page.items()).hasSize(3);
+        NewsListItem news = (NewsListItem) page.items().get(0);
+        assertThat(news.newsId()).isEqualTo(otherNews);
+        assertThat(news.stockId()).isEqualTo(OTHER_STOCK_ID);
+        assertThat(news.stockName()).isEqualTo("종목B");
+        DisclosureListItem disclosure = (DisclosureListItem) page.items().get(2);
+        assertThat(disclosure.disclosureId()).isEqualTo(mine.getId());
+        assertThat(disclosure.stockId()).isEqualTo(STOCK_ID);
+        assertThat(disclosure.stockName()).isEqualTo("종목A");
     }
 
     @Test

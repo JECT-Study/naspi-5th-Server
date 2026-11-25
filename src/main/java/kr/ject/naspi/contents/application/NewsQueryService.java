@@ -2,6 +2,7 @@ package kr.ject.naspi.contents.application;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
 import kr.ject.naspi.contents.domain.News;
 import kr.ject.naspi.contents.domain.NewsRepository;
@@ -9,6 +10,8 @@ import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
+import kr.ject.naspi.market.application.LeagueStock;
+import kr.ject.naspi.market.application.StockQueryService;
 import org.springframework.stereotype.Service;
 
 /**
@@ -33,6 +36,7 @@ public class NewsQueryService {
     private final NewsCommentService commentService;
     private final LeagueQueryService leagueQueryService;
     private final DisclosureRepository disclosureRepository;
+    private final StockQueryService stockQueryService;
 
     /**
      * 뉴스 조회 서비스를 만든다.
@@ -41,14 +45,17 @@ public class NewsQueryService {
      * @param commentService 댓글 미리보기 조회
      * @param leagueQueryService 플레이어 조회
      * @param disclosureRepository 공시 저장소
+     * @param stockQueryService 종목 이름 조회
      */
     public NewsQueryService(NewsRepository newsRepository, NewsCommentService commentService,
                             LeagueQueryService leagueQueryService,
-                            DisclosureRepository disclosureRepository) {
+                            DisclosureRepository disclosureRepository,
+                            StockQueryService stockQueryService) {
         this.newsRepository = newsRepository;
         this.commentService = commentService;
         this.leagueQueryService = leagueQueryService;
         this.disclosureRepository = disclosureRepository;
+        this.stockQueryService = stockQueryService;
     }
 
     /**
@@ -90,9 +97,12 @@ public class NewsQueryService {
 
         // 댓글은 뉴스마다 따로 조회하지 않고 페이지 단위로 한 번에 읽는다
         Map<Long, CommentPreview> comments = commentService.previews(leagueId, ids, playerId);
+        Map<Long, String> stockNames = stockQueryService.findAllByLeagueId(leagueId).stream()
+                .collect(Collectors.toMap(LeagueStock::stockId, LeagueStock::name));
 
         return news.stream()
-                .map(n -> new NewsListItem(n.getId(), n.getStockId(), n.getTitle(), n.getBody(),
+                .map(n -> new NewsListItem(n.getId(), n.getStockId(),
+                        stockNames.get(n.getStockId()), n.getTitle(), n.getBody(),
                         n.getSentiment(), n.getTradingDay(), n.getCreatedAt(),
                         n.getPublishedAt(), comments.get(n.getId())))
                 .toList();
