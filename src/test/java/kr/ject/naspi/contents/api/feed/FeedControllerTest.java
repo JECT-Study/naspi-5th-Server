@@ -69,12 +69,16 @@ class FeedControllerTest {
                 .andExpect(jsonPath("$.data.nextCursor").value("next"))
                 .andExpect(jsonPath("$.data.items[0].type").value("NEWS"))
                 .andExpect(jsonPath("$.data.items[0].newsId").value(30))
+                .andExpect(jsonPath("$.data.items[0].stockId").value(11))
+                .andExpect(jsonPath("$.data.items[0].stockName").value("종목A"))
                 .andExpect(jsonPath("$.data.items[0].sentiment").value("POSITIVE"))
                 .andExpect(jsonPath("$.data.items[0].commentCount").value(3))
                 .andExpect(jsonPath("$.data.items[0].previewComment.content").value("댓글"))
                 .andExpect(jsonPath("$.data.items[0].disclosureId").doesNotExist())
                 .andExpect(jsonPath("$.data.items[1].type").value("DISCLOSURE"))
                 .andExpect(jsonPath("$.data.items[1].disclosureId").value(20))
+                .andExpect(jsonPath("$.data.items[1].stockId").value(11))
+                .andExpect(jsonPath("$.data.items[1].stockName").value("종목A"))
                 .andExpect(jsonPath("$.data.items[1].images[0].signedUrl")
                         .value("https://signed/a"))
                 .andExpect(jsonPath("$.data.items[1].likeCount").value(1))
@@ -117,12 +121,13 @@ class FeedControllerTest {
     }
 
     private static NewsListItem news() {
-        return new NewsListItem(30L, 11L, "뉴스 제목", "뉴스 본문", NewsSentiment.POSITIVE, 2,
+        return new NewsListItem(30L, 11L, "종목A", "뉴스 제목", "뉴스 본문", NewsSentiment.POSITIVE, 2,
                 CREATED_AT, CREATED_AT.plusMinutes(1), comments());
     }
 
     private static DisclosureListItem disclosure() {
-        return new DisclosureListItem(20L, 11L, "공시 제목", "공시 본문", 2, CREATED_AT, 70L, false,
+        return new DisclosureListItem(20L, 11L, "종목A", "공시 제목", "공시 본문", 2, CREATED_AT, 70L,
+                false,
                 List.of(new ImageUrl(1L, "https://signed/a", CREATED_AT.plusMinutes(5))),
                 new DisclosureReactionSummary(20L, 1, 0, DisclosureReactionType.LIKE),
                 comments());

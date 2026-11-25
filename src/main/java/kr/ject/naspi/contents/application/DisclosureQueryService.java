@@ -3,6 +3,7 @@ package kr.ject.naspi.contents.application;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
 import kr.ject.naspi.contents.domain.NewsRepository;
@@ -10,6 +11,8 @@ import kr.ject.naspi.contents.domain.NewsStatus;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
+import kr.ject.naspi.market.application.LeagueStock;
+import kr.ject.naspi.market.application.StockQueryService;
 import org.springframework.stereotype.Service;
 
 /**
@@ -46,6 +49,7 @@ public class DisclosureQueryService {
     private final DisclosureCommentService commentService;
     private final LeagueQueryService leagueQueryService;
     private final NewsRepository newsRepository;
+    private final StockQueryService stockQueryService;
 
     /**
      * 공시 조회 서비스를 만든다.
@@ -56,19 +60,22 @@ public class DisclosureQueryService {
      * @param commentService 댓글 미리보기 조회
      * @param leagueQueryService 플레이어 조회
      * @param newsRepository 뉴스 저장소
+     * @param stockQueryService 종목 이름 조회
      */
     public DisclosureQueryService(DisclosureRepository disclosureRepository,
                                   ImageService imageService,
                                   DisclosureReactionService reactionService,
                                   DisclosureCommentService commentService,
                                   LeagueQueryService leagueQueryService,
-                                  NewsRepository newsRepository) {
+                                  NewsRepository newsRepository,
+                                  StockQueryService stockQueryService) {
         this.disclosureRepository = disclosureRepository;
         this.imageService = imageService;
         this.reactionService = reactionService;
         this.commentService = commentService;
         this.leagueQueryService = leagueQueryService;
         this.newsRepository = newsRepository;
+        this.stockQueryService = stockQueryService;
     }
 
     /**
@@ -115,9 +122,12 @@ public class DisclosureQueryService {
         Map<Long, DisclosureReactionSummary> reactions =
                 reactionService.summarizeAll(ids, playerId);
         Map<Long, CommentPreview> comments = commentService.previews(leagueId, ids, playerId);
+        Map<Long, String> stockNames = stockQueryService.findAllByLeagueId(leagueId).stream()
+                .collect(Collectors.toMap(LeagueStock::stockId, LeagueStock::name));
 
         return disclosures.stream()
                 .map(d -> new DisclosureListItem(d.getId(), d.getStockId(),
+                        stockNames.get(d.getStockId()),
                         d.getTitle().getValue(), d.getBody().getValue(), d.getTradingDay(),
                         d.getCreatedAt(), d.getAuthorPlayerId(),
                         d.getAuthorPlayerId() == playerId,

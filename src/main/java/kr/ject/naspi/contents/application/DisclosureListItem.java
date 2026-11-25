@@ -8,6 +8,7 @@ import java.util.List;
  *
  * @param disclosureId 공시 ID
  * @param stockId 종목 ID
+ * @param stockName 종목 이름
  * @param title 제목
  * @param body 본문
  * @param tradingDay 작성한 거래일 번호 (1~7)
@@ -18,7 +19,8 @@ import java.util.List;
  * @param reaction 반응 집계와 내 반응
  * @param comments 댓글 수와 가장 먼저 등록된 댓글
  */
-public record DisclosureListItem(long disclosureId, long stockId, String title, String body,
+public record DisclosureListItem(long disclosureId, long stockId, String stockName,
+                                 String title, String body,
                                  int tradingDay, LocalDateTime createdAt, long authorPlayerId,
                                  boolean mine, List<ImageUrl> images,
                                  DisclosureReactionSummary reaction, CommentPreview comments)

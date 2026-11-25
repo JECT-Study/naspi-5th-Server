@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.Disclosure;
@@ -19,6 +20,8 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
+import kr.ject.naspi.market.application.LeagueStock;
+import kr.ject.naspi.market.application.StockQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,8 +60,14 @@ class NewsQueryServiceTest {
     @MockitoBean
     private LeagueQueryService leagueQueryService;
 
+    @MockitoBean
+    private StockQueryService stockQueryService;
+
     @BeforeEach
     void setUp() {
+        given(stockQueryService.findAllByLeagueId(LEAGUE_ID)).willReturn(List.of(
+                new LeagueStock(STOCK_ID, "종목A", "소개", 70L, null),
+                new LeagueStock(OTHER_STOCK_ID, "종목B", "소개", 71L, null)));
         given(leagueQueryService.findPlayerId(VIEWER_MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.of(VIEWER_PLAYER_ID));
         given(leagueQueryService.findPlayerId(OUTSIDER_MEMBER_ID, LEAGUE_ID))
@@ -76,6 +85,8 @@ class NewsQueryServiceTest {
         assertThat(page1.items()).extracting(NewsListItem::newsId).containsExactly(third, second);
         assertThat(page1.items()).extracting(NewsListItem::sentiment)
                 .containsExactly(NewsSentiment.POSITIVE, NewsSentiment.NEGATIVE);
+        assertThat(page1.items()).extracting(NewsListItem::stockName)
+                .containsOnly("종목A");
         assertThat(page1.nextCursor()).isNotNull();
 
         NewsPage page2 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,

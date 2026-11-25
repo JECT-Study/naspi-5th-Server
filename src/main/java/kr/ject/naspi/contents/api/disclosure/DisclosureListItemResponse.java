@@ -14,6 +14,7 @@ import kr.ject.naspi.contents.domain.DisclosureReactionType;
  * @param type 항목 종류. 항상 {@code DISCLOSURE}
  * @param disclosureId 공시 ID
  * @param stockId 종목 ID
+ * @param stockName 종목 이름
  * @param title 제목
  * @param body 본문
  * @param tradingDay 작성한 거래일 번호 (1~7)
@@ -28,7 +29,8 @@ import kr.ject.naspi.contents.domain.DisclosureReactionType;
  * @param previewComment 미리보기 댓글 (가장 먼저 등록된 댓글). 없으면 null
  */
 public record DisclosureListItemResponse(FeedItemType type, long disclosureId, long stockId,
-                                         String title, String body, int tradingDay,
+                                         String stockName, String title, String body,
+                                         int tradingDay,
                                          LocalDateTime createdAt, long authorPlayerId,
                                          boolean mine, List<DisclosureImageResponse> images,
                                          long likeCount, long dislikeCount,
@@ -44,7 +46,7 @@ public record DisclosureListItemResponse(FeedItemType type, long disclosureId, l
      */
     public static DisclosureListItemResponse from(DisclosureListItem item) {
         return new DisclosureListItemResponse(item.type(), item.disclosureId(), item.stockId(),
-                item.title(), item.body(), item.tradingDay(), item.createdAt(),
+                item.stockName(), item.title(), item.body(), item.tradingDay(), item.createdAt(),
                 item.authorPlayerId(), item.mine(),
                 item.images().stream().map(DisclosureImageResponse::from).toList(),
                 item.reaction().likeCount(), item.reaction().dislikeCount(),

@@ -8,6 +8,7 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
  *
  * @param newsId 뉴스 ID
  * @param stockId 종목 ID
+ * @param stockName 종목 이름
  * @param title 제목
  * @param body 본문
  * @param sentiment 호재(POSITIVE)·악재(NEGATIVE)
@@ -16,7 +17,8 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
  * @param publishedAt 발행 일시 (KST)
  * @param comments 댓글 수와 가장 먼저 등록된 댓글
  */
-public record NewsListItem(long newsId, long stockId, String title, String body,
+public record NewsListItem(long newsId, long stockId, String stockName,
+                           String title, String body,
                            NewsSentiment sentiment, int tradingDay, LocalDateTime createdAt,
                            LocalDateTime publishedAt, CommentPreview comments)
         implements FeedItem {
