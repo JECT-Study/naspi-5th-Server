@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Map;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.websocket.domain.TopicEnvelope;
@@ -22,7 +23,7 @@ import org.springframework.messaging.simp.SimpMessageSendingOperations;
 
 class StompTopicMessagePublisherTest {
 
-    private static final Instant NOW = Instant.parse("2026-11-07T00:00:00Z");
+    private static final Instant NOW = Instant.parse("2026-11-07T00:00:00.123456Z");
 
     private final SimpMessageSendingOperations messagingTemplate =
             mock(SimpMessageSendingOperations.class);
@@ -30,12 +31,13 @@ class StompTopicMessagePublisherTest {
             messagingTemplate, Clock.fixed(NOW, ClockConfig.KST));
 
     @Test
-    @DisplayName("메시지를 발행 대상 토픽으로 보내고, 본문에는 종류·데이터·발행 시각(UTC)을 담는다")
+    @DisplayName("메시지를 발행 대상 토픽으로 보내고, 본문에는 종류·데이터·발행 시각(KST, 밀리초까지)을 담는다")
     void publishesEnvelopeToDestination() {
         publisher.publish(new TopicMessage("/topic/leagues/1/ranking", "RANKING", Map.of("a", 1)));
 
         verify(messagingTemplate).convertAndSend("/topic/leagues/1/ranking",
-                new TopicEnvelope("RANKING", Map.of("a", 1), NOW));
+                new TopicEnvelope("RANKING", Map.of("a", 1),
+                        LocalDateTime.of(2026, 11, 7, 9, 0, 0, 123_000_000)));
     }
 
     @Test

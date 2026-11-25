@@ -1,6 +1,8 @@
 package kr.ject.naspi.websocket.infra;
 
 import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import kr.ject.naspi.websocket.application.TopicMessagePublisher;
 import kr.ject.naspi.websocket.domain.TopicEnvelope;
 import kr.ject.naspi.websocket.domain.TopicMessage;
@@ -31,8 +33,8 @@ public class StompTopicMessagePublisher implements TopicMessagePublisher {
 
     @Override
     public void publish(TopicMessage message) {
-        TopicEnvelope envelope =
-                new TopicEnvelope(message.type(), message.payload(), clock.instant());
+        TopicEnvelope envelope = new TopicEnvelope(message.type(), message.payload(),
+                LocalDateTime.now(clock).truncatedTo(ChronoUnit.MILLIS));
         try {
             messagingTemplate.convertAndSend(message.destination(), envelope);
         } catch (MessageConversionException e) {

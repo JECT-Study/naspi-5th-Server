@@ -89,14 +89,11 @@ destination:/topic/leagues/1/stocks/1/candles
 | --- | --- | --- | --- |
 | type | String | 메시지 종류 | 이 토픽은 항상 `CANDLE_CHART` |
 | payload | Object | 데이터 | 아래 표 참고 |
-| publishedAt | Number | 발행 시각 | UTC epoch 밀리초, 예: `1794202325123` (= 2026-11-09 14:32:05.123 KST) |
+| publishedAt | String | 발행 시각 (KST) | REST 응답의 일시와 같은 형식(오프셋 없음, 밀리초까지), 예: `2026-11-09T14:32:05.123` |
 
 #### payload
 
-과거 캔들은 처음 접속할 때 REST API로 받고, 이 토픽은 **봉 단위별로 최근 2개 캔들만** 보냅니다.
-
-- **이전 봉** (`candles[0]`): 이미 끝난 구간이라 값이 바뀌지 않습니다.
-- **현재 봉** (`candles[1]`): 현재 시각이 속한 구간입니다. 거래가 일어나면 종가·고가·저가·거래량이 바뀝니다.
+과거 캔들은 처음 접속할 때 REST API로 받고, 이 토픽은 **봉 단위별로 최근 2개 캔들**(이전 봉, 현재 봉)만 보냅니다.
 
 | **필드** | **타입** | **설명** | **비고** |
 | --- | --- | --- | --- |
@@ -104,7 +101,7 @@ destination:/topic/leagues/1/stocks/1/candles
 | series | Array | 봉 단위별 캔들 목록 | `MINUTE_10`, `HOUR_1`, `DAY_1` 세 개 |
 | series[].interval | String | 봉 단위 | `MINUTE_10`(10분봉), `HOUR_1`(1시간봉), `DAY_1`(1일봉) |
 | series[].candles | Array | 캔들 목록 | 시간 오름차순. `[이전 봉, 현재 봉]` |
-| series[].candles[].startedAt | Number | 봉 시작 시각 | UTC epoch 밀리초. 봉 경계는 KST 기준 |
+| series[].candles[].startedAt | String | 봉 시작 시각 (KST) | REST와 같은 일시 형식 |
 | series[].candles[].openPrice | Long | 시가 (원) | |
 | series[].candles[].highPrice | Long | 고가 (원) | |
 | series[].candles[].lowPrice | Long | 저가 (원) | |
@@ -134,27 +131,27 @@ message-id:a1b2c3-0
       {
         "interval": "MINUTE_10",
         "candles": [
-          { "startedAt": 1794201600000, "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
-          { "startedAt": 1794202200000, "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
+          { "startedAt": "2026-11-09T14:20:00", "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
+          { "startedAt": "2026-11-09T14:30:00", "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
         ]
       },
       {
         "interval": "HOUR_1",
         "candles": [
-          { "startedAt": 1794196800000, "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
-          { "startedAt": 1794200400000, "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
+          { "startedAt": "2026-11-09T13:00:00", "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
+          { "startedAt": "2026-11-09T14:00:00", "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
         ]
       },
       {
         "interval": "DAY_1",
         "candles": [
-          { "startedAt": 1794096000000, "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
-          { "startedAt": 1794182400000, "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
+          { "startedAt": "2026-11-08T09:00:00", "openPrice": 10000, "highPrice": 10200, "lowPrice": 9900, "closePrice": 10100, "volume": 100 },
+          { "startedAt": "2026-11-09T09:00:00", "openPrice": 10100, "highPrice": 10300, "lowPrice": 10000, "closePrice": 10200, "volume": 57 }
         ]
       }
     ]
   },
-  "publishedAt": 1794202325123
+  "publishedAt": "2026-11-09T14:32:05.123"
 }^@
 ```
 
@@ -164,7 +161,7 @@ message-id:a1b2c3-0
 - 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
 - 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
 - 받은 캔들 2개를 `startedAt` 기준으로 차트 데이터에 합칩니다. 같은 `startedAt`의 캔들이 있으면 **덮어쓰고**, 없으면 **뒤에 추가**합니다.
-- 봉 구간이 넘어가면 진행 중이던 봉이 마지막 값 그대로 이전 봉이 되고, 새 봉이 직전 종가로 열립니다. 위 합치기 규칙대로 처리하면 따로 신경 쓸 필요가 없습니다.
+- 봉 구간이 넘어가도 위 합치기 규칙대로 처리하면 됩니다.
 - 화면에 한 봉 단위만 보여 준다면 `series`에서 해당 `interval`만 골라 씁니다.
 
 ---
@@ -206,7 +203,7 @@ content-length:0
 ### 예외
 
 1. **없는 리그·종목 ID로 구독한 경우:** 지금은 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
-2. **더미 응답:** 종목과 관계없이 종목명은 항상 `진영전자`이고, 모든 구독자가 같은 값을 받습니다. 현재 봉 종가는 보낼 때마다 ±200원 안에서 임의로 움직이고, 거래량은 1~20주씩 늘어납니다.
+2. **더미 응답:** 종목과 관계없이 모든 구독자가 같은 값을 받습니다. 현재 봉 값은 보낼 때마다 임의로 바뀝니다.
 3. **서버가 다시 시작된 경우:** 더미 캔들이 처음 값(10,000원)부터 다시 시작합니다.
 4. **1일봉 구간:** 지금은 매일 09:00(KST)을 거래일 시작으로 계산합니다. (TODO: 리그 모듈의 거래일 계산으로 교체 예정)
 5. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 과거 캔들을 다시 받습니다. (TODO: 캔들 조회 REST API 추가 예정)
@@ -232,7 +229,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 export type TopicEnvelope<T> = {
   type: string;
   payload: T;
-  publishedAt: number; // UTC epoch 밀리초
+  publishedAt: string;
 };
 
 export const stompClient = new Client({
@@ -272,7 +269,7 @@ export function subscribeTopic<T>(
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
-    const publishedAt = envelope.publishedAt;
+    const publishedAt = Date.parse(envelope.publishedAt); // 오프셋이 없어 브라우저 시간대로 해석되지만 비교에는 문제없다
     if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
     lastPublishedAt = publishedAt;
     onMessage(envelope.payload, envelope);
@@ -307,7 +304,7 @@ import { subscribeTopic } from './stompClient';
 export type CandleInterval = 'MINUTE_10' | 'HOUR_1' | 'DAY_1';
 
 export type Candle = {
-  startedAt: number; // UTC epoch 밀리초
+  startedAt: string; // KST 일시, 예: 2026-11-09T14:20:00
   openPrice: number;
   highPrice: number;
   lowPrice: number;

@@ -89,7 +89,7 @@ destination:/topic/leagues/1/stocks/1/orderbook
 | --- | --- | --- | --- |
 | type | String | 메시지 종류 | 이 토픽은 항상 `ORDER_BOOK` |
 | payload | Object | 데이터 | 아래 표 참고 |
-| publishedAt | Number | 발행 시각 | UTC epoch 밀리초, 예: `1794202325123` (= 2026-11-09 14:32:05.123 KST) |
+| publishedAt | String | 발행 시각 (KST) | REST 응답의 일시와 같은 형식(오프셋 없음, 밀리초까지), 예: `2026-11-09T14:32:05.123` |
 
 #### payload
 
@@ -129,7 +129,7 @@ message-id:a1b2c3-0
       { "orderPrice": 12100, "remainingQuantity": 150 }
     ]
   },
-  "publishedAt": 1794202325123
+  "publishedAt": "2026-11-09T14:32:05.123"
 }^@
 ```
 
@@ -206,7 +206,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 export type TopicEnvelope<T> = {
   type: string;
   payload: T;
-  publishedAt: number; // UTC epoch 밀리초
+  publishedAt: string;
 };
 
 export const stompClient = new Client({
@@ -246,7 +246,7 @@ export function subscribeTopic<T>(
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
-    const publishedAt = envelope.publishedAt;
+    const publishedAt = Date.parse(envelope.publishedAt); // 오프셋이 없어 브라우저 시간대로 해석되지만 비교에는 문제없다
     if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
     lastPublishedAt = publishedAt;
     onMessage(envelope.payload, envelope);

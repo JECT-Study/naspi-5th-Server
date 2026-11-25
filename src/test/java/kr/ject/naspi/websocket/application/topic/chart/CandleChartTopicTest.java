@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -67,11 +68,11 @@ class CandleChartTopicTest {
         assertThat(response.series()).extracting(Series::interval).containsExactly(
                 CandleInterval.MINUTE_10, CandleInterval.HOUR_1, CandleInterval.DAY_1);
         assertThat(times(response, CandleInterval.MINUTE_10))
-                .containsExactly(kst("2026-11-09T10:20:00"), kst("2026-11-09T10:30:00"));
+                .containsExactly(local("2026-11-09T10:20:00"), local("2026-11-09T10:30:00"));
         assertThat(times(response, CandleInterval.HOUR_1))
-                .containsExactly(kst("2026-11-09T09:00:00"), kst("2026-11-09T10:00:00"));
+                .containsExactly(local("2026-11-09T09:00:00"), local("2026-11-09T10:00:00"));
         assertThat(times(response, CandleInterval.DAY_1))
-                .containsExactly(kst("2026-11-08T09:00:00"), kst("2026-11-09T09:00:00"));
+                .containsExactly(local("2026-11-08T09:00:00"), local("2026-11-09T09:00:00"));
     }
 
     @Test
@@ -79,10 +80,10 @@ class CandleChartTopicTest {
     void dayCandleStartsAtNineKst() {
         assertThat(CandleChartTopic.startOf(CandleInterval.DAY_1,
                 kst("2026-11-09T08:59:59")))
-                .isEqualTo(kst("2026-11-08T09:00:00"));
+                .isEqualTo(local("2026-11-08T09:00:00"));
         assertThat(CandleChartTopic.startOf(CandleInterval.DAY_1,
                 kst("2026-11-09T09:00:00")))
-                .isEqualTo(kst("2026-11-09T09:00:00"));
+                .isEqualTo(local("2026-11-09T09:00:00"));
     }
 
     @Test
@@ -111,7 +112,7 @@ class CandleChartTopicTest {
         List<Candle> candles = candles(produceOnce(), CandleInterval.MINUTE_10);
 
         assertThat(candles.get(0)).isEqualTo(lastCurrent);
-        assertThat(candles.get(1).startedAt()).isEqualTo(kst("2026-11-09T10:40:00"));
+        assertThat(candles.get(1).startedAt()).isEqualTo(local("2026-11-09T10:40:00"));
         assertThat(candles.get(1).openPrice()).isEqualTo(lastCurrent.closePrice());
     }
 
@@ -155,9 +156,13 @@ class CandleChartTopicTest {
                 .candles();
     }
 
-    private static List<Instant> times(CandleChartResponse response,
+    private static List<LocalDateTime> times(CandleChartResponse response,
             CandleInterval interval) {
         return candles(response, interval).stream().map(Candle::startedAt).toList();
+    }
+
+    private static LocalDateTime local(String localDateTime) {
+        return LocalDateTime.parse(localDateTime);
     }
 
     private static Instant kst(String localDateTime) {

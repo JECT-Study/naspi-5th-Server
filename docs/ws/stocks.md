@@ -88,7 +88,7 @@ destination:/topic/leagues/1/stocks
 | --- | --- | --- | --- |
 | type | String | 메시지 종류 | 이 토픽은 항상 `STOCK` |
 | payload | Object | 데이터 | 아래 표 참고 |
-| publishedAt | Number | 발행 시각 | UTC epoch 밀리초, 예: `1794202325123` (= 2026-11-09 14:32:05.123 KST) |
+| publishedAt | String | 발행 시각 (KST) | REST 응답의 일시와 같은 형식(오프셋 없음, 밀리초까지), 예: `2026-11-09T14:32:05.123` |
 
 #### payload
 
@@ -116,7 +116,7 @@ message-id:a1b2c3-0
       { "stockId": 2, "stockName": "민영건설", "currentPrice": 12500, "changeAmount": -10, "changeRate": -1.5 }
     ]
   },
-  "publishedAt": 1794202325123
+  "publishedAt": "2026-11-09T14:32:05.123"
 }^@
 ```
 
@@ -126,7 +126,7 @@ message-id:a1b2c3-0
 - 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
 - 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
 - 받은 값으로 화면 상태를 통째로 덮어씁니다.
-- `stock` 목록은 리그의 **전체 종목**입니다. 목록을 통째로 바꿉니다.
+- `stock`은 리그의 **전체 종목** 목록입니다. 목록을 통째로 바꿉니다.
 
 ---
 
@@ -191,7 +191,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 export type TopicEnvelope<T> = {
   type: string;
   payload: T;
-  publishedAt: number; // UTC epoch 밀리초
+  publishedAt: string;
 };
 
 export const stompClient = new Client({
@@ -231,7 +231,7 @@ export function subscribeTopic<T>(
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
-    const publishedAt = envelope.publishedAt;
+    const publishedAt = Date.parse(envelope.publishedAt); // 오프셋이 없어 브라우저 시간대로 해석되지만 비교에는 문제없다
     if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
     lastPublishedAt = publishedAt;
     onMessage(envelope.payload, envelope);

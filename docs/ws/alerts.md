@@ -12,7 +12,7 @@
 | 프로토콜 | STOMP 1.2 over WebSocket (SockJS 미사용) |
 | 인증 | 로그인 세션 쿠키 `SESSION` ([2. 연결 인증](#2-연결-인증)) |
 | 구독 | `/topic/leagues/{leagueId}/players/{playerId}/alerts` |
-| 구독 권한 | 본인만 (`playerId`가 로그인 회원 ID와 같아야 함) |
+| 구독 권한 | 본인만 |
 | 메시지 종류 (`type`) | `ALERT` |
 | 전달 시점 | 10초마다 (더미). 구독자가 없으면 보내지 않습니다 |
 | 대응 REST | 없음 |
@@ -60,11 +60,9 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 
 ### 구독 권한
 
-**본인만** 구독할 수 있습니다. 지금은 리그 참여자 기능이 없어 `playerId`를 **로그인 회원 ID**와 비교합니다. 다르면 구독이 거부됩니다.
+로그인한 회원 **본인의 알림**만 구독할 수 있습니다.
 
-> TODO: 리그 모듈이 생기면 `playerId`가 로그인 회원의 해당 리그 참여자 ID인지 확인하도록 바뀝니다. 그때는 `playerId`에 회원 ID가 아니라 참여자 ID를 넣어야 합니다.
->
-> TODO: 지금은 프론트가 로그인 회원 ID를 받을 수 있는 REST API가 없습니다. 참여자 조회 API와 함께 추가될 예정입니다.
+> TODO: `playerId`에 회원 ID 대신 그 리그의 내 플레이어 ID를 넣도록 바뀝니다.
 
 권한이 없으면 `ERROR` 프레임을 받고 **연결 전체가 끊깁니다**([5. 에러](#5-에러)).
 
@@ -91,7 +89,7 @@ destination:/topic/leagues/1/players/1/alerts
 | --- | --- | --- | --- |
 | type | String | 메시지 종류 | 이 토픽은 항상 `ALERT` |
 | payload | Object | 데이터 | 아래 표 참고 |
-| publishedAt | Number | 발행 시각 | UTC epoch 밀리초, 예: `1794202325123` (= 2026-11-09 14:32:05.123 KST) |
+| publishedAt | String | 발행 시각 (KST) | REST 응답의 일시와 같은 형식(오프셋 없음, 밀리초까지), 예: `2026-11-09T14:32:05.123` |
 
 #### payload
 
@@ -122,7 +120,7 @@ message-id:a1b2c3-0
     "message": "진영전자 10주가 12,500원에 체결되었습니다.",
     "url": "/leagues/1/stocks/1"
   },
-  "publishedAt": 1794202325123
+  "publishedAt": "2026-11-09T14:32:05.123"
 }^@
 ```
 
@@ -131,9 +129,8 @@ message-id:a1b2c3-0
 - 메시지는 바뀐 부분이 아니라 **그 시점의 상태**를 담습니다. 이전 메시지와 비교해 변경분을 계산하지 않습니다.
 - 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
 - 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
-- **알림은 다른 토픽과 다릅니다.** 상태를 덮어쓰는 것이 아니라 메시지 하나가 알림 하나입니다. 받을 때마다 목록에 추가하거나 토스트로 띄웁니다.
-- 알림 ID가 없어 같은 알림이 두 번 왔는지 구분할 수 없습니다.
-- 알 수 없는 `alertType`이 오면 무시하지 말고 기본 모양으로 보여 줍니다. 나중에 종류가 늘어날 수 있습니다.
+- 메시지 하나가 알림 하나입니다. 받을 때마다 목록에 추가하거나 토스트로 띄웁니다.
+- 알 수 없는 `alertType`이 오면 기본 모양으로 보여 줍니다.
 
 ---
 
@@ -175,7 +172,7 @@ content-length:0
 
 1. **다른 사람의 `playerId`로 구독한 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 `playerId`를 꼭 확인합니다.
 2. **없는 리그 ID로 구독한 경우:** 지금은 리그 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
-3. **더미 응답:** 실제 이벤트와 관계없이 **10초마다 같은 체결 알림**을 보냅니다. (TODO: 체결·공시 등 도메인 이벤트가 생길 때 바로 보내도록 교체 예정. 그때는 주기 발행이 없어집니다)
+3. **더미 응답:** 실제 이벤트와 관계없이 **10초마다 같은 체결 알림**을 보냅니다. (TODO: 이벤트가 생길 때 바로 보내도록 교체 예정)
 4. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. (TODO: 놓친 알림을 조회하는 REST API가 필요한지 결정 필요)
 
 ---
@@ -199,7 +196,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 export type TopicEnvelope<T> = {
   type: string;
   payload: T;
-  publishedAt: number; // UTC epoch 밀리초
+  publishedAt: string;
 };
 
 export const stompClient = new Client({
@@ -239,7 +236,7 @@ export function subscribeTopic<T>(
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
-    const publishedAt = envelope.publishedAt;
+    const publishedAt = Date.parse(envelope.publishedAt); // 오프셋이 없어 브라우저 시간대로 해석되지만 비교에는 문제없다
     if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
     lastPublishedAt = publishedAt;
     onMessage(envelope.payload, envelope);
@@ -277,7 +274,7 @@ export type Alert = {
   alertType: AlertType;
   message: string;
   url: string;
-  publishedAt: number; // UTC epoch 밀리초 // 메시지 공통 필드에서 가져온다
+  publishedAt: string; // KST 일시. 메시지 공통 필드에서 가져온다
 };
 ```
 
