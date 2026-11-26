@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DisclosureLookupController {
 
     private static final String FIELDS = """
+            - 종목: `stockId`, `stockName`(종목 이름).
             - 작성 정보: `tradingDay`(작성한 거래일 1~7), `createdAt`(KST), `authorPlayerId`. \
             공시 작성자는 항상 그 종목의 상장자이므로 작성자 이름은 종목 조회의 `listerName`을 쓴다. \
             `mine`이 `true`이면 내가 작성한 공시다 (삭제 버튼 노출).

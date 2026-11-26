@@ -155,9 +155,9 @@ public class DisclosureQueryService {
                         && found.getStockId() == stockId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.DISCLOSURE_NOT_FOUND));
-        return new DisclosureDetail(d.getId(), d.getStockId(), d.getTitle().getValue(),
-                d.getBody().getValue(), d.getTradingDay(), d.getCreatedAt(),
-                d.getAuthorPlayerId(), d.getAuthorPlayerId() == playerId,
+        return new DisclosureDetail(d.getId(), d.getStockId(), stockName(leagueId, stockId),
+                d.getTitle().getValue(), d.getBody().getValue(), d.getTradingDay(),
+                d.getCreatedAt(), d.getAuthorPlayerId(), d.getAuthorPlayerId() == playerId,
                 imageService.issueUrls(d.getId()),
                 reactionService.summarizeAll(List.of(d.getId()), playerId).get(d.getId()),
                 commentService.findAll(leagueId, d.getId(), playerId),
@@ -165,6 +165,14 @@ public class DisclosureQueryService {
                         .filter(news -> SHOWN_NEWS_STATUSES.contains(news.getStatus()))
                         .map(DisclosureNews::from)
                         .orElse(null));
+    }
+
+    private String stockName(long leagueId, long stockId) {
+        return stockQueryService.findAllByLeagueId(leagueId).stream()
+                .filter(stock -> stock.stockId() == stockId)
+                .map(LeagueStock::name)
+                .findFirst()
+                .orElse(null);
     }
 
     /** 리그 참여자만 공시를 볼 수 있다. 리그 상태는 따지지 않아 종료된 리그도 조회할 수 있다. */

@@ -11,6 +11,7 @@ import kr.ject.naspi.contents.domain.DisclosureReactionType;
  *
  * @param disclosureId 공시 ID
  * @param stockId 종목 ID
+ * @param stockName 종목 이름
  * @param title 제목
  * @param body 본문
  * @param tradingDay 작성한 거래일 번호 (1~7)
@@ -25,7 +26,8 @@ import kr.ject.naspi.contents.domain.DisclosureReactionType;
  * @param comments 댓글 전체 (오래된 순). 댓글이 없으면 빈 목록
  * @param news 공시로 만든 AI 뉴스. 발행·생성 실패일 때만 있고, 생성 중·미생성이면 null
  */
-record DisclosureDetailResponse(long disclosureId, long stockId, String title, String body,
+record DisclosureDetailResponse(long disclosureId, long stockId, String stockName,
+                                String title, String body,
                                 int tradingDay, LocalDateTime createdAt, long authorPlayerId,
                                 boolean mine, List<DisclosureImageResponse> images,
                                 long likeCount, long dislikeCount,
@@ -34,7 +36,8 @@ record DisclosureDetailResponse(long disclosureId, long stockId, String title, S
 
     static DisclosureDetailResponse from(DisclosureDetail detail) {
         return new DisclosureDetailResponse(detail.disclosureId(), detail.stockId(),
-                detail.title(), detail.body(), detail.tradingDay(), detail.createdAt(),
+                detail.stockName(), detail.title(), detail.body(), detail.tradingDay(),
+                detail.createdAt(),
                 detail.authorPlayerId(), detail.mine(),
                 detail.images().stream().map(DisclosureImageResponse::from).toList(),
                 detail.reaction().likeCount(), detail.reaction().dislikeCount(),
