@@ -102,13 +102,13 @@
 ### WS-05 캔들 차트 토픽 실데이터 전환
 - Jira: ND-110
 - 목적: 종목 상세 차트가 실제 체결 데이터로 봉을 그리게 한다
-- 작업 내용: `/topic/leagues/{leagueId}/stocks/{stockId}/candles` (`CandleChartTopic`)를 체결 데이터 기반으로 바꾼다. 대응 REST 없음 — 과거 캔들 조회 REST API를 함께 만들고 같은 구조(`stockName`, `series[]`의 `interval`·`candles[]`)로 맞춘다. 선행: ORD-03, LEA-11
+- 작업 내용: `/topic/leagues/{leagueId}/stocks/{stockId}/candles` (`CandleChartTopic`)를 체결 데이터 기반으로 바꾼다. 대응 REST: [WS-06](#ws-06-과거-캔들-조회-api-추가) 과거 캔들 조회 — 봉 단위 하나의 `Candle` 배열을 주므로 토픽의 `series[].candles[]` 항목과 필드를 같게 맞춘다. 선행: ORD-03(체결 기록), LEA-11(거래일 계산), WS-06(봉 집계 조회)
   - 체결 기록으로 봉 단위(10분·1시간·1일)별 시가·고가·저가·종가·거래량을 집계하는 market 조회를 만든다. 1일봉 구간은 league의 거래일 계산을 쓴다
   - 봉 단위별 최근 2개(이전 봉·현재 봉)를 보내고, `TradeExecuted`나 현재가 변경 때 해당 종목 구독자에게 발행한다
   - 랜덤 더미 생성과 메모리 상태(`RecentCandles`)를 지운다
   - `CandleChartTopicAuthorizer`가 해당 리그 입장자만 구독을 허용하게 한다
 - 완료 조건 (확인 방법)
-  - [ ] 과거 캔들 REST 응답과 토픽 메시지의 JSON 필드가 같다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.chart.*"`
+  - [ ] 과거 캔들 REST 응답 항목과 토픽 메시지 `candles[]` 항목의 JSON 필드가 같다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.chart.*"`
   - [ ] 체결 데이터로 봉 단위별 시·고·저·종가와 거래량이 맞게 집계된다 — `./gradlew test --tests "kr.ject.naspi.market.*Candle*"`
   - [ ] 체결이 없는 구간은 직전 종가로 열린 거래량 0의 봉이다 — 같은 테스트
   - [ ] 리그에 입장하지 않은 회원은 구독할 수 없다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.chart.*"`
@@ -116,3 +116,31 @@
 - 결정 필요
   - 차트는 [roadmap.md 6.4](../../policies/roadmap.md)에 있어 v1 구현 대상이 아니다. v1에서 실데이터로 구현할지(정책서 반영 필요), v2까지 더미로 두거나 토픽을 내릴지 정한다
   - 체결 기록 저장 위치와 집계 방식 (체결마다 봉 테이블 갱신 vs 조회 시 집계). ERD 반영 필요
+
+### WS-06 과거 캔들 조회 API 추가
+- Jira:
+- 목적: 종목 상세 차트에 처음 들어갈 때 리그 시작부터 지금까지의 봉을 그리고, 이후는 [WS-05](#ws-05-캔들-차트-토픽-실데이터-전환) 토픽으로 이어 그리게 한다
+- 작업 내용: `GET /api/leagues/{leagueId}/stocks/{stockId}/candles?interval={MINUTE_10|HOUR_1|DAY_1}`를 새로 만든다. 토픽 없음 (WS-05 `/topic/leagues/{leagueId}/stocks/{stockId}/candles`의 첫 화면 값). 선행: ORD-03(체결 기록), LEA-11(거래일 계산)
+  - 요청 `interval`은 웹소켓과 같은 `MINUTE_10`, `HOUR_1`, `DAY_1`. 없거나 다른 값이면 400
+  - 응답은 웹소켓 `Candle`과 같은 필드의 배열: `startedAt`(UTC epoch 밀리초), `openPrice`, `highPrice`, `lowPrice`, `closePrice`, `volume`
+  - 범위는 리그 시작부터 지금까지(종료된 리그는 종료 시각까지), 오래된 순, 진행 중인 봉 포함
+  - 체결 기록(`Trade`)으로 봉별 시가·고가·저가·종가·거래량을 집계한다. 체결이 없는 봉은 직전 봉 종가(첫 봉은 시초가 10,000원)로 시·고·저·종가를 채우고 거래량 0
+  - **1일봉 1개 = 거래일 1일**. 구간은 league의 거래일(`trading_day`의 `starts_at`~`ends_at`, `TradingSchedule.periods()`)을 그대로 쓰고 24시간 단위로 자르지 않는다
+    - 1일차는 리그 시작 일시부터 다음 날 09:00까지다. 00:00~09:00에 시작하면 그날 09:00 전후가 봉 두 개로 나뉘지 않고 1일차 봉 하나다
+    - 1일봉 `startedAt`은 그 거래일의 `starts_at` (1일차는 리그 시작 일시, 이후는 09:00)
+    - 1일봉 종가는 정책의 종가(거래일 마지막 체결가, 거래량 0이면 기준가)와 같다
+  - 거래일 구간은 league `application` 조회(예: `LeagueQueryService`)로 노출해 받는다 (다른 모듈 domain 직접 참조 금지)
+  - 조회 서비스는 체결 기록을 가진 order `application`에 두고, Controller는 호가 조회(`order/api/orderbook`)처럼 `order/api/candle`에 둔다. WS-05 토픽도 이 조회를 재사용한다
+- 완료 조건 (확인 방법)
+  - [ ] 응답 항목의 JSON 필드가 웹소켓 `Candle`과 같다 — `./gradlew test --tests "kr.ject.naspi.order.*Candle*"`
+  - [ ] 체결 데이터로 봉 단위별 시·고·저·종가와 거래량이 맞게 집계되고, 오래된 순이며 진행 중인 봉을 포함한다 — 같은 테스트
+  - [ ] 체결이 없는 봉은 직전 봉 종가(첫 봉은 10,000원)로 열린 거래량 0의 봉이다 — 같은 테스트
+  - [ ] 1일봉은 거래일마다 1개이고, 00:00~09:00에 시작한 리그의 1일차(시작 일시~다음 날 09:00)도 봉 1개다 — 같은 테스트 (시각은 `Clock` 고정)
+  - [ ] 1일봉 종가가 같은 거래일의 확정 종가와 같다 (거래량 0이면 기준가) — 같은 테스트
+  - [ ] 리그에 입장하지 않은 회원은 조회할 수 없다 — 같은 테스트
+  - [ ] Swagger UI에 API와 `interval` 값이 문서화된다 — `/swagger-ui/index.html`
+- 결정 필요
+  - 차트는 [roadmap.md 6.4](../../policies/roadmap.md)에 있어 v1 정책 범위 밖이다 (WS-05와 같은 결정). v1에서 구현하면 정책서에 차트 항목을 먼저 반영한다
+  - 10분봉·1시간봉 경계: (a) KST 시계 기준(xx:00, xx:10 …)으로 자르고 첫 봉만 리그 시작 일시부터, (b) 리그 시작 일시 기준으로 자름. 권장: (a). (a)일 때 첫 봉 `startedAt`을 봉 경계로 줄지 리그 시작 일시로 줄지
+  - 조회 가능 시점: 시작 전 리그(빈 배열 vs 에러), 종료된 리그(정책 "종료 후 결과 페이지만 접근 가능"에 따라 거절할지)
+  - 1일봉 외 봉에서 거래일 경계(09:00)를 넘는 봉은 없다(10분·1시간이 09:00을 나누므로). 다만 (b)를 고르면 09:00을 넘는 봉이 생길 수 있어 자를지 정한다
