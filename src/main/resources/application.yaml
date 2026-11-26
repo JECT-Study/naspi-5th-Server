@@ -120,9 +120,6 @@ naspi:
       # 알림 (AlertTopic)
       alerts:
         interval: 10s
-      # 종목 정보 (StockTopic)
-      stocks:
-        interval: 1s
       # 호가 (OrderBookTopic)
       orderbook:
         interval: 1s

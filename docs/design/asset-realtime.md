@@ -55,7 +55,7 @@
 | 캐시 갱신 | 1초마다(`naspi.market.current-price.refresh-interval`, 기본 1s) 진행 중(`STARTED`) 리그의 `stock`을 한 쿼리로 읽어 캐시를 덮어쓴다. **캐시에 쓰는 곳은 이 갱신 하나뿐이다** (`CurrentPriceRefreshService`, 전용 스레드 하나로 실행하는 `CurrentPriceRefreshScheduler`) |
 | 변경 감지 | 덮어쓸 때 이전 값과 비교해 현재가가 바뀐 종목이 있는 리그 ID를 모아 `CurrentPricesChanged`로 알린다 (websocket이 구독해 2장의 주기 발행을 한다). 새로 캐시에 들어온 리그(리그 시작, 서버 재시작 직후)도 바뀐 것으로 본다. 이름·소개만 바뀐 경우는 알리지 않는다 |
 | 캐시에 없을 때 | 대기실·종료 리그나 첫 갱신 전에는 `StockQueryService.findAllByLeagueId`가 DB에서 읽는다. 종료된 리그는 다음 갱신에서 캐시에서 빠진다 |
-| 사용처 | 화면 표시용 조회만 (`StockQueryService.findAllByLeagueId` → 자산 조회, 리그 상세, 이후 종목·호가창 토픽) |
+| 사용처 | 화면 표시용 조회만 (`StockQueryService.findAllByLeagueId` → 자산 조회, 리그 상세, 이후 호가창 토픽). 종목 토픽은 거래량·기준가가 필요해 이 캐시가 아니라 REST와 같은 DB 조회를 쓴다) |
 | 위치 | market. 인터페이스 `StockSnapshotCache`는 `domain`, 로컬 메모리 구현 `LocalStockSnapshotCache`는 `infra`. 다중 서버 시 Redis 구현으로 교체한다 |
 
 - 쓰는 곳이 하나라서 늦게 도착한 옛날 값이 최신 값을 덮어쓰는 경쟁이 없다. 순번(버전) 컬럼이 필요 없다.

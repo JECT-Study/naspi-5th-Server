@@ -55,6 +55,7 @@ public class AssetTopic {
             Pattern.compile("^/topic/leagues/(\\d+)/players/(\\d+)/assets$");
 
     /** 발행을 실행할 웹소켓 발행 스레드 풀 ({@code WebSocketConfig#topicTaskScheduler}). */
+    // TODO: StockTopic.PUBLISH_EXECUTOR와 중복, 공통 상수로 합친다
     static final String PUBLISH_EXECUTOR = "topicTaskScheduler";
 
     private final TopicSubscriptions subscriptions;

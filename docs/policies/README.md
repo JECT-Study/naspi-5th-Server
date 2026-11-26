@@ -44,7 +44,7 @@ Spring 이벤트는 `websocket` 발행과 모듈 내부 비동기 처리에만 �
 
 | 이벤트 | 발행 | 구독 |
 |---|---|---|
-| 체결 (`TradeExecuted`) | order | websocket: 매수자·매도자 자산 즉시 발행 (커밋 이후, [설계](../design/asset-realtime.md)) |
+| 체결 (`TradeExecuted`) | order | websocket: 매수자·매도자 자산 즉시 발행 (커밋 이후, [설계](../design/asset-realtime.md)), 리그 종목 시세 발행 (커밋 이후) |
 | 공시 게시 (`DisclosurePublished`) | contents | contents: AI 뉴스 비동기 생성 |
 
 ## 작성 규칙

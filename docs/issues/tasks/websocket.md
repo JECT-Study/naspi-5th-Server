@@ -31,18 +31,24 @@
 - Jira: ND-112
 - 목적: 종목 목록 화면이 리그 전체 종목의 현재가·등락을 실시간으로 반영하게 한다
 - 작업 내용: `/topic/leagues/{leagueId}/stocks` (`StockTopic`)를 `GET /api/leagues/{leagueId}/stocks` (`StockLookupController#findAll`, `List<MemberStockResponse>`)와 같은 구조로 바꾼다. 선행: MKT-05, 현재가 캐시([asset-realtime.md 3장](../../design/asset-realtime.md#3-현재가-캐시))
-  - 메시지를 REST 종목 목록 구조(`stockId`, `name`, `description`, `listerName`, `currentPrice`·`basePrice`·`upperLimitPrice`·`lowerLimitPrice`·`changeAmount`·`changeRate`·`volume`)로 바꾼다. 더미의 `stockName`, 최상위 `stock` 감싸기는 REST에 맞춘다
-  - 값은 `LeagueStockLookupService` / `StockQueryService`(현재가 캐시)에서 얻는다
-  - 주기 더미 발행을 `CurrentPricesChanged` 구독으로 바꿔 바뀐 리그에만 발행한다
+  - 메시지를 REST 종목 목록 구조(`stockId`, `name`, `description`, `listerName`, `currentPrice`·`basePrice`·`upperLimitPrice`·`lowerLimitPrice`·`changeAmount`·`changeRate`·`volume`)로 바꾼다. `mine`은 넣지 않고, 시세가 아닌 필드도 매번 모두 보낸다. 더미의 `stockName`은 REST에 맞춘다
+  - 내 자산 토픽과 같이 계산 시각 `asOf`를 WS 메시지에만 붙인다 (REST 응답에는 없음). REST `data`가 배열이므로 메시지는 `{ "stocks": [종목 항목], "asOf": ... }`로 감싼다
+  - 값은 `LeagueStockLookupService`에서 얻는다. 지금 조회는 조회 회원(`memberId`)이 필요하므로 조회자 없이 리그 단위로 조회하는 메서드를 추가하고, REST와 종목 변환 로직을 공유한다
+  - 주기 더미 발행을 `CurrentPricesChanged` 구독으로 바꿔 바뀐 리그에만 발행한다. 이 이벤트는 트랜잭션 밖(캐시 갱신 스케줄러)에서 발행되므로 `@EventListener`로 받는다
+  - 같은 가격 체결은 현재가가 바뀌지 않아 `CurrentPricesChanged`가 나가지 않으므로, `TradeExecuted` 커밋 후에도 해당 리그에 발행해 거래량을 반영한다
   - `StockTopicAuthorizer`가 해당 리그 입장자만 구독을 허용하게 한다 (지금은 로그인 회원 누구나)
 - 완료 조건 (확인 방법)
-  - [ ] 토픽 메시지 JSON 필드가 `GET /api/leagues/{leagueId}/stocks`의 종목 항목과 같다 (`mine` 결정 반영) — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.stock.*"`
-  - [ ] 체결로 현재가가 바뀐 리그의 구독자에게만 발행되고, 바뀌지 않은 리그에는 발행되지 않는다 — 같은 테스트
-  - [ ] 리그에 입장하지 않은 회원은 구독할 수 없다 — 같은 테스트
-  - [ ] `StockTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO" src/main/java/kr/ject/naspi/websocket/application/topic/stock`
-- 결정 필요
-  - REST의 `mine`(조회자 본인 종목 여부)은 리그 단위 토픽으로 보낼 수 없다. (a) 토픽에서 빼고 프론트가 REST 값을 유지, (b) 플레이어 단위 토픽으로 변경. 권장: (a)
-  - 종목 소개·상장자 이름처럼 시세가 아닌 필드도 매번 보낼지, 시세 필드만 보낼지
+  - [x] 토픽 메시지 `stocks[]` 항목의 JSON 필드가 `GET /api/leagues/{leagueId}/stocks`의 종목 항목에서 `mine`을 뺀 것과 같고, 메시지에 `asOf`가 있다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.stock.*"`
+  - [x] 체결로 현재가가 바뀐 리그의 구독자에게만 발행되고, 바뀌지 않은 리그에는 발행되지 않는다 — 같은 테스트
+  - [x] 같은 가격으로 체결돼도 체결 커밋 후 해당 리그 구독자에게 바뀐 거래량이 발행되고, 롤백되면 발행되지 않는다 — 같은 테스트
+  - [x] 리그에 입장하지 않은 회원은 구독할 수 없다 — 같은 테스트
+  - [x] `StockTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO" src/main/java/kr/ject/naspi/websocket/application/topic/stock`
+- 결정 (2026-11-27)
+  - `mine`: 리그 단위 토픽을 유지하고 토픽에서 뺀다. 리그 안에서 바뀌지 않으므로 프론트는 REST로 받은 값을 유지한다
+  - 시세가 아닌 필드(이름·소개·상장자 이름)도 매번 모두 보낸다
+  - 거래량: 같은 가격 체결도 반영하도록 `TradeExecuted`(커밋 이후)도 구독한다
+  - 비동기 발행 순서 역전은 내 자산과 같이 WS 전용 `asOf`로 클라이언트가 이른 메시지를 버린다
+  - 범위 밖: 거래일 전환(09:00) 시 발행(별도 스토리), 종목 소개 수정 즉시 반영
 
 ### WS-02 호가 토픽 실데이터 전환
 - Jira: ND-111
