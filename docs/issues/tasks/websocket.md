@@ -53,12 +53,12 @@
   - 현재가는 캐시 값이라 늦게 바뀔 수 있으므로 `CurrentPricesChanged`에도 해당 리그의 구독 종목을 다시 발행한다
   - `OrderBookTopicAuthorizer`가 REST와 같은 조건(진행 중인 리그의 참여자)으로 구독을 허용하게 한다
 - 완료 조건 (확인 방법)
-  - [ ] 토픽 메시지 JSON 필드가 호가 조회 REST 응답과 같다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.orderbook.*"`
-  - [ ] 지정가 주문 접수·취소·체결 커밋 후 해당 종목 구독자에게 바뀐 호가가 발행된다 — 같은 테스트
-  - [ ] 다른 종목·다른 리그의 구독자에게는 발행되지 않는다 — 같은 테스트
-  - [ ] 진행 중인 리그의 참여자가 아니면 구독할 수 없다 — 같은 테스트
-  - [ ] `OrderBookTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO" src/main/java/kr/ject/naspi/websocket/application/topic/orderbook`
-- 결정 필요: 체결이 몰릴 때 이벤트마다 발행할지, 종목별로 모아 짧은 주기로 한 번 발행할지
+  - [x] 토픽 메시지 JSON 필드가 호가 조회 REST 응답과 같다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.orderbook.*"`
+  - [x] 지정가 주문 접수·취소·체결 커밋 후 해당 종목 구독자에게 바뀐 호가가 발행된다 — 같은 테스트
+  - [x] 다른 종목·다른 리그의 구독자에게는 발행되지 않는다 — 같은 테스트
+  - [x] 진행 중인 리그의 참여자가 아니면 구독할 수 없다 — 같은 테스트
+  - [x] `OrderBookTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO" src/main/java/kr/ject/naspi/websocket/application/topic/orderbook`
+- 결정: 체결이 몰려도 이벤트(`TradeExecuted`·`OrderPlaced`·`OrderCanceled`)마다 바로 발행한다. 같은 커밋에서 같은 종목이 여러 번 발행될 수 있다 (v1 규모에서 허용)
 
 ### WS-03 내 자산 토픽 실데이터 전환
 - Jira: ND-109
