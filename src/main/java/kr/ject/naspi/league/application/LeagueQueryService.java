@@ -185,8 +185,50 @@ public class LeagueQueryService {
     }
 
     /**
+     * 리그 화면에 접근할 수 있는 회원의 플레이어 ID를 조회한다. 리그 결과 페이지를 제외한 리그 화면 API(자산,
+     * 종목, 공시, 뉴스, 댓글, 피드 등)는 입장 확인에 {@link #findPlayerId} 대신 이 메서드를 쓴다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "리그 시작 및 운영", "리그 결과"): 종료 시각부터는 리그 결과
+     * 페이지만 접근할 수 있고, 그 외 해당 리그 기록 전체에 접근할 수 없다. 종료 처리 전이라도 종료 시각이 지났으면
+     * 종료로 본다.
+     *
+     * <p>입장 여부를 먼저 확인해 입장하지 않은 회원에게는 리그 상태를 알리지 않는다.
+     *
+     * @param memberId 회원 ID
+     * @param leagueId 리그 ID
+     * @return 플레이어 ID
+     * @throws NaspiBizException 리그에 입장하지 않은 회원이거나({@code FORBIDDEN}), 리그가 없거나 만료·삭제된
+     *         대기실이거나({@code LEAGUE_NOT_FOUND}), 종료 시각이 지난 리그인 경우({@code LEAGUE_ALREADY_ENDED})
+     */
+    public long requireAccessiblePlayer(long memberId, long leagueId) {
+        long playerId = findPlayerId(memberId, leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        League league = leagueRepository.findById(leagueId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        league.requireOngoing(LocalDateTime.now(clock));
+        return playerId;
+    }
+
+    /**
+     * {@link #requireAccessiblePlayer}와 같은 판정을 예외 없이 한다. 웹소켓 구독 권한 확인처럼 거절을 참·거짓으로
+     * 다루는 쪽에서 쓴다.
+     *
+     * @param memberId 회원 ID
+     * @param leagueId 리그 ID
+     * @return 플레이어 ID. 입장하지 않았거나, 리그가 없거나 만료·삭제되었거나, 종료 시각이 지났으면 빈 값
+     */
+    public Optional<Long> findAccessiblePlayerId(long memberId, long leagueId) {
+        try {
+            return Optional.of(requireAccessiblePlayer(memberId, leagueId));
+        } catch (NaspiBizException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * 리그에 입장한 회원의 플레이어 ID를 조회한다. 다른 모듈이 로그인 회원 본인의 플레이어를 찾을 때 쓴다
-     * (클라이언트가 보낸 플레이어 ID를 믿지 않는다).
+     * (클라이언트가 보낸 플레이어 ID를 믿지 않는다). 리그 상태는 따지지 않는다. 리그 화면 API는 종료 리그 접근을
+     * 막는 {@link #requireAccessiblePlayer}를 쓴다.
      *
      * @param memberId 회원 ID
      * @param leagueId 리그 ID
@@ -223,12 +265,12 @@ public class LeagueQueryService {
      * 작성됐는지 기록할 때 쓴다.
      *
      * @param leagueId 리그 ID
-     * @return 현재 거래일. 진행 중이 아닌 리그(대기실, 종료)면 빈 값
+     * @return 현재 거래일. 진행 중이 아닌 리그(대기실, 종료, 종료 처리 전이라도 종료 시각 이후)면 빈 값
      * @throws NaspiBizException 리그가 없는 경우 (만료·삭제된 대기실 포함)
      */
     public Optional<LeagueTradingDay> findCurrentTradingDay(long leagueId) {
         League league = getLeague(leagueId);
-        if (!league.isTradable()) {
+        if (!league.isTradable(LocalDateTime.now(clock))) {
             return Optional.empty();
         }
         return Optional.of(tradingDayOf(league));

@@ -86,8 +86,7 @@ public class StockEditService {
     }
 
     private long resolvePlayerId(long leagueId, long memberId) {
-        return leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        return leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
     }
 
     private Stock findOwnedStock(long leagueId, long playerId, long stockId) {

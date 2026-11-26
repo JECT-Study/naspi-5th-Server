@@ -231,6 +231,75 @@ class LeagueTest {
                 .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("리그는 종료 시각(시작 KST 날짜 + 7일 09:00)에 종료된다")
+    void endAtEndsAt() {
+        League league = newLeague();
+        league.start(participants(3), STARTED_AT);
+        LocalDateTime endsAt = league.getEndsAt();
+
+        assertThat(endsAt).isEqualTo(STARTED_AT.toLocalDate().plusDays(7).atTime(9, 0));
+        assertThat(league.isEndDue(endsAt.minusNanos(1))).isFalse();
+        assertThat(league.isEndDue(endsAt)).isTrue();
+
+        league.end(endsAt);
+
+        assertThat(league.getStatus()).isEqualTo(LeagueStatus.ENDED);
+        assertThat(league.isEndDue(endsAt.plusDays(1))).isFalse();
+    }
+
+    @Test
+    @DisplayName("종료 시각 전에는 리그를 종료할 수 없다 (조기 종료 불가)")
+    void endBeforeEndsAtRejected() {
+        League league = newLeague();
+        league.start(participants(3), STARTED_AT);
+
+        assertThatThrownBy(() -> league.end(league.getEndsAt().minusSeconds(1)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(league.getStatus()).isEqualTo(LeagueStatus.STARTED);
+    }
+
+    @Test
+    @DisplayName("진행 중인 리그만 종료할 수 있다")
+    void endOnlyStarted() {
+        LocalDateTime later = STARTED_AT.plusDays(30);
+        League waiting = newLeague();
+        assertThatThrownBy(() -> waiting.end(later)).isInstanceOf(IllegalStateException.class);
+
+        League expired = newLeague();
+        expired.expire(EXPIRES_AT);
+        assertThatThrownBy(() -> expired.end(later)).isInstanceOf(IllegalStateException.class);
+
+        League ended = newLeague();
+        ended.start(participants(3), STARTED_AT);
+        ended.end(ended.getEndsAt());
+        assertThatThrownBy(() -> ended.end(later)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("리그가 종료되면 초대 코드가 폐기된다")
+    void endClosesInvitation() {
+        League league = newLeague();
+        league.start(participants(3), STARTED_AT);
+        assertThat(league.getInviteCode()).isNotNull();
+
+        league.end(league.getEndsAt());
+
+        assertThat(league.getInviteCode()).isNull();
+    }
+
+    @Test
+    @DisplayName("종료 시각부터는 종료 처리 전이라도 거래할 수 없는 리그로 본다")
+    void isTradableUntilEndsAt() {
+        League waiting = newLeague();
+        assertThat(waiting.isTradable(STARTED_AT)).isFalse();
+
+        League started = newLeague();
+        started.start(participants(3), STARTED_AT);
+        assertThat(started.isTradable(started.getEndsAt().minusNanos(1))).isTrue();
+        assertThat(started.isTradable(started.getEndsAt())).isFalse();
+    }
+
     private static League newLeague() {
         return League.create(LeagueName.of("리그"), InviteCode.of("ABC1234"), CREATED_AT);
     }

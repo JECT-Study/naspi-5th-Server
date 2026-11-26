@@ -65,10 +65,10 @@ class NewsRegenerationServiceTest {
         given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID))
                 .willReturn(Optional.of(new LeagueTradingDay(2, 7, NOW.plusDays(1),
                         NOW.minusDays(1), NOW.plusDays(6))));
-        given(leagueQueryService.findPlayerId(AUTHOR, LEAGUE_ID))
-                .willReturn(Optional.of(AUTHOR_PLAYER));
-        given(leagueQueryService.findPlayerId(OTHER, LEAGUE_ID))
-                .willReturn(Optional.of(OTHER_PLAYER));
+        given(leagueQueryService.requireAccessiblePlayer(AUTHOR, LEAGUE_ID))
+                .willReturn(AUTHOR_PLAYER);
+        given(leagueQueryService.requireAccessiblePlayer(OTHER, LEAGUE_ID))
+                .willReturn(OTHER_PLAYER);
     }
 
     @Test

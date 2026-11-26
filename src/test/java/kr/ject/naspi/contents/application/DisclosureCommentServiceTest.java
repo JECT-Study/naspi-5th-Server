@@ -64,10 +64,11 @@ class DisclosureCommentServiceTest {
         given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID))
                 .willReturn(Optional.of(new LeagueTradingDay(2, 7, NOW.plusDays(1),
                         NOW.minusDays(1), NOW.plusDays(6))));
-        given(leagueQueryService.findPlayerId(ME, LEAGUE_ID)).willReturn(Optional.of(ME_PLAYER));
-        given(leagueQueryService.findPlayerId(OTHER, LEAGUE_ID))
-                .willReturn(Optional.of(OTHER_PLAYER));
-        given(leagueQueryService.findPlayerId(OUTSIDER, LEAGUE_ID)).willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(ME, LEAGUE_ID)).willReturn(ME_PLAYER);
+        given(leagueQueryService.requireAccessiblePlayer(OTHER, LEAGUE_ID))
+                .willReturn(OTHER_PLAYER);
+        given(leagueQueryService.requireAccessiblePlayer(OUTSIDER, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
         given(leagueQueryService.getPlayerNames(eq(LEAGUE_ID), anyCollection()))
                 .willReturn(Map.of(ME_PLAYER, "나", OTHER_PLAYER, "상대"));
     }
@@ -99,18 +100,31 @@ class DisclosureCommentServiceTest {
     }
 
     @Test
-    @DisplayName("공시 댓글 목록은 페이징 없이 전체를 오래된 순으로 주고 작성자 이름과 내 댓글 여부를 표시하며, 종료된 리그에서도 볼 수 있다")
+    @DisplayName("공시 댓글 목록은 페이징 없이 전체를 오래된 순으로 주고 작성자 이름과 내 댓글 여부를 표시한다")
     void list() {
         long disclosure = disclosure(STOCK_ID);
         long first = comment(disclosure, ME_PLAYER, "1");
         long second = comment(disclosure, OTHER_PLAYER, "2");
-        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
 
         List<CommentItem> comments = service.findByTarget(ME, LEAGUE_ID, STOCK_ID, disclosure);
 
         assertThat(comments).extracting(CommentItem::commentId).containsExactly(first, second);
         assertThat(comments).extracting(CommentItem::authorName).containsExactly("나", "상대");
         assertThat(comments).extracting(CommentItem::mine).containsExactly(true, false);
+    }
+
+    @Test
+    @DisplayName("종료된 리그의 기록(댓글)은 조회하거나 삭제할 수 없다")
+    void endedLeagueBlocked() {
+        long disclosure = disclosure(STOCK_ID);
+        final long comment = comment(disclosure, ME_PLAYER, "댓글");
+        given(leagueQueryService.requireAccessiblePlayer(ME, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertBiz(() -> service.findByTarget(ME, LEAGUE_ID, STOCK_ID, disclosure),
+                ErrorCode.LEAGUE_ALREADY_ENDED);
+        assertBiz(() -> service.delete(ME, LEAGUE_ID, STOCK_ID, disclosure, comment),
+                ErrorCode.LEAGUE_ALREADY_ENDED);
     }
 
     @Test

@@ -39,7 +39,7 @@ public class LeagueStockLookupService {
      * @param memberId 조회하는 회원 ID
      * @param leagueId 리그 ID
      * @return 종목 목록. 상장된 종목이 없으면 빈 목록
-     * @throws NaspiBizException 리그가 없거나 리그에 입장하지 않은 회원인 경우
+     * @throws NaspiBizException 리그가 없거나 리그에 입장하지 않은 회원인 경우, 종료 시각이 지난 리그인 경우
      */
     public List<MemberStock> findAll(long memberId, long leagueId) {
         Viewer viewer = viewerOf(memberId, leagueId, latestPrices(leagueId));
@@ -56,7 +56,8 @@ public class LeagueStockLookupService {
      * @param leagueId 리그 ID
      * @param stockId 종목 ID
      * @return 종목
-     * @throws NaspiBizException 리그가 없거나 리그에 입장하지 않은 회원인 경우, 리그에 해당 종목이 없는 경우
+     * @throws NaspiBizException 리그가 없거나 리그에 입장하지 않은 회원인 경우, 종료 시각이 지난 리그인 경우,
+     *         리그에 해당 종목이 없는 경우
      *         ({@link ErrorCode#STOCK_NOT_FOUND})
      */
     public MemberStock findOne(long memberId, long leagueId, long stockId) {
@@ -72,13 +73,13 @@ public class LeagueStockLookupService {
      */
     private Viewer viewerOf(long memberId, long leagueId,
             Map<Long, StockDailyPrice> pricesByStockId) {
-        // 리그가 없거나 입장하지 않은 회원이면 여기서 예외가 난다.
+        // 리그가 없거나(204) 입장하지 않은 회원이면(004) 여기서 예외가 난다.
         Map<Long, String> namesByPlayerId = new HashMap<>();
         for (LeaguePlayer player : leagueQueryService.getPlayers(memberId, leagueId).players()) {
             namesByPlayerId.put(player.playerId(), player.name());
         }
-        long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        // 종료 시각이 지난 리그면(212) 여기서 예외가 난다.
+        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
         return new Viewer(playerId, namesByPlayerId, pricesByStockId);
     }
 

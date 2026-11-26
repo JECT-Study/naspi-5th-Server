@@ -64,14 +64,14 @@ class DisclosureReactionServiceTest {
         given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.of(
                 new LeagueTradingDay(2, 7, NOW.plusHours(23), NOW.minusDays(1),
                         NOW.plusDays(6))));
-        given(leagueQueryService.findPlayerId(AUTHOR_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.of(AUTHOR_PLAYER_ID));
-        given(leagueQueryService.findPlayerId(MEMBER_A, LEAGUE_ID))
-                .willReturn(Optional.of(PLAYER_A));
-        given(leagueQueryService.findPlayerId(MEMBER_B, LEAGUE_ID))
-                .willReturn(Optional.of(PLAYER_B));
-        given(leagueQueryService.findPlayerId(OUTSIDER_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(AUTHOR_MEMBER_ID, LEAGUE_ID))
+                .willReturn(AUTHOR_PLAYER_ID);
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_A, LEAGUE_ID))
+                .willReturn(PLAYER_A);
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_B, LEAGUE_ID))
+                .willReturn(PLAYER_B);
+        given(leagueQueryService.requireAccessiblePlayer(OUTSIDER_MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
         disclosureId = entityManager.persistAndFlush(Disclosure.publish(LEAGUE_ID, STOCK_ID,
                 AUTHOR_PLAYER_ID, DisclosureTitle.of("제목"), DisclosureBody.of("본문"), 2, NOW))
                 .getId();

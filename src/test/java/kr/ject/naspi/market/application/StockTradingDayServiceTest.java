@@ -99,6 +99,40 @@ class StockTradingDayServiceTest {
     }
 
     @Test
+    @DisplayName("리그 종료 시 7일차 종가는 마지막 체결가로 확정되고 다음 거래일 시세는 만들지 않는다")
+    void closeLastTradingDay() {
+        long stockId = openedStock(7);
+        executionService.applyExecution(LEAGUE_ID, stockId, 7, 11_000, 3);
+
+        service.closeLastTradingDay(LEAGUE_ID, 7);
+
+        assertThat(day(stockId, 7).getClosePrice()).isEqualTo(11_000);
+        assertThat(rowCount(stockId)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("7일차 거래량이 0이면 종가는 기준가다")
+    void closeLastTradingDayNoVolume() {
+        long stockId = openedStock(7);
+        // 현재가가 기준가와 달라도 거래량이 0이면 기준가로 확정된다
+        entityManager.find(Stock.class, stockId).applyTrade(12_000);
+        entityManager.flush();
+
+        service.closeLastTradingDay(LEAGUE_ID, 7);
+
+        assertThat(day(stockId, 7).getClosePrice()).isEqualTo(10_000);
+    }
+
+    @Test
+    @DisplayName("마지막 거래일 시세 행이 없으면 종가를 확정할 수 없다")
+    void closeLastTradingDayRejectsMissingRow() {
+        openedStock(6);
+
+        assertThatThrownBy(() -> service.closeLastTradingDay(LEAGUE_ID, 7))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @DisplayName("전환 트랜잭션 밖에서는 호출할 수 없다")
     void requiresTransaction() {
@@ -107,12 +141,23 @@ class StockTradingDayServiceTest {
     }
 
     private long openedStock() {
+        return openedStock(1);
+    }
+
+    private long openedStock(int tradingDay) {
         Stock stock = Stock.list(LEAGUE_ID, 10L, StockName.of("가나다"), StockDescription.of("소개"));
         stock.open();
         long stockId = entityManager.persistAndGetId(stock, Long.class);
-        entityManager.persist(StockDailyPrice.open(LEAGUE_ID, stockId, 1, 10_000));
+        entityManager.persist(StockDailyPrice.open(LEAGUE_ID, stockId, tradingDay, 10_000));
         entityManager.flush();
         return stockId;
+    }
+
+    private long rowCount(long stockId) {
+        entityManager.flush();
+        return entityManager.getEntityManager().createQuery(
+                        "select count(d) from StockDailyPrice d where d.stockId = :s", Long.class)
+                .setParameter("s", stockId).getSingleResult();
     }
 
     private StockDailyPrice day(long stockId, int tradingDay) {

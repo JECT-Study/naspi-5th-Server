@@ -172,8 +172,7 @@ public abstract class CommentService<T extends Comment, S> {
     }
 
     private long viewerPlayerId(long memberId, long leagueId) {
-        return leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        return leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
     }
 
     /** 댓글들을 응답 항목으로 바꾼다. 작성자 이름은 댓글에 나온 플레이어만 한 번에 조회한다. */

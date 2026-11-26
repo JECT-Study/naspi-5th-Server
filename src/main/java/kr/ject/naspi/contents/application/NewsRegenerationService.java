@@ -74,8 +74,7 @@ public class NewsRegenerationService {
         if (leagueQueryService.findCurrentTradingDay(leagueId).isEmpty()) {
             throw new NaspiBizException(ErrorCode.NEWS_REGENERATION_LEAGUE_NOT_STARTED);
         }
-        long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
         return transactionTemplate.execute(status -> {
             // 삭제된 공시는 수동 재생성 불가 (자동 재시도는 삭제와 무관하게 계속된다)
             Disclosure disclosure = disclosureRepository.findById(disclosureId)

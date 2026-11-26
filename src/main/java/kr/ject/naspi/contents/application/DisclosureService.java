@@ -136,9 +136,8 @@ public class DisclosureService {
      *         작성자가 아닌 경우
      */
     public void delete(long memberId, long leagueId, long stockId, long disclosureId) {
-        // 회원의 플레이어 정보 조회
-        long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        // 회원의 플레이어 정보 조회 (종료 시각이 지난 리그의 기록은 지울 수 없다)
+        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
         // 공시 상태 변경과 이미지 메타데이터 삭제를 한 트랜잭션으로 묶는다
         transactionTemplate.executeWithoutResult(status -> {
             // 경로의 리그·종목에 속한 공시만 삭제 대상으로 본다 (다른 리그·종목의 공시 ID로 지우는 것 방지)

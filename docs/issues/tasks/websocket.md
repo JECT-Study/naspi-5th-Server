@@ -11,7 +11,7 @@
   - 계산은 REST와 같은 application 조회(서비스·뷰 객체)를 재사용한다. websocket이 값을 따로 계산하지 않는다.
   - websocket은 다른 모듈의 `api` 패키지(REST 응답 record)를 import하지 않는다. websocket 응답 record를 같은 필드로 두고, 구조가 같은지는 테스트로 확인한다 (REST 응답 JSON과 토픽 메시지 JSON의 필드 집합 비교).
   - REST에만 있는 조회자별 필드처럼 토픽으로 보낼 수 없는 필드가 있으면 스토리의 `결정 필요`에 적고 정한다.
-- **구독 권한**: REST와 같은 조회 조건을 구독 시점에 확인한다 (`TopicSubscriptionAuthorizer`). 리그 단위 토픽은 해당 리그 입장자, 플레이어 단위 토픽은 본인 플레이어만.
+- **구독 권한**: REST와 같은 조회 조건을 구독 시점에 확인한다 (`TopicSubscriptionAuthorizer`). 리그 단위 토픽은 해당 리그 입장자, 플레이어 단위 토픽은 본인 플레이어만. 종료 시각이 지난 리그는 결과 페이지 외 접근이 막히므로(LEA-12) 입장 확인에 `LeagueQueryService#findAccessiblePlayerId`(`requireAccessiblePlayer`의 예외 없는 버전)를 쓴다. `AssetTopicAuthorizer`는 ND-85에서 바꿨고, 나머지 Authorizer(종목·호가·캔들·알림)는 WS-01·02·04·05에서 참여자 확인을 넣을 때 같은 메서드를 쓴다.
 - **발행 시점**: 값이 바뀔 수 있을 때 바뀐 대상에게만 발행한다. 구독자가 없는 토픽은 계산하지 않는다 (`TopicSubscriptions`). 리그 하나의 실패가 다른 리그 발행을 막지 않도록 리그 단위로 예외를 잡는다. 기준 설계: [docs/design/asset-realtime.md](../../design/asset-realtime.md)
 - **즉시 발행은 커밋 이후**: 도메인 이벤트 리스너는 `@TransactionalEventListener(phase = AFTER_COMMIT)`로 두고, 발행 예외는 기록만 하고 삼킨다.
 - 새 토픽·리스너는 기존 코드 수정 없이 빈 추가로 만든다 (CLAUDE.md "경계 규칙" websocket 항목). 다중 서버 발행은 [COM-06](common.md#com-06-웹소켓-발행-이벤트-다중-서버-구성)에서 다룬다.
@@ -110,7 +110,7 @@
     - `NEWS`: 뉴스 생성 완료 이벤트 → 리그 구독자
     - `LEAGUE`: 리그 시작·거래일 전환·종료 이벤트 → 리그 구독자
   - `message`, `url`은 이벤트 값으로 만든다. 종목명 등 표시 정보는 각 모듈 application 조회로 얻는다
-  - `AlertTopicAuthorizer`를 `AssetTopicAuthorizer`처럼 `LeagueQueryService.findPlayerId`로 본인 플레이어인지 확인하게 바꾼다 (지금은 `playerId`를 회원 ID와 비교)
+  - `AlertTopicAuthorizer`를 `AssetTopicAuthorizer`처럼 `LeagueQueryService.findAccessiblePlayerId`로 본인 플레이어인지 확인하게 바꾼다 (지금은 `playerId`를 회원 ID와 비교)
 - 선행: ORD-03, CNT(공시 게시·AI 뉴스), LEA-09·LEA-11·LEA-12(리그 시작·거래일 전환·종료)
 - 완료 조건 (확인 방법)
   - [ ] 체결 커밋 후 매수자·매도자에게 `TRADE_EXECUTED` 알림이 발행된다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.alert.*"`
@@ -120,7 +120,8 @@
 - 결정 필요
   - v1 정책서에 알림 정책이 없다. 알림 대상 이벤트, 문구, 이동 경로(`url`)를 정책서에 먼저 정한다 (정책 없으면 구현하지 않는다)
   - 접속하지 않은 동안의 알림 보관·목록 조회 여부 (보관하면 REST 알림 목록 API를 함께 만들고 구조를 맞춘다)
-  - 뉴스 생성 완료·리그 시작·거래일 전환·종료 이벤트 이름과 발행 위치
+  - 뉴스 생성 완료·리그 시작·거래일 전환 이벤트 이름과 발행 위치
+- 결정: 리그 종료 이벤트는 `league/application/LeagueEnded(leagueId, endedAt)`이며 `LeagueEndUseCase`가 종료 트랜잭션 안에서 발행한다(ND-85, 발행만). 커밋 이후 리스너로 구독한다
 
 ### WS-05 캔들 차트 토픽 실데이터 전환
 - Jira: ND-110

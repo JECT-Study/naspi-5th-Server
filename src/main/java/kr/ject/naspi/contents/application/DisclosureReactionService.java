@@ -140,8 +140,7 @@ public class DisclosureReactionService {
             throw new NaspiBizException(ErrorCode.DISCLOSURE_REACTION_LEAGUE_NOT_STARTED);
         }
         // 반응은 플레이어 단위로 1개이므로 회원을 이 리그의 플레이어로 바꾼다 (리그에 없으면 거절)
-        return leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        return leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
     }
 
     /** 경로의 리그·종목에 속하고 삭제되지 않은 공시만 반응 대상으로 본다. */
