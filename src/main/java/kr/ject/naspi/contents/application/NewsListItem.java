@@ -10,7 +10,7 @@ import kr.ject.naspi.contents.domain.NewsType;
  * @param newsId 뉴스 ID
  * @param stockId 종목 ID
  * @param stockName 종목 이름
- * @param newsType 뉴스 유형 (공시 기반 DISCLOSURE, 사용자 제보 기반 TIP)
+ * @param newsType 뉴스 유형 (공시 기반 DISCLOSURE, 사용자 제보 기반 REPORT)
  * @param title 제목
  * @param body 본문
  * @param sentiment 호재(POSITIVE)·악재(NEGATIVE)

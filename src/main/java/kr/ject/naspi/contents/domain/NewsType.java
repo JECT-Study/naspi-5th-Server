@@ -9,5 +9,5 @@ public enum NewsType {
     DISCLOSURE,
 
     /** 사용자 제보 기반 뉴스. 원본 공시가 없다. */
-    TIP
+    REPORT
 }
