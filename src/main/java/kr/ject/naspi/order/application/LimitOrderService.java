@@ -14,6 +14,7 @@ import kr.ject.naspi.order.domain.OrderRepository;
 import kr.ject.naspi.order.domain.OrderStatus;
 import kr.ject.naspi.order.domain.OrderType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,7 @@ public class LimitOrderService {
     private final StockQueryService stockQueryService;
     private final OrderExecutionSupport support;
     private final OrderRepository orderRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 지정가 주문을 접수하고 바로 매칭한다.
@@ -84,6 +86,8 @@ public class LimitOrderService {
         support.settleAll(result, now);
         // 자전거래로 취소된 신규 주문의 미체결 잔여 수량에 묶인 예약을 푼다.
         support.releaseRemaining(order);
+        eventPublisher.publishEvent(new OrderPlaced(order.getLeagueId(), order.getStockId(),
+                order.getId(), order.getPlayerId()));
         return PlacedOrder.from(order);
     }
 

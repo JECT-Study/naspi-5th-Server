@@ -21,7 +21,9 @@ import kr.ject.naspi.market.application.StockQueryService;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
+import kr.ject.naspi.market.domain.StockSnapshot;
 import kr.ject.naspi.market.infra.LocalStockSnapshotCache;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +55,14 @@ class AssetQueryServiceTest {
 
     @MockitoSpyBean
     private StockQueryService stockQueryService;
+
+    @Autowired
+    private LocalStockSnapshotCache cache;
+
+    @AfterEach
+    void clearCache() {
+        cache.replaceAll(Map.of());
+    }
 
     @Test
     @DisplayName("참여자는 현금, 종목별 보유 수량·평가 손익·수익률, 현재가 기준 총자산과 총자산 평가 손익을 조회할 수 있다")
@@ -147,6 +157,21 @@ class AssetQueryServiceTest {
         service.getPlayerAssets(LEAGUE_ID, List.of(1L, 2L, 3L));
 
         verify(stockQueryService, times(1)).findAllByLeagueId(anyLong());
+    }
+
+    @Test
+    @DisplayName("진행 중인 리그의 평가 가격은 DB가 아니라 현재가 캐시 값이다")
+    void currentPriceFromCache() {
+        long[] stocks = startLeagueWithThreePlayers();
+        cache.replaceAll(Map.of(LEAGUE_ID, List.of(
+                new StockSnapshot(stocks[0], LEAGUE_ID, "가나다", "소개", 1L, 15_000L),
+                new StockSnapshot(stocks[1], LEAGUE_ID, "라마바", "소개", 2L, 10_000L),
+                new StockSnapshot(stocks[2], LEAGUE_ID, "사아자", "소개", 3L, 8_000L))));
+
+        PlayerAsset asset = service.getPlayerAssets(LEAGUE_ID, List.of(1L)).get(0);
+
+        assertThat(asset.holdings().get(0).currentPrice()).isEqualTo(15_000);
+        assertThat(asset.holdings().get(0).valuation()).isEqualTo(2_500L * 15_000);
     }
 
     @Test

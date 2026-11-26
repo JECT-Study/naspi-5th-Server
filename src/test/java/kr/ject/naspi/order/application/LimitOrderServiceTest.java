@@ -364,6 +364,37 @@ class LimitOrderServiceTest {
     }
 
     @Test
+    @DisplayName("지정가 주문을 접수하면 주문한 플레이어의 접수 이벤트를 발행한다")
+    void publishOrderPlaced() {
+        PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 10);
+
+        assertThat(events.stream(OrderPlaced.class))
+                .containsExactly(new OrderPlaced(leagueId, stockId, sell.orderId(), SELLER));
+    }
+
+    @Test
+    @DisplayName("미체결 주문을 취소하면 주문한 플레이어의 취소 이벤트를 사유와 함께 발행한다")
+    void publishOrderCanceled() {
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 3);
+
+        service.cancelOrder(leagueId, BUYER, buy.orderId());
+
+        assertThat(events.stream(OrderCanceled.class)).containsExactly(new OrderCanceled(
+                leagueId, stockId, buy.orderId(), BUYER, CancelReason.USER_REQUESTED));
+    }
+
+    @Test
+    @DisplayName("거래일 변경으로 만료된 주문도 만료 사유로 취소 이벤트를 발행한다")
+    void publishOrderCanceledOnExpiry() {
+        PlacedOrder buy = place(BUYER, OrderSide.BUY, 9_000, 3);
+
+        openOrderClosingService.expireTradingDay(leagueId, TRADING_DAY, NOW.plusDays(1));
+
+        assertThat(events.stream(OrderCanceled.class)).containsExactly(new OrderCanceled(
+                leagueId, stockId, buy.orderId(), BUYER, CancelReason.TRADING_DAY_EXPIRED));
+    }
+
+    @Test
     @DisplayName("상장자가 탈퇴해도 그 종목은 다른 참여자끼리 계속 매수·매도해 체결할 수 있다")
     void tradeStockOfWithdrawnLister() {
         Account lister = account(LISTER);
