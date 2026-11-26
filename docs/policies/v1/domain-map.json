@@ -14,7 +14,7 @@
       "module": "league",
       "file": "league.md",
       "title": "리그 정책 (v1)",
-      "sections": ["리그 생성 및 초대", "대기실", "리그 시작 및 운영", "리그 결과"],
+      "sections": ["리그 생성 및 초대", "대기실", "리그 시작 및 운영", "리그 결과", "일일 랭킹"],
       "notes": ["거래일·거래 시간 정의는 [market.md](market.md) 참고"]
     },
     {
