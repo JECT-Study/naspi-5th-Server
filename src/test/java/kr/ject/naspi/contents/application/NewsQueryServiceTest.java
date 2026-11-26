@@ -17,6 +17,7 @@ import kr.ject.naspi.contents.domain.News;
 import kr.ject.naspi.contents.domain.NewsComment;
 import kr.ject.naspi.contents.domain.NewsGenerationResult;
 import kr.ject.naspi.contents.domain.NewsSentiment;
+import kr.ject.naspi.contents.domain.NewsType;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -87,6 +88,8 @@ class NewsQueryServiceTest {
                 .containsExactly(NewsSentiment.POSITIVE, NewsSentiment.NEGATIVE);
         assertThat(page1.items()).extracting(NewsListItem::stockName)
                 .containsOnly("종목A");
+        assertThat(page1.items()).extracting(NewsListItem::newsType)
+                .containsOnly(NewsType.DISCLOSURE);
         assertThat(page1.nextCursor()).isNotNull();
 
         NewsPage page2 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
@@ -197,7 +200,7 @@ class NewsQueryServiceTest {
         NewsDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id);
 
         assertThat(detail).usingRecursiveComparison().ignoringFields("comments")
-                .isEqualTo(new NewsDetail(id, STOCK_ID, "뉴스 제목", "뉴스 본문",
+                .isEqualTo(new NewsDetail(id, STOCK_ID, NewsType.DISCLOSURE, "뉴스 제목", "뉴스 본문",
                         NewsSentiment.NEGATIVE, 2, NOW, PUBLISHED_AT, null,
                         new NewsDisclosure(disclosureId, "공시", "본문", NOW)));
         assertThat(detail.comments()).extracting(CommentItem::commentId)

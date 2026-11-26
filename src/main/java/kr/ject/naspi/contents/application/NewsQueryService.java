@@ -102,7 +102,7 @@ public class NewsQueryService {
 
         return news.stream()
                 .map(n -> new NewsListItem(n.getId(), n.getStockId(),
-                        stockNames.get(n.getStockId()), n.getTitle(), n.getBody(),
+                        stockNames.get(n.getStockId()), n.getType(), n.getTitle(), n.getBody(),
                         n.getSentiment(), n.getTradingDay(), n.getCreatedAt(),
                         n.getPublishedAt(), comments.get(n.getId())))
                 .toList();
@@ -126,7 +126,7 @@ public class NewsQueryService {
                         && found.getStockId() == stockId)
                 .filter(found -> found.getStatus() == NewsStatus.PUBLISHED)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.NEWS_NOT_FOUND));
-        return new NewsDetail(n.getId(), n.getStockId(), n.getTitle(), n.getBody(),
+        return new NewsDetail(n.getId(), n.getStockId(), n.getType(), n.getTitle(), n.getBody(),
                 n.getSentiment(), n.getTradingDay(), n.getCreatedAt(), n.getPublishedAt(),
                 commentService.findAll(leagueId, n.getId(), playerId),
                 findDisclosure(n));
