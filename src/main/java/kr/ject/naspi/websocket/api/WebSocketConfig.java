@@ -99,7 +99,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     }
 
     /**
-     * 주기 발행 전용 스레드 풀. 다른 곳에서 {@link TaskScheduler}로 주입받지 않도록 후보에서 뺀다.
+     * 웹소켓 발행 전용 스레드 풀. 주기 발행과 이벤트 리스너의 비동기 발행({@code @Async("topicTaskScheduler")})이
+     * 함께 쓴다. 다른 곳에서 {@link TaskScheduler}로 주입받지 않도록 후보에서 뺀다.
      *
      * @return 주기 발행 스케줄러
      */

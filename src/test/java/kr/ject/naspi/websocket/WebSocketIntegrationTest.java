@@ -13,6 +13,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,17 +22,21 @@ import kr.ject.naspi.common.security.LoginSession;
 import kr.ject.naspi.websocket.application.PeriodicTopic;
 import kr.ject.naspi.websocket.application.TopicMessagePublisher;
 import kr.ject.naspi.websocket.application.TopicSubscriptionAuthorizer;
+import kr.ject.naspi.websocket.application.topic.asset.AssetTopic;
 import kr.ject.naspi.websocket.domain.TopicMessage;
 import kr.ject.naspi.websocket.infra.TopicSubscriptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.BeanFactoryAnnotationUtils;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.Order;
@@ -91,6 +96,9 @@ class WebSocketIntegrationTest {
     @Autowired
     private TestTopics testTopics;
 
+    @Autowired
+    private ConfigurableApplicationContext context;
+
     private WebSocketStompClient stompClient;
     private StompSession session;
 
@@ -137,6 +145,14 @@ class WebSocketIntegrationTest {
     }
 
     @Test
+    @DisplayName("내 자산 토픽은 비동기 프록시이고, 지정한 발행 스레드 풀을 찾을 수 있다")
+    void assetTopicRunsOnTopicPool() {
+        assertThat(AopUtils.isAopProxy(context.getBean(AssetTopic.class))).isTrue();
+        assertThat(BeanFactoryAnnotationUtils.qualifiedBeanOfType(context.getBeanFactory(),
+                Executor.class, "topicTaskScheduler")).isNotNull();
+    }
+
+    @Test
     @DisplayName("Spring 이벤트가 발생하면 이벤트에 지정된 토픽으로 메시지가 즉시 전달된다")
     void eventIsDeliveredToTopic() throws Exception {
         session = connect(7L);
@@ -147,7 +163,8 @@ class WebSocketIntegrationTest {
         Map<String, Object> message = received.poll(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
         assertThat(message).isNotNull();
         assertThat(message).containsEntry("type", "TEST_EVENT").containsEntry("payload", "체결");
-        assertThat(message.get("publishedAt")).isInstanceOf(Long.class);
+        assertThat(message.get("publishedAt")).isInstanceOf(String.class)
+                .asString().matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?");
     }
 
     @Test
