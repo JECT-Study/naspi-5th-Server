@@ -213,6 +213,23 @@ class AssetQueryServiceTest {
     }
 
     @Test
+    @DisplayName("총자산 집계는 총자산 − 1억 원 손익과 자산 조회와 같은 기준의 수익률을 함께 반환한다")
+    void aggregateProfitAndReturnRate() {
+        long[] stocks = startLeagueWithThreePlayers();
+        // 플레이어 1: 현금 5,000만 원 + 2,500주 × 9,000 + 1,250주 × 6,120 + 1,250주 × 6,000
+        //   = 87,650,000 → 손익 -12,350,000, -12.35%는 절댓값 기준 반올림으로 -12.4%
+        List<PlayerTotalAsset> assets = service.aggregateTotalAssets(LEAGUE_ID,
+                Map.of(stocks[0], 9_000L, stocks[1], 6_120L, stocks[2], 6_000L));
+
+        PlayerTotalAsset first = assets.get(0);
+        assertThat(first.totalAsset()).isEqualTo(87_650_000L);
+        assertThat(first.totalProfit()).isEqualTo(-12_350_000L);
+        assertThat(first.totalReturnRate()).isEqualTo(new BigDecimal("-12.4"));
+        assertThat(assets).allSatisfy(asset ->
+                assertThat(asset.totalProfit()).isEqualTo(asset.totalAsset() - 100_000_000L));
+    }
+
+    @Test
     @DisplayName("평가 가격은 현재가가 아니라 호출자가 넘긴 가격을 쓴다")
     void aggregateUsesCallerPrices() {
         long[] stocks = startLeagueWithThreePlayers();

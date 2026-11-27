@@ -1,10 +1,13 @@
 package kr.ject.naspi.league.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -12,8 +15,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
+import kr.ject.naspi.asset.application.AssetQueryService;
+import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
@@ -21,6 +28,7 @@ import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
+import kr.ject.naspi.market.application.FinalEvaluationPriceUseCase;
 import kr.ject.naspi.market.application.StockTradingDayService;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDailyPrice;
@@ -28,7 +36,9 @@ import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.order.application.OrderClosingTestConfig;
+import kr.ject.naspi.order.application.TradeQueryService;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +55,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({LeagueEndUseCase.class, TradingDayChangeUseCase.class, StockTradingDayService.class,
-        OrderClosingTestConfig.class, MutableClock.Config.class})
+        OrderClosingTestConfig.class, MutableClock.Config.class, LeagueResultUseCase.class,
+        FinalEvaluationPriceUseCase.class, TradeQueryService.class, AssetQueryService.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class LeagueEndConcurrencyTest {
 
@@ -72,9 +83,23 @@ class LeagueEndConcurrencyTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @BeforeEach
+    void stubNames() {
+        given(memberService.getNames(any())).willAnswer(invocation -> {
+            Collection<Long> ids = invocation.getArgument(0);
+            return ids.stream().collect(Collectors.toMap(Function.identity(), id -> "회원" + id));
+        });
+    }
+
     @AfterEach
     void tearDown() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createQuery("delete from LeagueResultHolding").executeUpdate();
+            entityManager.createQuery("delete from LeagueResultPlayer").executeUpdate();
+            entityManager.createQuery("delete from LeagueResultStock").executeUpdate();
+            entityManager.createQuery("delete from LeagueResult").executeUpdate();
+            entityManager.createQuery("delete from Holding").executeUpdate();
+            entityManager.createQuery("delete from Account").executeUpdate();
             entityManager.createQuery("delete from StockDailyPrice").executeUpdate();
             entityManager.createQuery("delete from Stock").executeUpdate();
             entityManager.createQuery("delete from TradingDay").executeUpdate();
@@ -136,7 +161,7 @@ class LeagueEndConcurrencyTest {
         return results;
     }
 
-    /** 리그가 종료되었고, 1~7일차가 모두 한 번씩 마감되었으며 시세 행이 일차마다 하나씩만 있다. */
+    /** 리그가 종료되었고, 1~7일차가 모두 한 번씩 마감되었으며 시세 행이 일차마다 하나씩만 있고 결과가 하나다. */
     private void assertEndedOnce(long leagueId) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         tx.executeWithoutResult(status -> {
@@ -152,6 +177,9 @@ class LeagueEndConcurrencyTest {
             assertThat(prices).extracting(StockDailyPrice::getTradingDay)
                     .containsExactly(1, 2, 3, 4, 5, 6, 7);
             assertThat(prices).allSatisfy(price -> assertThat(price.getClosePrice()).isNotNull());
+            assertThat(entityManager.createQuery(
+                            "select count(r) from LeagueResult r where r.leagueId = :l", Long.class)
+                    .setParameter("l", leagueId).getSingleResult()).isEqualTo(1L);
         });
     }
 
@@ -167,6 +195,9 @@ class LeagueEndConcurrencyTest {
                                 STARTED_AT.minusDays(1));
                         player.completeListing(STARTED_AT.minusDays(1));
                         entityManager.persist(player);
+                        entityManager.flush();
+                        entityManager.persist(
+                                Account.open(league.getId(), player.getId(), 100_000_000));
                         return player;
                     })
                     .toList();

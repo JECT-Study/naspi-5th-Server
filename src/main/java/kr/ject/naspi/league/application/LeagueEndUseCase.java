@@ -27,11 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
  *       ({@link TradingDayChangeUseCase}).</li>
  *   <li>7일차 마감: market 7일차 종가 확정(MKT-06) 후 거래일 마감을 기록한다.</li>
  *   <li>order 미체결 지정가 주문 전체 취소·예약 해제(ORD-10). 취소 시각은 리그 종료 시각이다.</li>
+ *   <li>market 종료 평가 가격(MKT-07)으로 asset 총자산 집계(AST-08) 후 순위·결과 스냅샷 저장(LEA-13,
+ *       {@link LeagueResultUseCase}). 취소가 끝나 예약 자산이 0인 상태에서 산정해야 하므로 미체결 취소 뒤,
+ *       종료 상태 전환 전에 같은 트랜잭션에서 호출한다.</li>
  *   <li>리그 종료 상태 전환과 초대 코드 폐기, 종료 이벤트 발행.</li>
  * </ol>
- *
- * <p>결과 산정(LEA-13·MKT-07·INT-05)은 미체결 취소 뒤, 종료 상태 전환 전에 같은 트랜잭션에서 호출한다. 취소가
- * 끝나 예약 자산이 0인 상태에서 산정해야 하기 때문이다.
  *
  * <p>처리 중 오류가 나면 그 리그의 종료 전체가 롤백되어 진행 중 상태로 남고 다음 실행에서 다시 처리된다. 그 사이에도
  * 거래·리그 화면 접근은 종료 시각 기준으로 차단된다.
@@ -45,6 +45,7 @@ public class LeagueEndUseCase {
     private final TradingDayChangeUseCase tradingDayChangeUseCase;
     private final StockTradingDayService stockTradingDayService;
     private final OpenOrderClosingService openOrderClosingService;
+    private final LeagueResultUseCase leagueResultUseCase;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -71,6 +72,8 @@ public class LeagueEndUseCase {
                 .closeLast(now);
         // 남은 지정가 미체결 주문은 거래일 구분 없이 리그 종료 사유로 취소한다
         openOrderClosingService.cancelAllOfLeague(leagueId, league.getEndsAt());
+        // 종료 평가 가격으로 최종 총자산·순위를 산정해 결과 스냅샷을 저장한다
+        leagueResultUseCase.calculate(leagueId, league.getEndsAt(), now);
         league.end(now);
         eventPublisher.publishEvent(new LeagueEnded(leagueId, league.getEndsAt()));
         return true;

@@ -148,7 +148,8 @@ public class AssetQueryService {
                         holding.valuation()))
                 .toList();
         return new PlayerTotalAsset(valuation.playerId(), valuation.deposit(),
-                valuation.stockValuation(), valuation.totalAsset(), account.isWithdrawn(),
+                valuation.stockValuation(), valuation.totalAsset(), valuation.totalProfit(),
+                valuation.totalReturnRate(), account.isWithdrawn(),
                 holdingTotals);
     }
 

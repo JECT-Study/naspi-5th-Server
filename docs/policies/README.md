@@ -36,7 +36,7 @@ member ← league ← market ← asset ← order
 | 리그 시작 | league (`LeagueStartUseCase`) | asset: 초기 자산 배분 / market: 시초가 적용 |
 | 회원 탈퇴 | member (`MemberWithdrawalUseCase`) | league: 대기실 퇴장, 시작된 리그 플레이어에 탈퇴 일시 기록 / order: 미체결 주문 취소 (예약 해제 포함) → asset: 현금 폐기 (`AssetWithdrawalService`, 주문 취소 뒤 순서 보장) / market: 처리 없음 (상장 종목은 그대로 남아 계속 거래, MKT-09) |
 | 거래일 전환 (매일 09:00 KST) | league | market: 종가 확정·기준가 적용 / order: 미체결 만료 |
-| 리그 종료 (매일 09:00 KST, 종료 시각 도달 리그) | league (`LeagueEndUseCase`) | league: 밀린 거래일 전환 보정 / market: 7일차 종가 확정 / order: 미체결 전체 취소 (예약 해제 포함) / league: 결과 산정 (LEA-13) → 종료 상태 전환·초대 코드 폐기 |
+| 리그 종료 (매일 09:00 KST, 종료 시각 도달 리그) | league (`LeagueEndUseCase`) | league: 밀린 거래일 전환 보정 / market: 7일차 종가 확정 / order: 미체결 전체 취소 (예약 해제 포함) / market: 종료 평가 가격 (MKT-07) / asset: 총자산 집계 (AST-08) / league: 결과 산정·스냅샷 저장 (LEA-13, 종료 전 탈퇴자 제외) → 종료 상태 전환·초대 코드 폐기 |
 
 체결 시 market 현재가·거래량 갱신은 order가 상위 모듈인 market을 직접 호출한다.
 

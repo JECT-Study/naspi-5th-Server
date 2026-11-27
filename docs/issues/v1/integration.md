@@ -62,8 +62,8 @@
 - 내용: league UseCase가 MKT-07 종료 평가 가격(종목 ID → 가격)을 market에서 받아 `aggregateTotalAssets(leagueId, prices)`에 넘기고, 결과로 순위·스냅샷을 만든다. asset은 하위 모듈이라 Service가 아닌 UseCase에서 호출한다
 - 선행: AST-08, MKT-07, LEA-13
 - 완료 조건 (확인 방법)
-  - [ ] league에서 결과 산정이 asset 총자산 집계를 호출한다 — `grep -rn "aggregateTotalAssets" src/main/java/kr/ject/naspi/league` 결과 있음
-  - [ ] 결과 총자산이 종료 평가 가격 기준이다 — `./gradlew test --tests "kr.ject.naspi.league.*Result*"`
+  - [x] league에서 결과 산정이 asset 총자산 집계를 호출한다 — `grep -rn "aggregateTotalAssets" src/main/java/kr/ject/naspi/league` 결과 있음
+  - [x] 결과 총자산이 종료 평가 가격 기준이다 — `./gradlew test --tests "kr.ject.naspi.league.*Result*"`
 
 ### INT-06 거래일 종료 시 종가로 asset 총자산 집계를 호출한다
 - Jira: ND-90
