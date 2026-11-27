@@ -119,7 +119,7 @@
   - 체결 기록 저장 위치와 집계 방식 (체결마다 봉 테이블 갱신 vs 조회 시 집계). ERD 반영 필요
 
 ### WS-06 과거 캔들 조회 API 추가
-- Jira:
+- Jira: ND-113
 - 목적: 종목 상세 차트에 처음 들어갈 때 리그 시작부터 지금까지의 봉을 그리고, 이후는 [WS-05](#ws-05-캔들-차트-토픽-실데이터-전환) 토픽으로 이어 그리게 한다
 - 작업 내용: `GET /api/leagues/{leagueId}/stocks/{stockId}/candles?interval={MINUTE_10|HOUR_1|DAY_1}`를 새로 만든다. 토픽 없음 (WS-05 `/topic/leagues/{leagueId}/stocks/{stockId}/candles`의 첫 화면 값). 선행: ORD-03(체결 기록), LEA-11(거래일 계산)
   - 요청 `interval`은 웹소켓과 같은 `MINUTE_10`, `HOUR_1`, `DAY_1`. 없거나 다른 값이면 400
