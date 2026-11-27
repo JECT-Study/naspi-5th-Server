@@ -135,12 +135,16 @@ public class DisclosureReactionService {
 
     /** 리그에 입장한 회원인지, 리그가 진행 중인지 확인하고 플레이어 ID를 돌려준다. */
     private long reactablePlayerId(long memberId, long leagueId) {
-        // 반응은 거래 판단용 신호라 거래가 열린 진행 중 리그에서만 받는다 (리그가 없으면 여기서 오류)
-        if (leagueQueryService.findCurrentTradingDay(leagueId).isEmpty()) {
+        // 반응은 거래 판단용 신호라 거래가 열린 진행 중 리그에서만 받는다 (리그가 없으면(204) 여기서 오류)
+        boolean started = leagueQueryService.findCurrentTradingDay(leagueId).isPresent();
+        // 반응은 플레이어 단위로 1개이므로 회원을 이 리그의 플레이어로 바꾼다
+        // (입장하지 않았거나(004) 종료 시각이 지난 리그면(212) 여기서 오류)
+        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
+        // 남은 경우는 시작 전(대기실) 리그
+        if (!started) {
             throw new NaspiBizException(ErrorCode.DISCLOSURE_REACTION_LEAGUE_NOT_STARTED);
         }
-        // 반응은 플레이어 단위로 1개이므로 회원을 이 리그의 플레이어로 바꾼다 (리그에 없으면 거절)
-        return leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
+        return playerId;
     }
 
     /** 경로의 리그·종목에 속하고 삭제되지 않은 공시만 반응 대상으로 본다. */

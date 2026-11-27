@@ -121,7 +121,7 @@ class NewsRegenerationServiceTest {
     }
 
     @Test
-    @DisplayName("진행 중인 리그가 아니면 뉴스를 다시 생성할 수 없다")
+    @DisplayName("시작 전(대기실) 리그에서는 뉴스를 다시 생성할 수 없다")
     void leagueNotStarted() {
         Disclosure disclosure = disclosure();
         failedNews(disclosure);
@@ -129,6 +129,20 @@ class NewsRegenerationServiceTest {
 
         assertBiz(() -> service.regenerate(AUTHOR, LEAGUE_ID, STOCK_ID, disclosure.getId()),
                 ErrorCode.NEWS_REGENERATION_LEAGUE_NOT_STARTED);
+    }
+
+    @Test
+    @DisplayName("종료 시각이 지난 리그에서는 뉴스를 다시 생성할 수 없고 리그 종료로 거절된다")
+    void regenerateInEndedLeague() {
+        Disclosure disclosure = disclosure();
+        failedNews(disclosure);
+        // 종료 시각이 지난 리그는 거래일이 없고, 결과 페이지 외 리그 화면에 접근할 수 없다
+        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(AUTHOR, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertBiz(() -> service.regenerate(AUTHOR, LEAGUE_ID, STOCK_ID, disclosure.getId()),
+                ErrorCode.LEAGUE_ALREADY_ENDED);
     }
 
     @Test

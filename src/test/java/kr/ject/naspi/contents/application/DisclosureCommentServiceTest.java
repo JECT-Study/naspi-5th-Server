@@ -90,13 +90,26 @@ class DisclosureCommentServiceTest {
     }
 
     @Test
-    @DisplayName("진행 중이 아닌 리그에서는 공시에 댓글을 쓸 수 없다")
+    @DisplayName("시작 전(대기실) 리그에서는 공시에 댓글을 쓸 수 없다")
     void leagueNotStarted() {
         long disclosure = disclosure(STOCK_ID);
         given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
 
         assertBiz(() -> service.write(ME, LEAGUE_ID, STOCK_ID, disclosure, "댓글"),
                 ErrorCode.COMMENT_LEAGUE_NOT_STARTED);
+    }
+
+    @Test
+    @DisplayName("종료 시각이 지난 리그에서는 공시에 댓글을 쓸 수 없고 리그 종료로 거절된다")
+    void writeInEndedLeague() {
+        long disclosure = disclosure(STOCK_ID);
+        // 종료 시각이 지난 리그는 거래일이 없고, 결과 페이지 외 리그 화면에 접근할 수 없다
+        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(ME, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertBiz(() -> service.write(ME, LEAGUE_ID, STOCK_ID, disclosure, "댓글"),
+                ErrorCode.LEAGUE_ALREADY_ENDED);
     }
 
     @Test

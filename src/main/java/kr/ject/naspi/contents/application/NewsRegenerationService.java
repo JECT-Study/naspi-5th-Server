@@ -70,11 +70,14 @@ public class NewsRegenerationService {
      */
     public RegeneratedNews regenerate(long memberId, long leagueId, long stockId,
                                       long disclosureId) {
-        // 리그가 없으면 여기서 오류
-        if (leagueQueryService.findCurrentTradingDay(leagueId).isEmpty()) {
+        // 리그가 없으면(204) 여기서 오류
+        boolean started = leagueQueryService.findCurrentTradingDay(leagueId).isPresent();
+        // 입장하지 않았거나(004) 종료 시각이 지난 리그면(212) 여기서 오류
+        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
+        // 남은 경우는 시작 전(대기실) 리그
+        if (!started) {
             throw new NaspiBizException(ErrorCode.NEWS_REGENERATION_LEAGUE_NOT_STARTED);
         }
-        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
         return transactionTemplate.execute(status -> {
             // 삭제된 공시는 수동 재생성 불가 (자동 재시도는 삭제와 무관하게 계속된다)
             Disclosure disclosure = disclosureRepository.findById(disclosureId)

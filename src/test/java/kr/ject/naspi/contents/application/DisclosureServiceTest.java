@@ -258,6 +258,21 @@ class DisclosureServiceTest {
     }
 
     @Test
+    @DisplayName("종료 시각이 지난 리그에서는 공시를 작성할 수 없고 리그 종료로 거절된다")
+    void publishInEndedLeague() {
+        League league = startedLeague();
+        // 종료 시각이 지난 리그는 거래일이 없고, 결과 페이지 외 리그 화면에 접근할 수 없다
+        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(league.hostMemberId, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertBiz(() -> disclosureService.publish(league.hostMemberId, LEAGUE_ID,
+                league.hostStockId, "제목", "본문", List.of(png("a.png"))),
+                ErrorCode.LEAGUE_ALREADY_ENDED);
+        then(imageStorage).shouldHaveNoInteractions();
+    }
+
+    @Test
     @DisplayName("공시 저장이 실패하면 이미 올린 이미지 파일을 지운다")
     void compensateOnFailure() {
         League league = startedLeague();

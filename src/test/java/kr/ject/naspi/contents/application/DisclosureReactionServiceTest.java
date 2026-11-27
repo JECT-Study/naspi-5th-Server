@@ -135,7 +135,7 @@ class DisclosureReactionServiceTest {
     }
 
     @Test
-    @DisplayName("진행 중인 리그에서만 반응을 등록·변경·취소할 수 있다 (대기실·종료된 리그는 불가)")
+    @DisplayName("진행 중인 리그에서만 반응을 등록·변경·취소할 수 있다 (대기실은 불가)")
     void leagueNotInProgress() {
         reactAs(MEMBER_A, LIKE);
         given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
@@ -144,6 +144,20 @@ class DisclosureReactionServiceTest {
         assertBiz(() -> reactAs(MEMBER_A, DISLIKE),
                 ErrorCode.DISCLOSURE_REACTION_LEAGUE_NOT_STARTED);
         assertBiz(() -> reactAs(MEMBER_A, LIKE), ErrorCode.DISCLOSURE_REACTION_LEAGUE_NOT_STARTED);
+        assertThat(reactionRows()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("종료 시각이 지난 리그에서는 반응을 변경·취소할 수 없고 리그 종료로 거절된다")
+    void reactInEndedLeague() {
+        reactAs(MEMBER_A, LIKE);
+        // 종료 시각이 지난 리그는 거래일이 없고, 결과 페이지 외 리그 화면에 접근할 수 없다
+        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_A, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertBiz(() -> reactAs(MEMBER_A, DISLIKE), ErrorCode.LEAGUE_ALREADY_ENDED);
+        assertBiz(() -> reactAs(MEMBER_A, LIKE), ErrorCode.LEAGUE_ALREADY_ENDED);
         assertThat(reactionRows()).isEqualTo(1);
     }
 
