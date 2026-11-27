@@ -28,12 +28,12 @@ public class MyAssetQueryService {
      * @param leagueId 리그 ID
      * @return 자산 조회 결과
      * @throws NaspiBizException 리그에 입장하지 않은 회원인 경우 ({@link ErrorCode#FORBIDDEN}),
+     *     종료 시각이 지난 리그인 경우 ({@link ErrorCode#LEAGUE_ALREADY_ENDED}),
      *     자산이 없는 경우 ({@link ErrorCode#ASSET_NOT_FOUND})
      */
     @Transactional(readOnly = true)
     public PlayerAsset getMyAsset(long memberId, long leagueId) {
-        long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
         return assetQueryService.getPlayerAsset(leagueId, playerId);
     }
 }

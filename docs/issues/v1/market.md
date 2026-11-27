@@ -70,7 +70,7 @@
 - 비고 (MKT-05에서 전달): 체결 시 거래일별 마지막 체결가는 따로 기록하지 않는다. 리그 락 아래에서 전환하면 종가 = 전환 시점의 `stock.current_price`다 (거래량 0인 거래일도 `current_price`가 직전 종가 = 기준가와 같다). 거래량은 `stock_daily_price` 행이 거래일마다 새로 생기므로 0부터 시작한다. 같은 행에 기준가·상·하한가·종가 컬럼을 추가한다
 
 ### MKT-07 리그가 종료되면 종목별 종료 평가 가격이 VWAP로 산정된다
-- Jira:
+- Jira: ND-115
 - 정책: [league.md#리그-결과](../../policies/v1/domain/league.md#리그-결과)
 - 선행: MKT-05
 - 완료 조건
@@ -120,3 +120,4 @@
   - [x] `GET /api/leagues/{leagueId}/stocks/{stockId}`: 종목 하나의 이름·소개·상장자 이름·내 종목 여부 조회
   - [x] 리그에 입장한 회원(대기자 포함)만 조회 가능, 아니면 권한 없음
   - [x] 다른 리그의 종목은 조회되지 않음 (개별 조회는 종목 없음)
+- TODO: 종목 조회 시 리그·플레이어 중복 조회 정리 (별도 스토리로 분리 예정). ND-85에서 종료 판정을 붙이며 `LeagueStockLookupService#viewerOf`가 `getPlayers`(리그·플레이어 전체 조회)에 이어 `requireAccessiblePlayer`(플레이어·리그 재조회)를 호출해, 요청마다 같은 데이터를 두 번 읽는다. 결과는 맞고 쿼리만 늘어난다. 권장: league application에 종료 판정을 포함한 리그 화면용 플레이어 조회(예: `getAccessiblePlayers`)를 두고, 본인 플레이어 ID는 `me` 항목에서 얻는다. 시세 조회(MKT-08, ND-105)도 같은 서비스를 쓴다

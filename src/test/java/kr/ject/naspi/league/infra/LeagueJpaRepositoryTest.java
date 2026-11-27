@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.LongStream;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
 import kr.ject.naspi.league.domain.LeagueRepository;
+import kr.ject.naspi.league.domain.LeagueStatus;
+import kr.ject.naspi.league.domain.Player;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +19,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
@@ -67,6 +72,38 @@ class LeagueJpaRepositoryTest {
         entityManager.flush();
 
         assertThat(leagueRepository.existsByInviteCode(CODE)).isFalse();
+    }
+
+    @Test
+    @DisplayName("종료 시각이 지난(같은 시각 포함) 진행 중인 리그만 종료 대상으로 조회한다")
+    void findIdsByStatusAndEndsAtLessThanEqual() {
+        League due = startedLeague("AAAAAAA");
+        League notYet = startedLeague("BBBBBBB");
+        ReflectionTestUtils.setField(notYet, "endsAt", due.getEndsAt().plusSeconds(1));
+        League waiting = leagueRepository.save(League.create(
+                LeagueName.of("리그"), InviteCode.of("CCCCCCC"), NOW));
+        entityManager.flush();
+
+        assertThat(leagueRepository.findIdsByStatusAndEndsAtLessThanEqual(
+                LeagueStatus.STARTED, due.getEndsAt()))
+                .containsExactly(due.getId())
+                .doesNotContain(notYet.getId(), waiting.getId());
+        assertThat(leagueRepository.findIdsByStatusAndEndsAtLessThanEqual(
+                LeagueStatus.STARTED, due.getEndsAt().minusSeconds(1))).isEmpty();
+    }
+
+    private League startedLeague(String code) {
+        League league = leagueRepository.save(League.create(
+                LeagueName.of("리그"), InviteCode.of(code), NOW));
+        List<Player> players = LongStream.rangeClosed(1, League.MIN_PARTICIPANTS_TO_START)
+                .mapToObj(memberId -> {
+                    Player player = Player.enter(league.getId(), memberId, NOW);
+                    player.completeListing(NOW);
+                    return player;
+                })
+                .toList();
+        league.start(players, NOW.plusHours(1));
+        return league;
     }
 
     private static League newLeague() {

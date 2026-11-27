@@ -19,7 +19,7 @@
 ## 공통 규칙
 
 - 대응하는 REST API가 있으면 토픽 메시지(`TopicEnvelope.payload`)의 JSON 필드 이름·타입·의미를 REST 응답(`Result.data`)과 같게 맞춘다. 계산은 REST와 같은 application 조회를 재사용하고, websocket은 다른 모듈의 `api` 패키지를 import하지 않는다 (구조가 같은지는 필드 집합 비교 테스트로 확인). 토픽으로 보낼 수 없는 조회자별 필드는 `결정 필요`에 적는다.
-- 구독 권한은 REST와 같은 조회 조건을 구독 시점에 확인한다 (`TopicSubscriptionAuthorizer`). 리그 단위 토픽은 해당 리그 입장자, 플레이어 단위 토픽은 본인 플레이어만.
+- 구독 권한은 REST와 같은 조회 조건을 구독 시점에 확인한다 (`TopicSubscriptionAuthorizer`). 리그 단위 토픽은 해당 리그 입장자, 플레이어 단위 토픽은 본인 플레이어만. 종료 시각이 지난 리그는 결과 페이지 외 접근이 막히므로(LEA-12) 입장 확인에 `LeagueQueryService#findAccessiblePlayerId`(`requireAccessiblePlayer`의 예외 없는 버전)를 쓴다. `AssetTopicAuthorizer`는 ND-85에서 바꿨고, 나머지 Authorizer(종목·호가·캔들·알림)는 WS-01·02·04·05에서 참여자 확인을 넣을 때 같은 메서드를 쓴다.
 - 값이 바뀔 수 있을 때 바뀐 대상에게만 발행하고, 구독자가 없는 토픽은 계산하지 않는다 (`TopicSubscriptions`). 리그 단위로 예외를 잡아 한 리그의 실패가 다른 리그 발행을 막지 않게 한다.
 - 도메인 이벤트 리스너는 `@TransactionalEventListener(phase = AFTER_COMMIT)`로 두고, 발행 예외는 기록만 하고 삼킨다.
 - 새 토픽·리스너는 기존 코드 수정 없이 빈 추가로 만든다 (CLAUDE.md "경계 규칙"). 다중 서버 발행은 [COM-06](common.md#com-06-웹소켓-발행-이벤트-다중-서버-구성)에서 다룬다.
@@ -88,7 +88,7 @@
   - `NEWS`: 뉴스 생성 완료 이벤트 → 리그 구독자
   - `LEAGUE`: 리그 시작·거래일 전환·종료 이벤트 → 리그 구독자
   - `message`, `url`은 이벤트 값으로 만들고, 종목명 등 표시 정보는 각 모듈 application 조회로 얻는다
-  - `AlertTopicAuthorizer`가 `LeagueQueryService.findPlayerId`로 본인 플레이어인지 확인하게 바꾼다 (지금은 `playerId`를 회원 ID와 비교)
+  - `AlertTopicAuthorizer`가 `LeagueQueryService.findAccessiblePlayerId`로 본인 플레이어인지 확인하게 바꾼다 (지금은 `playerId`를 회원 ID와 비교)
 - 완료 조건 (확인 방법)
   - [ ] 체결 커밋 후 매수자·매도자에게 `TRADE_EXECUTED` 알림이 발행된다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.alert.*"`
   - [ ] 공시·뉴스 게시 후 해당 리그 구독자에게 알림이 발행된다 — 같은 테스트
@@ -97,7 +97,8 @@
 - 결정 필요
   - v1 정책서에 알림 정책이 없다. 알림 대상 이벤트, 문구, 이동 경로(`url`)를 정책서에 먼저 정한다 (정책 없으면 구현하지 않는다)
   - 접속하지 않은 동안의 알림 보관·목록 조회 여부 (보관하면 REST 알림 목록 API를 함께 만들고 구조를 맞춘다)
-  - 뉴스 생성 완료·리그 시작·거래일 전환·종료 이벤트 이름과 발행 위치
+  - 뉴스 생성 완료·리그 시작·거래일 전환 이벤트 이름과 발행 위치
+- 결정: 리그 종료 이벤트는 `league/application/LeagueEnded(leagueId, endedAt)`이며 `LeagueEndUseCase`가 종료 트랜잭션 안에서 발행한다(ND-85, 발행만). 커밋 이후 리스너로 구독한다
 
 ### WS-05 캔들 차트 토픽 실데이터 전환
 - Jira: ND-110

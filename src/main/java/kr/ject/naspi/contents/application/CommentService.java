@@ -6,12 +6,14 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import kr.ject.naspi.contents.domain.Comment;
 import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.CommentRepository;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
+import kr.ject.naspi.league.application.LeagueTradingDay;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -78,11 +80,14 @@ public abstract class CommentService<T extends Comment, S> {
     public CommentItem write(long memberId, long leagueId, long stockId, long targetId,
                              String content) {
         CommentContent commentContent = CommentContent.of(content);
-        // 리그가 없으면 여기서 오류
-        if (leagueQueryService.findCurrentTradingDay(leagueId).isEmpty()) {
+        // 리그가 없으면(204) 여기서 오류
+        Optional<LeagueTradingDay> tradingDay = leagueQueryService.findCurrentTradingDay(leagueId);
+        // 입장하지 않았거나(004) 종료 시각이 지난 리그면(212) 여기서 오류
+        long playerId = viewerPlayerId(memberId, leagueId);
+        // 남은 경우는 시작 전(대기실) 리그
+        if (tradingDay.isEmpty()) {
             throw new NaspiBizException(ErrorCode.COMMENT_LEAGUE_NOT_STARTED);
         }
-        long playerId = viewerPlayerId(memberId, leagueId);
         S target = findTarget(leagueId, stockId, targetId);
 
         T saved = commentRepository.save(newComment(target, playerId, commentContent,
@@ -172,8 +177,7 @@ public abstract class CommentService<T extends Comment, S> {
     }
 
     private long viewerPlayerId(long memberId, long leagueId) {
-        return leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        return leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
     }
 
     /** 댓글들을 응답 항목으로 바꾼다. 작성자 이름은 댓글에 나온 플레이어만 한 번에 조회한다. */
