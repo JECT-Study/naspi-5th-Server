@@ -6,6 +6,7 @@ import kr.ject.naspi.order.domain.OrderExecutionTotal;
 import kr.ject.naspi.order.domain.Trade;
 import kr.ject.naspi.order.domain.TradeRepository;
 import kr.ject.naspi.order.domain.TradeTotal;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
@@ -24,6 +25,20 @@ interface TradeJpaRepository extends Repository<Trade, Long>, TradeRepository {
             """)
     TradeTotal sumByStockIdAndTradingDay(@Param("stockId") long stockId,
             @Param("tradingDay") int tradingDay);
+
+    @Override
+    default List<Trade> findRecentByStockId(long stockId, int limit) {
+        return findByStockIdOrderByExecutedAtDescIdDesc(stockId, Limit.of(limit));
+    }
+
+    /**
+     * 종목의 체결을 체결 일시·ID 역순으로 최대 {@code limit}건 조회한다.
+     *
+     * @param stockId 종목 ID
+     * @param limit 최대 건수
+     * @return 체결 기록
+     */
+    List<Trade> findByStockIdOrderByExecutedAtDescIdDesc(long stockId, Limit limit);
 
     @Override
     @Query("""

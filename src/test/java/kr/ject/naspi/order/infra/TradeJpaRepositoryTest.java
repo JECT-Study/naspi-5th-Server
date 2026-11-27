@@ -69,7 +69,7 @@ class TradeJpaRepositoryTest {
     }
 
     @Test
-    @DisplayName("종목의 체결을 종료 시각에 가까운 순서로 최대 500건 조회한다")
+    @DisplayName("종목의 체결을 체결 일시가 늦은 순서로 조회한다")
     void findsRecentTradesFirst() {
         Trade oldest = save(1L, 1, 10_000, 1, NOW);
         Trade newest = save(1L, 1, 10_000, 1, NOW.plusMinutes(2));
@@ -77,9 +77,20 @@ class TradeJpaRepositoryTest {
         save(2L, 1, 10_000, 1, NOW.plusMinutes(3));
         entityManager.flush();
 
-        List<Trade> trades = tradeRepository.findTop500ByStockIdOrderByExecutedAtDescIdDesc(1L);
+        List<Trade> trades = tradeRepository.findRecentByStockId(1L, 500);
 
         assertThat(trades).containsExactly(newest, middle, oldest);
+    }
+
+    @Test
+    @DisplayName("최근 체결은 최대 limit건만 조회한다")
+    void findRecentLimitsCount() {
+        save(1L, 1, 10_000, 1, NOW);
+        Trade middle = save(1L, 1, 10_000, 1, NOW.plusMinutes(1));
+        Trade newest = save(1L, 1, 10_000, 1, NOW.plusMinutes(2));
+        entityManager.flush();
+
+        assertThat(tradeRepository.findRecentByStockId(1L, 2)).containsExactly(newest, middle);
     }
 
     private Trade saveWithOrders(long sellOrderId, long buyOrderId, LocalDateTime executedAt) {

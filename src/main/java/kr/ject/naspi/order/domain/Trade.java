@@ -8,8 +8,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,8 +16,8 @@ import lombok.NoArgsConstructor;
  * 체결 기록 (ERD: trade). 체결 1건 = 매수 주문 1개 + 매도 주문 1개.
  *
  * <p>정산과 같은 트랜잭션에서 저장하며, 한 번 저장하면 수정·삭제하지 않는다 (setter가 없다). 거래량 합계와
- * 리그 종료 평가(VWAP)의 원본이므로 회원이 탈퇴해도 남긴다. 회원(member)은 참조하지 않고 리그 플레이어
- * ID만 둔다. 거래일은 ERD의 거래일 FK 대신 {@link Order}와 같이 거래일 번호로 둔다.
+ * 리그 종료 평가(VWAP)의 원본이므로 회원이 탈퇴해도 남긴다 (평가 계산은 market이 한다). 회원(member)은
+ * 참조하지 않고 리그 플레이어 ID만 둔다. 거래일은 ERD의 거래일 FK 대신 {@link Order}와 같이 거래일 번호로 둔다.
  */
 @Entity
 @Table(name = "trade", indexes = {
@@ -30,12 +28,6 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Trade {
-
-    /** 종료 평가(VWAP)에 필요한 최소 체결 수량 (주). 발행량 5,000주의 10%. */
-    public static final long EVALUATION_MIN_QUANTITY = 500;
-
-    /** {@link #EVALUATION_MIN_QUANTITY}를 채우는 데 필요한 최대 체결 건수. 체결 1건은 1주 이상이다. */
-    public static final int VWAP_MAX_TRADES = 500;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -91,29 +83,6 @@ public class Trade {
         this.quantity = execution.quantity();
         this.amount = execution.amount();
         this.executedAt = executedAt;
-    }
-
-    /**
-     * 종료 시각에 가까운 체결부터 수량이 {@code limit}주가 될 때까지만 모은다. 마지막 체결 건은 한도를 채우는 데
-     * 필요한 수량만 반영한다 (league.md "리그 결과"). 전체 수량이 한도에 못 미치면 전체를 쓴다.
-     *
-     * @param recentFirst 최근 체결부터 정렬된 체결 기록
-     * @param limit 모을 수량 한도 (주)
-     * @return 체결가와 반영 수량. 최근 체결부터의 순서이며 반영 수량 합계는 최대 {@code limit}이다
-     */
-    public static List<TradeSlice> takeRecentQuantity(List<Trade> recentFirst,
-            long limit) {
-        List<TradeSlice> slices = new ArrayList<>();
-        long remaining = limit;
-        for (Trade trade : recentFirst) {
-            if (remaining <= 0) {
-                break;
-            }
-            long taken = Math.min(trade.quantity, remaining);
-            slices.add(new TradeSlice(trade.price, taken));
-            remaining -= taken;
-        }
-        return slices;
     }
 
     /**

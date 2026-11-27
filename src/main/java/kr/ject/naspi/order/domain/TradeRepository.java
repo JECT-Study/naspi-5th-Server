@@ -27,14 +27,13 @@ public interface TradeRepository {
     TradeTotal sumByStockIdAndTradingDay(long stockId, int tradingDay);
 
     /**
-     * 종목의 가장 최근 체결부터 최대 {@value Trade#VWAP_MAX_TRADES}건을 조회한다. 체결 수량이 1주 이상이므로 이
-     * 건수면 {@value Trade#EVALUATION_MIN_QUANTITY}주를 채우기에 충분하다. 종료 평가(VWAP)가 종료 시각에 가까운
-     * 체결부터 수량을 채울 때 쓴다 ({@link Trade#takeRecentQuantity}).
+     * 종목의 가장 최근 체결부터 최대 {@code limit}건을 조회한다. 같은 체결 일시면 나중에 저장된 체결이 먼저다.
      *
      * @param stockId 종목 ID
+     * @param limit 최대 건수 (1 이상)
      * @return 체결 일시·ID 역순 체결 기록
      */
-    List<Trade> findTop500ByStockIdOrderByExecutedAtDescIdDesc(long stockId);
+    List<Trade> findRecentByStockId(long stockId, int limit);
 
     /**
      * 매수 주문의 체결 기록을 체결 순서로 조회한다.
