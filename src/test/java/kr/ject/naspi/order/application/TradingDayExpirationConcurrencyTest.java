@@ -16,6 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.LongStream;
+import kr.ject.naspi.asset.application.AssetQueryService;
 import kr.ject.naspi.asset.application.AssetReservationService;
 import kr.ject.naspi.asset.application.AssetSettlementService;
 import kr.ject.naspi.asset.domain.Account;
@@ -23,6 +24,7 @@ import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.config.ClockConfig;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.league.application.DailyAssetSnapshotUseCase;
 import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.league.application.LeagueTradingService;
 import kr.ject.naspi.league.application.TradingDayChangeUseCase;
@@ -70,7 +72,8 @@ import org.springframework.transaction.support.TransactionTemplate;
         TradingDayChangeUseCase.class, LeagueTradingService.class, LeagueQueryService.class,
         StockQueryService.class, StockExecutionService.class, StockTradingDayService.class,
         LocalStockSnapshotCache.class, AssetReservationService.class,
-        AssetSettlementService.class, TradingDayExpirationConcurrencyTest.ClockConfigForTest.class})
+        AssetSettlementService.class, DailyAssetSnapshotUseCase.class, AssetQueryService.class,
+        TradingDayExpirationConcurrencyTest.ClockConfigForTest.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class TradingDayExpirationConcurrencyTest {
 
@@ -138,6 +141,7 @@ class TradingDayExpirationConcurrencyTest {
         clock.set(DAY1);
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             entityManager.createNativeQuery("delete from orders").executeUpdate();
+            entityManager.createQuery("delete from DailyAssetSnapshot").executeUpdate();
             entityManager.createQuery("delete from Account").executeUpdate();
             entityManager.createQuery("delete from Holding").executeUpdate();
             entityManager.createQuery("delete from Stock").executeUpdate();

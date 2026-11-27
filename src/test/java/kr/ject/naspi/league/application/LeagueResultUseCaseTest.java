@@ -18,6 +18,7 @@ import kr.ject.naspi.asset.application.AssetQueryService;
 import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.exception.NaspiRuntimeException;
+import kr.ject.naspi.league.domain.DailyAssetSnapshot;
 import kr.ject.naspi.league.domain.LeagueResult;
 import kr.ject.naspi.league.domain.LeagueResultHolding;
 import kr.ject.naspi.league.domain.LeagueResultPlayer;
@@ -58,7 +59,8 @@ import org.springframework.transaction.annotation.Transactional;
 @ActiveProfiles("test")
 @DataJpaTest
 @Import({LeagueResultUseCase.class, FinalEvaluationPriceUseCase.class, TradeQueryService.class,
-        AssetQueryService.class, StockQueryService.class, LocalStockSnapshotCache.class})
+        AssetQueryService.class, StockQueryService.class, LocalStockSnapshotCache.class,
+        DailyAssetSnapshotUseCase.class})
 class LeagueResultUseCaseTest {
 
     private static final long LEAGUE_ID = 1L;
@@ -220,6 +222,61 @@ class LeagueResultUseCaseTest {
                 .containsExactly(tuple(first.getId(), 1), tuple(second.getId(), 2));
         assertThat(resultPlayers()).extracting(LeagueResultPlayer::getPlayerId)
                 .doesNotContain(waiting.getId());
+    }
+
+    @Test
+    @DisplayName("마지막 거래일 자산 집계는 종료 평가 가격으로 산정한 최종 총자산과 같다")
+    void savesLastDayFromFinalResult() {
+        Player lister = player(LISTED_AT);
+        Player cashOnly = player(LISTED_AT);
+        long stockId = stock(lister);
+        account(lister, 50_000_000);
+        holding(lister, stockId, 2_500);
+        account(cashOnly, 70_000_000);
+        // 7일차 VWAP 10,400, 7일차 종가(마지막 체결가)는 11,000
+        trade(stockId, LAST_DAY, 10_000, 300, DAY7);
+        trade(stockId, LAST_DAY, 11_000, 200, DAY7.plusMinutes(1));
+        entityManager.find(Stock.class, stockId).applyTrade(11_000);
+        entityManager.flush();
+
+        useCase.calculate(LEAGUE_ID, ENDS_AT, FINALIZED_AT);
+
+        assertThat(lastDaySnapshots()).extracting(DailyAssetSnapshot::getPlayerId,
+                        DailyAssetSnapshot::getCash, DailyAssetSnapshot::getStockValuation,
+                        DailyAssetSnapshot::getTotalAsset)
+                .containsExactly(
+                        tuple(lister.getId(), 50_000_000L, 2_500L * 10_400,
+                                50_000_000L + 2_500L * 10_400),
+                        tuple(cashOnly.getId(), 70_000_000L, 0L, 70_000_000L));
+        for (DailyAssetSnapshot snapshot : lastDaySnapshots()) {
+            assertThat(snapshot.getTotalAsset()).isEqualTo(
+                    resultPlayer(entityManager.find(Player.class, snapshot.getPlayerId()))
+                            .getFinalTotalAsset());
+        }
+    }
+
+    @Test
+    @DisplayName("종료 전 탈퇴자는 최종 결과에서 제외하지만 마지막 거래일 자산 집계에는 기록한다")
+    void savesLastDayIncludingWithdrawn() {
+        Player withdrawn = player(LISTED_AT);
+        Player other = player(LISTED_AT);
+        long stockId = stock(withdrawn);
+        account(withdrawn, 0);
+        holding(withdrawn, stockId, 2_000);
+        account(other, 100_000_000);
+        withdrawn.withdraw(ENDS_AT.minusDays(1));
+        entityManager.flush();
+
+        useCase.calculate(LEAGUE_ID, ENDS_AT, FINALIZED_AT);
+
+        assertThat(resultPlayers()).extracting(LeagueResultPlayer::getPlayerId)
+                .containsExactly(other.getId());
+        assertThat(lastDaySnapshots()).extracting(DailyAssetSnapshot::getPlayerId,
+                        DailyAssetSnapshot::getCash, DailyAssetSnapshot::getStockValuation,
+                        DailyAssetSnapshot::getTotalAsset)
+                .containsExactly(
+                        tuple(withdrawn.getId(), 0L, 2_000L * 10_000, 2_000L * 10_000),
+                        tuple(other.getId(), 100_000_000L, 0L, 100_000_000L));
     }
 
     @Test
@@ -444,6 +501,14 @@ class LeagueResultUseCaseTest {
         return resultPlayers().stream()
                 .filter(result -> result.getPlayerId().equals(player.getId()))
                 .findFirst().orElseThrow();
+    }
+
+    private List<DailyAssetSnapshot> lastDaySnapshots() {
+        return entityManager.getEntityManager().createQuery(
+                        "select d from DailyAssetSnapshot d where d.leagueId = :l "
+                                + "and d.tradingDay = :t order by d.playerId",
+                        DailyAssetSnapshot.class)
+                .setParameter("l", LEAGUE_ID).setParameter("t", LAST_DAY).getResultList();
     }
 
     private List<LeagueResultHolding> holdingsOf(LeagueResultPlayer resultPlayer) {
