@@ -1,0 +1,288 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>공시·뉴스 생성 흐름</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 단일 칼럼 문서, 두 흐름을 시퀀스 다이어그램으로 나란히 비교한 뒤 뉴스 상태 전이로 마무리 */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1c2330;
+  --muted: #5d6676;
+  --line: #c9cfd9;
+  --tx: #2f6fd6;
+  --tx-fill: rgba(47, 111, 214, 0.07);
+  --retry: #b7791f;
+  --retry-fill: rgba(183, 121, 31, 0.08);
+  --fail: #c2413a;
+  --ok: #2e8a57;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --surface: #1a2029; --fg: #e3e7ee; --muted: #98a2b3; --line: #3a4352;
+    --tx: #6ea2f2; --tx-fill: rgba(110, 162, 242, 0.10);
+    --retry: #e0a64a; --retry-fill: rgba(224, 166, 74, 0.10);
+    --fail: #ef7a72; --ok: #5cc28a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a2029; --fg: #e3e7ee; --muted: #98a2b3; --line: #3a4352;
+  --tx: #6ea2f2; --tx-fill: rgba(110, 162, 242, 0.10);
+  --retry: #e0a64a; --retry-fill: rgba(224, 166, 74, 0.10);
+  --fail: #ef7a72; --ok: #5cc28a; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.6;
+}
+main {
+  max-width: 1040px; margin: 0 auto;
+  padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px;
+}
+header { display: grid; gap: 8px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1 { font-size: 28px; line-height: 1.3; margin: 0; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0; text-wrap: balance; }
+p { margin: 0; max-width: 68ch; }
+.lead { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: 0.9em; }
+section { display: grid; gap: 14px; min-width: 0; }
+
+.compare-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+tr:last-child td { border-bottom: none; }
+thead th { font-size: 13px; color: var(--muted); font-weight: 500; }
+tbody th { font-weight: 500; color: var(--muted); white-space: nowrap; width: 110px; }
+
+figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; padding: 8px; }
+.diagram svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--fg); font-family: var(--font-body); }
+figcaption { color: var(--muted); font-size: 14px; max-width: 80ch; }
+
+/* SVG 요소 스타일 (토큰 사용) */
+.hd rect { fill: var(--surface); stroke: var(--fg); stroke-width: 1.2; }
+.hd .name { font-size: 12.5px; font-weight: 700; fill: var(--fg); }
+.hd .layer { font-size: 10.5px; fill: var(--muted); font-family: var(--font-mono); }
+.life { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 4 4; }
+.msg { stroke: currentColor; stroke-width: 1.4; fill: none; }
+.ret { stroke: currentColor; stroke-width: 1.2; stroke-dasharray: 5 4; fill: none; }
+.bad { stroke: var(--fail); stroke-width: 1.3; stroke-dasharray: 5 4; fill: none; }
+.lbl { font-size: 12px; fill: var(--fg); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.lbl.bad-t { fill: var(--fail); }
+.lbl.muted { fill: var(--muted); }
+.txbox { fill: var(--tx-fill); stroke: var(--tx); stroke-width: 1.2; stroke-dasharray: 6 3; }
+.txlbl { font-size: 11.5px; font-weight: 700; fill: var(--tx); font-family: var(--font-mono); }
+.rtbox { fill: var(--retry-fill); stroke: var(--retry); stroke-width: 1.2; stroke-dasharray: 6 3; }
+.rtlbl { font-size: 11.5px; font-weight: 700; fill: var(--retry); }
+.handoff { stroke: var(--tx); stroke-width: 1.6; fill: none; }
+.handoff-t { font-size: 12px; font-weight: 700; fill: var(--tx); }
+.st rect { fill: var(--surface); stroke-width: 1.6; }
+.st text { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+.st.pending rect { stroke: var(--muted); } .st.pending text { fill: var(--muted); }
+.st.ok rect { stroke: var(--ok); } .st.ok text { fill: var(--ok); }
+.st.skip rect { stroke: var(--fg); } .st.skip text { fill: var(--fg); }
+.st.fail rect { stroke: var(--fail); } .st.fail text { fill: var(--fail); }
+.note { font-size: 12.5px; fill: var(--fg); }
+.note.sub { fill: var(--muted); font-size: 11.5px; }
+.mk-fg { fill: currentColor; }
+.mk-fail { fill: var(--fail); }
+.mk-tx { fill: var(--tx); }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">contents · CNT-05 / CNT-06 · ND-19</div>
+    <h1>공시 작성과 AI 뉴스 생성</h1>
+    <p class="lead">공시 작성 요청에서 공시와 함께 내용이 빈 PENDING 뉴스를 저장하고, 뉴스 내용은 커밋 뒤 별도 스레드에서 채웁니다. 두 흐름은 <code>DisclosurePublished</code> 이벤트로만 이어지므로 뉴스 생성이 실패해도 공시는 남습니다.</p>
+  </header>
+
+  <section aria-labelledby="cmp">
+    <h2 id="cmp">두 흐름의 차이</h2>
+    <div class="compare-wrap">
+      <table>
+        <thead><tr><th></th><th>공시 작성</th><th>뉴스 생성</th></tr></thead>
+        <tbody>
+          <tr><th>시작</th><td><code>POST /api/leagues/{id}/stocks/{id}/disclosures</code></td><td>공시 저장 커밋 후 <code>DisclosurePublished</code> 수신, PENDING 뉴스를 채움</td></tr>
+          <tr><th>실행 스레드</th><td>HTTP 요청 스레드</td><td><code>async-</code> 스레드 풀 (4개, <code>AsyncConfig</code>)</td></tr>
+          <tr><th>트랜잭션</th><td>1개: 공시·이미지 메타데이터·PENDING 뉴스 저장과 이벤트 발행</td><td>2개: 공시 내용 조회와 결과 반영. AI 호출은 트랜잭션 밖</td></tr>
+          <tr><th>외부 호출</th><td>GCS 이미지 업로드</td><td>GCS 서명 URL 발급, OpenRouter</td></tr>
+          <tr><th>실패하면</th><td>저장 롤백, 올린 이미지 삭제, 오류 응답</td><td>뉴스만 <code>FAILED</code>. 공시는 그대로</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="f1">
+    <h2 id="f1">1. 공시 작성</h2>
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 940 610" role="img" aria-label="공시 작성 흐름: 검증 후 트랜잭션 밖에서 이미지를 GCS에 올리고, 한 트랜잭션에서 공시·이미지 메타데이터·PENDING 뉴스를 저장하며 이벤트를 발행한다. 커밋 후 뉴스 생성으로 넘어간다.">
+          <defs>
+            <marker id="f1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fg" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="f1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fail" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="f1c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-tx" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <!-- 생명선 -->
+          <line class="life" x1="70" y1="66" x2="70" y2="560"/>
+          <line class="life" x1="220" y1="66" x2="220" y2="560"/>
+          <line class="life" x1="380" y1="66" x2="380" y2="560"/>
+          <line class="life" x1="540" y1="66" x2="540" y2="560"/>
+          <line class="life" x1="700" y1="66" x2="700" y2="560"/>
+          <line class="life" x1="860" y1="66" x2="860" y2="560"/>
+
+          <!-- 참여 컴포넌트 -->
+          <g class="hd"><rect x="10" y="18" width="120" height="48" rx="6"/><text class="name" x="70" y="39" text-anchor="middle">프론트</text><text class="layer" x="70" y="55" text-anchor="middle">client</text></g>
+          <g class="hd"><rect x="150" y="18" width="140" height="48" rx="6"/><text class="name" x="220" y="39" text-anchor="middle">Controller</text><text class="layer" x="220" y="55" text-anchor="middle">api</text></g>
+          <g class="hd"><rect x="305" y="18" width="150" height="48" rx="6"/><text class="name" x="380" y="39" text-anchor="middle">DisclosureService</text><text class="layer" x="380" y="55" text-anchor="middle">application</text></g>
+          <g class="hd"><rect x="470" y="18" width="140" height="48" rx="6"/><text class="name" x="540" y="39" text-anchor="middle">리그·종목 조회</text><text class="layer" x="540" y="55" text-anchor="middle">league · market</text></g>
+          <g class="hd"><rect x="640" y="18" width="120" height="48" rx="6"/><text class="name" x="700" y="39" text-anchor="middle">GCS</text><text class="layer" x="700" y="55" text-anchor="middle">ImageStorage</text></g>
+          <g class="hd"><rect x="800" y="18" width="120" height="48" rx="6"/><text class="name" x="860" y="39" text-anchor="middle">DB</text><text class="layer" x="860" y="55" text-anchor="middle">PostgreSQL</text></g>
+
+          <!-- 요청·검증 -->
+          <line class="msg" x1="70" y1="104" x2="220" y2="104" marker-end="url(#f1a)"/>
+          <text class="lbl" x="145" y="97" text-anchor="middle">POST 공시 작성</text>
+          <line class="msg" x1="220" y1="146" x2="380" y2="146" marker-end="url(#f1a)"/>
+          <text class="lbl" x="300" y="139" text-anchor="middle">publish()</text>
+          <line class="msg" x1="380" y1="188" x2="540" y2="188" marker-end="url(#f1a)"/>
+          <text class="lbl" x="460" y="181" text-anchor="middle">진행 중 리그·상장자 확인</text>
+
+          <!-- 이미지 업로드 (트랜잭션 밖) -->
+          <line class="msg" x1="380" y1="232" x2="700" y2="232" marker-end="url(#f1a)"/>
+          <text class="lbl" x="540" y="225" text-anchor="middle">이미지 업로드 (트랜잭션 밖)</text>
+
+          <!-- 트랜잭션 -->
+          <rect class="txbox" x="330" y="256" width="590" height="176" rx="6"/>
+          <text class="txlbl" x="340" y="273">트랜잭션</text>
+          <line class="msg" x1="380" y1="298" x2="860" y2="298" marker-end="url(#f1a)"/>
+          <text class="lbl" x="620" y="291" text-anchor="middle">공시 저장 (작성 거래일 기록)</text>
+          <line class="msg" x1="380" y1="334" x2="860" y2="334" marker-end="url(#f1a)"/>
+          <text class="lbl" x="620" y="327" text-anchor="middle">이미지 메타데이터 저장</text>
+          <line class="msg" x1="380" y1="370" x2="860" y2="370" marker-end="url(#f1a)"/>
+          <text class="lbl" x="620" y="363" text-anchor="middle">뉴스 저장 (PENDING, 내용 비어 있음)</text>
+          <path class="msg" d="M380,390 h36 v22 h-34" marker-end="url(#f1a)"/>
+          <text class="lbl" x="424" y="406">DisclosurePublished 발행</text>
+          <text class="txlbl" x="910" y="425" text-anchor="end">커밋</text>
+
+          <!-- 실패 보상 -->
+          <line class="bad" x1="380" y1="462" x2="700" y2="462" marker-end="url(#f1b)"/>
+          <text class="lbl bad-t" x="540" y="455" text-anchor="middle">저장 실패 시 올린 이미지 삭제</text>
+
+          <!-- 응답 -->
+          <line class="ret" x1="380" y1="500" x2="220" y2="500" marker-end="url(#f1a)"/>
+          <text class="lbl" x="300" y="493" text-anchor="middle">공시 ID·이미지 ID</text>
+          <line class="ret" x1="220" y1="538" x2="70" y2="538" marker-end="url(#f1a)"/>
+          <text class="lbl" x="145" y="531" text-anchor="middle">응답</text>
+
+          <!-- 뉴스 생성으로 넘김 -->
+          <path class="handoff" d="M380,432 V585 H520" marker-end="url(#f1c)"/>
+          <text class="handoff-t" x="530" y="589">커밋 후 이벤트 전달 → 2. AI 뉴스 채우기 (별도 스레드)</text>
+        </svg>
+      </div>
+      <figcaption>공시와 PENDING 뉴스는 한 트랜잭션에서 저장되므로 함께 생기거나 함께 롤백됩니다. 리스너는 커밋된 뒤에만 이벤트를 받습니다.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="f2">
+    <h2 id="f2">2. AI 뉴스 생성</h2>
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 960 630" role="img" aria-label="AI 뉴스 생성 흐름: 트랜잭션 1에서 PENDING 뉴스와 공시 내용, 과거 요약을 조회한 뒤, 트랜잭션 밖에서 이미지 서명 URL을 발급하고 OpenRouter를 호출한다. 실패만 최대 2회 재시도한다. 트랜잭션 2에서 뉴스 상태와 공시 요약 또는 미생성 사유를 저장한다.">
+          <defs>
+            <marker id="f2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fg" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="f2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fail" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <line class="life" x1="80" y1="66" x2="80" y2="610"/>
+          <line class="life" x1="280" y1="66" x2="280" y2="610"/>
+          <line class="life" x1="480" y1="66" x2="480" y2="610"/>
+          <line class="life" x1="660" y1="66" x2="660" y2="610"/>
+          <line class="life" x1="860" y1="66" x2="860" y2="610"/>
+
+          <g class="hd"><rect x="10" y="18" width="140" height="48" rx="6"/><text class="name" x="80" y="39" text-anchor="middle">이벤트 리스너</text><text class="layer" x="80" y="55" text-anchor="middle">@Async · 커밋 후</text></g>
+          <g class="hd"><rect x="190" y="18" width="180" height="48" rx="6"/><text class="name" x="280" y="39" text-anchor="middle">NewsGenerationService</text><text class="layer" x="280" y="55" text-anchor="middle">application</text></g>
+          <g class="hd"><rect x="420" y="18" width="120" height="48" rx="6"/><text class="name" x="480" y="39" text-anchor="middle">DB</text><text class="layer" x="480" y="55" text-anchor="middle">news · disclosure</text></g>
+          <g class="hd"><rect x="600" y="18" width="120" height="48" rx="6"/><text class="name" x="660" y="39" text-anchor="middle">GCS</text><text class="layer" x="660" y="55" text-anchor="middle">ImageStorage</text></g>
+          <g class="hd"><rect x="790" y="18" width="140" height="48" rx="6"/><text class="name" x="860" y="39" text-anchor="middle">OpenRouter</text><text class="layer" x="860" y="55" text-anchor="middle">NewsGenerator</text></g>
+
+          <line class="msg" x1="80" y1="104" x2="280" y2="104" marker-end="url(#f2a)"/>
+          <text class="lbl" x="180" y="97" text-anchor="middle">generate(공시 ID)</text>
+
+          <!-- 트랜잭션 1 -->
+          <rect class="txbox" x="210" y="124" width="350" height="140" rx="6"/>
+          <text class="txlbl" x="220" y="141">트랜잭션 1</text>
+          <line class="msg" x1="280" y1="170" x2="480" y2="170" marker-end="url(#f2a)"/>
+          <text class="lbl" x="380" y="163" text-anchor="middle">뉴스 조회 (PENDING만 진행)</text>
+          <line class="msg" x1="280" y1="208" x2="480" y2="208" marker-end="url(#f2a)"/>
+          <text class="lbl" x="380" y="201" text-anchor="middle">공시 제목·본문 조회</text>
+          <line class="msg" x1="280" y1="246" x2="480" y2="246" marker-end="url(#f2a)"/>
+          <text class="lbl" x="380" y="239" text-anchor="middle">과거 요약 조회 (오래된 순)</text>
+          <text class="lbl muted" x="570" y="174">뉴스가 없거나 이미 결과가 있으면 중단</text>
+
+          <!-- 이미지 URL (트랜잭션 밖, 재시도 없음) -->
+          <line class="msg" x1="280" y1="306" x2="660" y2="306" marker-end="url(#f2a)"/>
+          <text class="lbl" x="470" y="299" text-anchor="middle">이미지 서명 URL 발급 (트랜잭션 밖)</text>
+          <line class="bad" x1="660" y1="338" x2="280" y2="338" marker-end="url(#f2b)"/>
+          <text class="lbl bad-t" x="470" y="331" text-anchor="middle">실패하면 재시도 없이 FAILED</text>
+
+          <!-- AI 호출 + 자동 재시도 -->
+          <rect class="rtbox" x="210" y="362" width="730" height="114" rx="6"/>
+          <text class="rtlbl" x="220" y="380">실패하면 자동 재시도 최대 2회 (최초 포함 3회) · 미생성은 재시도하지 않음</text>
+          <line class="msg" x1="280" y1="414" x2="860" y2="414" marker-end="url(#f2a)"/>
+          <text class="lbl" x="570" y="407" text-anchor="middle">공시 원문 · 이미지 URL · 과거 요약</text>
+          <line class="ret" x1="860" y1="456" x2="280" y2="456" marker-end="url(#f2a)"/>
+          <text class="lbl" x="570" y="449" text-anchor="middle">발행(제목·본문·호재/악재·요약) / 미생성 / 3회 실패</text>
+
+          <!-- 트랜잭션 2 -->
+          <rect class="txbox" x="210" y="500" width="350" height="110" rx="6"/>
+          <text class="txlbl" x="220" y="517">트랜잭션 2</text>
+          <line class="msg" x1="280" y1="548" x2="480" y2="548" marker-end="url(#f2a)"/>
+          <text class="lbl" x="380" y="541" text-anchor="middle">뉴스 상태·내용 반영</text>
+          <line class="msg" x1="280" y1="588" x2="480" y2="588" marker-end="url(#f2a)"/>
+          <text class="lbl" x="380" y="581" text-anchor="middle">요약 또는 미생성 사유 기록</text>
+          <text class="lbl muted" x="570" y="592">다음 공시의 과거 요약이 됨</text>
+        </svg>
+      </div>
+      <figcaption>PENDING 뉴스만 채우고, 결과가 반영된 뉴스는 다시 생성하지 않습니다. AI 호출 동안에는 DB 트랜잭션을 열어 두지 않습니다. 공시가 삭제돼도 진행합니다.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="f3">
+    <h2 id="f3">3. 뉴스 상태</h2>
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 820 236" role="img" aria-label="뉴스 상태: 공시 저장 때 PENDING으로 생성되어 PUBLISHED, SKIPPED, FAILED 중 하나로 끝난다. FAILED는 수동 재시도 대상이고, 멈춘 PENDING 복구는 TODO다.">
+          <defs>
+            <marker id="f3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fg" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <g class="st pending"><rect x="30" y="96" width="140" height="44" rx="6"/><text x="100" y="123" text-anchor="middle">PENDING</text></g>
+          <text class="note sub" x="100" y="162" text-anchor="middle">공시 저장 때 생성</text>
+          <text class="note sub" x="100" y="180" text-anchor="middle">멈추면 복구: TODO (CNT-07)</text>
+          <g class="st ok"><rect x="320" y="22" width="150" height="44" rx="6"/><text x="395" y="49" text-anchor="middle">PUBLISHED</text></g>
+          <g class="st skip"><rect x="320" y="96" width="150" height="44" rx="6"/><text x="395" y="123" text-anchor="middle">SKIPPED</text></g>
+          <g class="st fail"><rect x="320" y="170" width="150" height="44" rx="6"/><text x="395" y="197" text-anchor="middle">FAILED</text></g>
+
+          <path class="msg" d="M170,112 C240,112 250,44 318,44" marker-end="url(#f3a)"/>
+          <line class="msg" x1="170" y1="118" x2="318" y2="118" marker-end="url(#f3a)"/>
+          <path class="msg" d="M170,124 C240,124 250,192 318,192" marker-end="url(#f3a)"/>
+
+          <text class="note" x="490" y="41">발행: 제목 30자·본문 100자, 호재/악재</text>
+          <text class="note sub" x="490" y="58">공시 ai_summary 기록. 삭제 불가</text>
+          <text class="note" x="490" y="115">미생성: 기사로 쓸 사실이 없음</text>
+          <text class="note sub" x="490" y="132">공시 ai_skip_reason 기록. 재시도하지 않음</text>
+          <text class="note" x="490" y="189">실패: AI 3회 모두 실패 또는 URL 발급 실패</text>
+          <text class="note sub" x="490" y="206">수동 재시도 대상 (CNT-07, 아직 없음)</text>
+        </svg>
+      </div>
+      <figcaption>공시를 저장할 때 PENDING으로 만들어지고, 결과에 따라 셋 중 하나로 끝납니다. 결과가 반영된 뉴스는 바뀌지 않습니다. 공시 저장 커밋 직후 서버가 종료되면 PENDING으로 남으며, 복구 방법은 CNT-07에서 정합니다.</figcaption>
+    </figure>
+  </section>
+</main>
+
+</body></html>
