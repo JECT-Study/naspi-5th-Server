@@ -30,7 +30,7 @@ public class NewsController {
 
     private static final String FIELDS = """
             - 뉴스: `title`, `body`, `sentiment`(`POSITIVE`=호재, `NEGATIVE`=악재).
-            - 일시(KST): `tradingDay`(원본 공시를 작성한 거래일 1~7), `createdAt`(뉴스 생성 요청 일시), \
+            - 일시(KST): `tradingDay`(원본 공시·제보를 작성한 거래일 1~7), `createdAt`(뉴스 생성 요청 일시), \
             `publishedAt`(발행 일시).
             - 댓글: `commentCount`(삭제되지 않은 댓글 수). 목록은 `previewComment`(가장 먼저 등록된 댓글 1개, \
             없으면 `null`), 상세는 `previewComment` 대신 `comments`(댓글 전체 배열, 오래된 순, 페이징 없음)를 \
@@ -116,7 +116,7 @@ public class NewsController {
                     **성공 시** HTTP 200, `code` `"000"`, `data`에 뉴스 상세. 목록 항목과 같은 필드에서 \
                     `previewComment` 대신 `comments`를 주고 `disclosure`가 더해진다.
                     - `disclosure`: 원본 공시 (`disclosureId`, `title`, `body`, `createdAt`). \
-                    공시 없이 만든 뉴스이거나 원본 공시가 삭제됐으면 `null`이다.
+                    제보 뉴스(`newsType`이 `REPORT`, 원본 공시 없음)이거나 원본 공시가 삭제됐으면 `null`이다.
                     """ + FIELDS + """
 
                     **실패 응답** (`code`는 3자리 문자열)

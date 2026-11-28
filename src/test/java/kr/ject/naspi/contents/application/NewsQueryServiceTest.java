@@ -2,6 +2,7 @@ package kr.ject.naspi.contents.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.BDDMockito.given;
 
 import java.time.Clock;
@@ -17,6 +18,9 @@ import kr.ject.naspi.contents.domain.NewsComment;
 import kr.ject.naspi.contents.domain.NewsGenerationResult;
 import kr.ject.naspi.contents.domain.NewsSentiment;
 import kr.ject.naspi.contents.domain.NewsType;
+import kr.ject.naspi.contents.domain.Report;
+import kr.ject.naspi.contents.domain.ReportBody;
+import kr.ject.naspi.contents.domain.ReportNewsGenerationResult;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -246,6 +250,65 @@ class NewsQueryServiceTest {
                 20), ErrorCode.LEAGUE_ALREADY_ENDED);
         assertBiz(() -> queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id),
                 ErrorCode.LEAGUE_ALREADY_ENDED);
+    }
+
+    @Test
+    @DisplayName("발행된 제보 뉴스는 종목별 뉴스 목록에 공시 뉴스와 함께 최신순으로 표시된다")
+    void reportNewsInList() {
+        long disclosureNews = published(LEAGUE_ID, STOCK_ID, NewsSentiment.POSITIVE);
+        long reportNews = reportNews(LEAGUE_ID, STOCK_ID,
+                new ReportNewsGenerationResult.Generated("종목A, 소식", "본문 제보자 철수",
+                        NewsSentiment.NEGATIVE), PUBLISHED_AT.plusMinutes(5));
+
+        NewsPage page = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 20);
+
+        assertThat(page.items()).extracting(NewsListItem::newsId, NewsListItem::newsType)
+                .containsExactly(tuple(reportNews, NewsType.REPORT),
+                        tuple(disclosureNews, NewsType.DISCLOSURE));
+    }
+
+    @Test
+    @DisplayName("제보 뉴스 상세의 원본 공시는 null이다")
+    void reportNewsDetail() {
+        long id = reportNews(LEAGUE_ID, STOCK_ID,
+                new ReportNewsGenerationResult.Generated("종목A, 소식", "본문 제보자 철수",
+                        NewsSentiment.POSITIVE), PUBLISHED_AT);
+
+        NewsDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id);
+
+        assertThat(detail.newsType()).isEqualTo(NewsType.REPORT);
+        assertThat(detail.title()).isEqualTo("종목A, 소식");
+        assertThat(detail.disclosure()).isNull();
+    }
+
+    @Test
+    @DisplayName("생성 중·미생성·실패한 제보 뉴스는 보이지 않는다")
+    void reportNewsNotPublishedHidden() {
+        long pending = reportNews(LEAGUE_ID, STOCK_ID, null, null);
+        long skipped = reportNews(LEAGUE_ID, STOCK_ID,
+                new ReportNewsGenerationResult.Skipped(), PUBLISHED_AT);
+        long failed = reportNews(LEAGUE_ID, STOCK_ID,
+                new ReportNewsGenerationResult.Failed("x"), PUBLISHED_AT);
+
+        assertThat(queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 20)
+                .items()).isEmpty();
+        for (long id : new long[] {pending, skipped, failed}) {
+            assertBiz(() -> queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id),
+                    ErrorCode.NEWS_NOT_FOUND);
+        }
+    }
+
+    /** 제보와 제보 뉴스를 만든다. result가 null이면 생성 중(PENDING)으로 둔다. */
+    private long reportNews(long leagueId, long stockId, ReportNewsGenerationResult result,
+                            LocalDateTime publishedAt) {
+        Report report = entityManager.persistAndFlush(Report.submit(leagueId, stockId, 80L,
+                ReportBody.of("제보"), 2, NOW));
+        News news = entityManager.persistAndFlush(News.requestFromReport(report, NOW));
+        if (result != null) {
+            news.complete(result, publishedAt);
+            entityManager.flush();
+        }
+        return news.getId();
     }
 
     private long published(long leagueId, long stockId, NewsSentiment sentiment) {

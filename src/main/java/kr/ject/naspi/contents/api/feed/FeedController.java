@@ -61,7 +61,8 @@ public class FeedController {
                     - 항목: `type`으로 구분한다. `DISCLOSURE`면 종목별 공시 목록\
                     (`GET .../stocks/{stockId}/disclosures`)의 항목과, `NEWS`면 종목별 뉴스 목록\
                     (`GET .../stocks/{stockId}/news`)의 항목과 같은 모양이다 (두 목록 항목에도 `type`이 있다). \
-                    보이는 범위도 같다 (삭제된 공시 제외, 발행된 뉴스만, 공시가 삭제돼도 발행된 뉴스는 보임).
+                    보이는 범위도 같다 (삭제된 공시 제외, 발행된 뉴스만, 공시가 삭제돼도 발행된 뉴스는 보임). \
+                    `NEWS` 항목에는 공시 기반 뉴스와 제보 기반 뉴스(`newsType`이 `REPORT`)가 함께 나온다.
                     - 종목: 모든 항목에 종목 ID(`stockId`)와 종목 이름(`stockName`)이 있다.
 
                     **실패 응답** (`code`는 3자리 문자열)
