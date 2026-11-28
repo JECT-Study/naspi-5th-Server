@@ -7,7 +7,7 @@ package kr.ject.naspi.websocket.api.response.alert;
  *
  * @param alertType 알림 종류
  * @param message 알림 내용
- * @param url 알림을 눌렀을 때 이동할 프론트 경로
+ * @param url 알림을 눌렀을 때 이동할 프론트 경로. 이동할 곳이 없으면 null
  */
 public record AlertResponse(AlertType alertType, String message, String url) {
 
