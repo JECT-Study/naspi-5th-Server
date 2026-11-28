@@ -3,6 +3,7 @@ package kr.ject.naspi.websocket.application.topic.chart;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
@@ -110,8 +111,8 @@ public class CandleChartTopic implements PeriodicTopic {
 
     /** 봉 단위 하나의 최근 2개 캔들을 현재 시각 기준으로 갱신한다. */
     private List<Candle> advance(CandleInterval interval, Instant now) {
-        Instant start = startOf(interval, now);
-        Instant previousStart = start.minus(interval.duration());
+        LocalDateTime start = startOf(interval, now);
+        LocalDateTime previousStart = start.minus(interval.duration());
         RecentCandles candles = recent.get(interval);
         if (candles == null) {
             Candle previous = new Candle(previousStart, DUMMY_FIRST_PRICE,
@@ -140,12 +141,12 @@ public class CandleChartTopic implements PeriodicTopic {
                 current.volume() + random.nextInt(1, 21));
     }
 
-    private static Candle open(Instant start, long price) {
+    private static Candle open(LocalDateTime start, long price) {
         return new Candle(start, price, price, price, price, 0);
     }
 
     /** 현재 시각이 속한 봉의 시작 시각. 봉 경계는 KST 기준이고 1일봉은 거래일(09:00 KST 시작) 기준. */
-    static Instant startOf(CandleInterval interval, Instant now) {
+    static LocalDateTime startOf(CandleInterval interval, Instant now) {
         ZonedDateTime kst = now.atZone(ClockConfig.KST);
         ZonedDateTime start = switch (interval) {
             case MINUTE_10 -> kst.truncatedTo(ChronoUnit.HOURS)
@@ -154,7 +155,7 @@ public class CandleChartTopic implements PeriodicTopic {
             case DAY_1 -> kst.minus(TRADING_DAY_START).truncatedTo(ChronoUnit.DAYS)
                     .plus(TRADING_DAY_START);
         };
-        return start.toInstant();
+        return start.toLocalDateTime();
     }
 
     /**

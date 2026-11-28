@@ -117,6 +117,21 @@ public class TradingDay {
     }
 
     /**
+     * 마지막 거래일(7일차)을 마감했다고 기록한다. 리그 종료 처리가 종료 시각 이후에 호출한다.
+     *
+     * @param now 마감 일시
+     * @throws IllegalStateException 마지막 거래일이 아니거나, 이미 마감했거나, 아직 끝나지 않은 경우
+     */
+    public void closeLast(LocalDateTime now) {
+        Objects.requireNonNull(now, "now");
+        if (closedAt != null || !isLast() || !endedAt(now)) {
+            throw new IllegalStateException("마지막 거래일을 마감할 수 없습니다. leagueId=" + leagueId
+                    + ", dayNumber=" + dayNumber + ", closedAt=" + closedAt);
+        }
+        this.closedAt = now;
+    }
+
+    /**
      * 이 거래일의 다음 거래일 전환을 기다리는 상태인지. 이 거래일이 끝났는데(종료 시각 이후) 아직 마감하지
      * 않았고 마지막 거래일이 아니면, 09:00 전환 처리 전이다.
      *

@@ -65,7 +65,7 @@ class OrderExecutionSupport {
     /**
      * 미체결 주문을 취소·만료로 종료하고 미체결 잔여 수량에 묶인 예약을 푼다. 사유가
      * {@link CancelReason#TRADING_DAY_EXPIRED}이면 만료, 아니면 취소로 처리한다. 이미 종료된 주문이면
-     * 도메인이 상태 전이를 거절하고 해제는 일어나지 않는다.
+     * 도메인이 상태 전이를 거절하고 해제는 일어나지 않는다. 종료한 뒤 {@link OrderCanceled}를 발행한다.
      *
      * @param order 주문
      * @param reason 종료 사유
@@ -78,6 +78,8 @@ class OrderExecutionSupport {
             order.cancel(reason, closedAt);
         }
         releaseRemaining(order);
+        eventPublisher.publishEvent(new OrderCanceled(order.getLeagueId(), order.getStockId(),
+                order.getId(), order.getPlayerId(), reason));
     }
 
     /**

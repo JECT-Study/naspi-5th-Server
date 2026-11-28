@@ -1,4 +1,4 @@
-# 종목 정보 (WebSocket)
+# 종목 정보 토픽
 
 리그에 상장된 전체 종목의 현재가와 등락을 실시간으로 받습니다. 종목 목록 화면에서 씁니다.
 
@@ -14,7 +14,8 @@
 | 구독 | `/topic/leagues/{leagueId}/stocks` |
 | 구독 권한 | 로그인 회원 누구나 |
 | 메시지 종류 (`type`) | `STOCK` |
-| 전달 주기 | 1초마다 (더미). 구독자가 없으면 보내지 않습니다 |
+| 전달 시점 | 1초마다 (더미). 구독자가 없으면 보내지 않습니다 |
+| 대응 REST | 없음 (TODO: 추가 예정) |
 | 발행 (클라이언트 → 서버) | 없음 |
 
 ---
@@ -68,7 +69,7 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 
 | **헤더** | **값** | **필수** | **비고** |
 | --- | --- | --- | --- |
-| destination | `/topic/leagues/{leagueId}/stocks` | O | |
+| destination | `/topic/leagues/{leagueId}/stocks` | O |  |
 | id | 구독 ID | O | 클라이언트가 정하는 값. STOMP 라이브러리가 자동으로 만듭니다 |
 
 ```
@@ -87,7 +88,7 @@ destination:/topic/leagues/1/stocks
 | --- | --- | --- | --- |
 | type | String | 메시지 종류 | 이 토픽은 항상 `STOCK` |
 | payload | Object | 데이터 | 아래 표 참고 |
-| publishedAt | Number | 발행 시각 | UTC epoch 밀리초, 예: `1794202325123` (= 2026-11-09 14:32:05.123 KST) |
+| publishedAt | String | 발행 시각 (KST) | REST 응답의 일시와 같은 형식(오프셋 없음, 밀리초까지), 예: `2026-11-09T14:32:05.123` |
 
 #### payload
 
@@ -115,16 +116,17 @@ message-id:a1b2c3-0
       { "stockId": 2, "stockName": "민영건설", "currentPrice": 12500, "changeAmount": -10, "changeRate": -1.5 }
     ]
   },
-  "publishedAt": 1794202325123
+  "publishedAt": "2026-11-09T14:32:05.123"
 }^@
 ```
 
 ### 메시지 처리 방법
 
-- 메시지는 바뀐 부분만이 아니라 **그 시점의 전체 상태**를 담습니다. 받은 값으로 화면 상태를 통째로 덮어씁니다.
+- 메시지는 바뀐 부분이 아니라 **그 시점의 상태**를 담습니다. 이전 메시지와 비교해 변경분을 계산하지 않습니다.
 - 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
-- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지로 덮어씁니다.
-- `stock` 목록은 리그의 **전체 종목**입니다. 목록을 통째로 바꿉니다.
+- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
+- 받은 값으로 화면 상태를 통째로 덮어씁니다.
+- `stock`은 리그의 **전체 종목** 목록입니다. 목록을 통째로 바꿉니다.
 
 ---
 
@@ -166,13 +168,13 @@ content-length:0
 
 1. **없는 리그 ID로 구독한 경우:** 지금은 리그 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
 2. **더미 응답:** 리그와 관계없이 항상 위 예시와 같은 2개 종목을 보냅니다. 값도 바뀌지 않습니다.
-3. **연결이 끊긴 동안의 시세:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 시세를 받습니다. (TODO: 종목 목록 조회 REST API 추가 예정)
+3. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 시세를 받습니다. (TODO: 종목 목록 조회 REST API 추가 예정)
 
 ---
 
 ## 6. FE 연동 예시
 
-[`@stomp/stompjs`](https://stomp-js.github.io/) 7.x를 사용합니다.
+`@stomp/stompjs` 7.x를 사용합니다.
 
 ```bash
 npm install @stomp/stompjs
@@ -182,14 +184,14 @@ npm install @stomp/stompjs
 
 모든 토픽이 연결 하나를 같이 씁니다. 다른 토픽 문서에서 이미 만들었다면 그대로 재사용합니다.
 
-```ts
+```tsx
 import { Client, IMessage } from '@stomp/stompjs';
 
 /** 모든 토픽 메시지의 공통 형식. */
 export type TopicEnvelope<T> = {
   type: string;
   payload: T;
-  publishedAt: number; // UTC epoch 밀리초
+  publishedAt: string;
 };
 
 export const stompClient = new Client({
@@ -229,7 +231,7 @@ export function subscribeTopic<T>(
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
-    const publishedAt = envelope.publishedAt;
+    const publishedAt = Date.parse(envelope.publishedAt); // 오프셋이 없어 브라우저 시간대로 해석되지만 비교에는 문제없다
     if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
     lastPublishedAt = publishedAt;
     onMessage(envelope.payload, envelope);
@@ -270,7 +272,9 @@ export type Stock = {
 };
 
 type StockPayload = { stock: Stock[] };
+```
 
+```tsx
 /** 리그 전체 종목 시세를 실시간으로 받는다. */
 export function useStocks(leagueId: number) {
   const [stocks, setStocks] = useState<Stock[]>([]);

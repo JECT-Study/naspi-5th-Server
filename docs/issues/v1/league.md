@@ -123,10 +123,15 @@
 - Jira: ND-85
 - 정책: [league.md#리그-시작-및-운영](../../policies/v1/domain/league.md#리그-시작-및-운영)
 - 선행: LEA-10
-- 내용: 종료 시각에 주문 접수·체결 종료, 리그 종료 UseCase가 하위 모듈을 직접 호출
+- 내용: 종료 시각에 주문 접수·체결 종료, 리그 종료 UseCase가 하위 모듈을 직접 호출. 매일 09:00 KST와 기동 직후 `LeagueEndScheduler`가 종료 시각이 지난 진행 중 리그마다 `LeagueEndUseCase`를 리그별 트랜잭션으로 실행한다. 흐름(리그 락 안, 한 트랜잭션): ① 밀린 거래일 전환 보정(`TradingDayChangeUseCase`, 1~6일차) → ② 7일차 마감(market `StockTradingDayService#closeLastTradingDay` 종가 확정, `TradingDay#closeLast`) → ③ ORD-10 미체결 지정가 전체 취소(`OpenOrderClosingService#cancelAllOfLeague`, 취소 시각 = 종료 시각) → (LEA-13 결과 산정) → ⑦ `League#end`(ENDED 전환·초대 코드 폐기) → `LeagueEnded` 이벤트 발행
+- 결정: 스케줄러는 09:00 KST cron + 기동 시 보정만 둔다(짧은 주기 재시도 없음). 실패한 리그는 롤백되어 STARTED로 남고 다음 09:00 또는 재기동 때 다시 처리되며, 그동안 거래·리그 화면 접근은 종료 시각 기준으로 차단된다. 종료 처리 시각 컬럼(`league.ended_at`)은 두지 않는다(7일차 `trading_day.closed_at`에 남는다). `LeagueEnded(leagueId, endedAt)`는 websocket 전용으로 발행만 하고 구독은 WS-04에서 한다
+- 결정: 종료 후 차단은 `LeagueQueryService#requireAccessiblePlayer`(입장 확인 `004` → 리그 상태 `212`, 시각 기준: ENDED 또는 STARTED && now >= endsAt)를 각 모듈 application에서 호출한다. 대상: 내 자산, 종목 목록·상세, 종목 소개 수정, 공시 목록·상세·삭제, 뉴스 목록·상세·재생성, 댓글 목록·삭제, 공시 반응, 피드, websocket 내 자산 토픽 구독(`findAccessiblePlayerId`). 공시·댓글·반응 작성은 `findCurrentTradingDay`가 종료 시각부터 빈 값을 돌려 막는다. `GET /api/leagues/{leagueId}/detail`은 결과 페이지(LEA-14) 전까지 종료 리그의 이름·참여자 표시용으로 열어 둔다. 나머지 websocket Authorizer(종목·호가·캔들·알림)는 WS-01~05에서 리그 참여자 확인을 넣을 때 같은 메서드를 쓴다
+- 진행: 결과 산정(LEA-13·MKT-07·INT-05) 호출은 LEA-13(ND-86)에서 ③ 뒤 ⑦ 앞, 같은 트랜잭션에 연결한다 (`LeagueEndUseCase` Javadoc에 위치 기재)
 - 완료 조건
-  - [ ] 리그 종료 UseCase가 ORD-10(미체결 전체 취소) → LEA-13(결과 산정)을 직접 호출. 종료 시각의 7일차 종가 확정 포함
-  - [ ] 종료 후 결과 페이지 외 리그 API 접근 차단
+  - [ ] 리그 종료 UseCase가 ORD-10(미체결 전체 취소) → LEA-13(결과 산정)을 직접 호출. 종료 시각의 7일차 종가 확정 포함 — ORD-10 연결·7일차 종가 확정 완료(ND-85), LEA-13 연결은 ND-86
+  - [x] 종료 후 결과 페이지 외 리그 API 접근 차단 — `./gradlew test --tests "kr.ject.naspi.league.application.LeagueQueryServiceTest"` 외 각 모듈 `endedLeagueBlocked`
+  - [x] 종료 시 초대 코드 폐기 — `./gradlew test --tests "kr.ject.naspi.league.domain.LeagueTest"`
+  - [x] 서버 재시작·중복 실행·거래일 전환과 동시 실행에도 한 번만 처리 — `./gradlew test --tests "kr.ject.naspi.league.application.LeagueEnd*"`
 
 ## 결과
 
@@ -141,6 +146,7 @@
   - [ ] 최종 손익 = 최종 총자산 - 1억 원, 최종 수익률 = 최종 손익 ÷ 1억 원 × 100
   - [ ] 종료 전 탈퇴자는 순위·결과에서 제외
   - [ ] 결과 스냅샷 저장 (참여자별 현금, 종목별 보유 수량·평가액, 총자산)
+- 비고: 공동 순위·후속 순위 계산은 LEA-19 일일 랭킹과 같은 로직을 공유한다
 - 결정 필요: 최종 수익률 반올림 규칙 (자산 조회와 같이 소수점 둘째 자리에서 반올림, 음수는 절댓값 기준인지)
 
 ### LEA-14 참여자는 종료된 리그의 최종 순위와 참여자별 자산 내역을 영구히 조회할 수 있다
@@ -189,4 +195,22 @@
   - [ ] 각 거래일 종료 시점의 전체 현금과 종목별 보유 수량 기준으로 집계
   - [ ] 보유 주식은 해당 거래일 종가로 평가, 총자산 = 전체 현금 + 보유 주식 평가 금액
   - [ ] 마지막 거래일에는 최종 총자산 산출 (LEA-13)
-- 결정 필요: 저장 범위 (참여자별 총자산만인지, 종목별 보유 수량·평가액도인지)와 집계 결과의 사용처
+- 결정: 집계 결과는 일일 랭킹(LEA-19)과 최종 결과(LEA-13)에서 쓴다. 참여자별 총자산은 반드시 저장한다 (ERD `daily_asset_snapshot`)
+- 결정 필요: 종목별 보유 수량·평가액도 저장할지
+
+### LEA-19 참여자는 직전 거래일 기준 일일 랭킹을 조회할 수 있다
+- Jira: ND-114
+- 정책: [league.md#일일-랭킹](../../policies/v1/domain/league.md#일일-랭킹)
+- 선행: LEA-18, LEA-11
+- 완료 조건
+  - [ ] 직전 거래일 종료 시점의 총자산(LEA-18 거래일별 자산 집계)이 높은 순서로 순위 산정
+  - [ ] 총자산 동일 시 공동 순위, 이후 순위는 해당 순위에 동점자 수를 더해 산정 (예: 공동 1위 2명이면 다음은 3위)
+  - [ ] 수익률 = (총자산 - 1억 원) ÷ 1억 원 × 100, 소수점 둘째 자리에서 반올림 (음수는 절댓값 기준)
+  - [ ] 1일차에는 공개하지 않고 2일차 09:00 KST에 첫 공개
+  - [ ] 매 거래일 09:00 KST에 직전 거래일 집계 결과로 갱신
+- 비고: 순위 계산은 LEA-13 최종 순위와 같은 로직을 쓴다
+- 결정 필요
+  - 1일차 응답 (빈 목록 / 미공개 상태)
+  - 09:00 이후 거래일 전환·집계 전 표시 (이전 랭킹 유지 / 미공개)
+  - 진행 중 탈퇴자를 일일 랭킹에서 제외할지 (LEA-15는 최종 결과만 다룸)
+  - 순위 저장 vs 조회 시 계산 (권장: 조회 시 계산)

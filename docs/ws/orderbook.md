@@ -1,10 +1,6 @@
-# 호가 (WebSocket)
+# 호가 토픽
 
 종목 하나의 매도·매수 호가(가격별 미체결 잔량)를 실시간으로 받습니다. 종목 상세 화면의 호가창에서 씁니다.
-
-> **⚠️ 더미 응답입니다.**
-> 지금은 실제 데이터 대신 더미 값을 1초마다 보냅니다. 구독 경로와 메시지 형식은 실제 구현에서도 유지할 예정이지만, 구현하면서 바뀔 수 있습니다.
-> 서버 코드: `websocket.application.topic.orderbook.OrderBookTopic`
 
 | **항목** | **값** |
 | --- | --- |
@@ -12,9 +8,10 @@
 | 프로토콜 | STOMP 1.2 over WebSocket (SockJS 미사용) |
 | 인증 | 로그인 세션 쿠키 `SESSION` ([2. 연결 인증](#2-연결-인증)) |
 | 구독 | `/topic/leagues/{leagueId}/stocks/{stockId}/orderbook` |
-| 구독 권한 | 로그인 회원 누구나 |
+| 구독 권한 | 진행 중인 리그의 참여자 |
 | 메시지 종류 (`type`) | `ORDER_BOOK` |
-| 전달 주기 | 1초마다 (더미). 구독자가 없으면 보내지 않습니다 |
+| 전달 시점 | 호가나 현재가가 바뀔 때 ([전달 시점](#전달-시점)). 구독자가 없으면 보내지 않습니다 |
+| 대응 REST | `GET /api/leagues/{leagueId}/stocks/{stockId}/orderbook` |
 | 발행 (클라이언트 → 서버) | 없음 |
 
 ---
@@ -59,9 +56,11 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 
 ### 구독 권한
 
-로그인 회원이면 누구나 구독할 수 있습니다.
+REST 호가 조회(`GET /api/leagues/{leagueId}/stocks/{stockId}/orderbook`)와 같은 조건입니다. 다음을 모두 만족해야 구독할 수 있습니다.
 
-> TODO: 리그 모듈이 생기면 해당 리그 참여자만 구독할 수 있게 바뀝니다.
+- 로그인한 회원이 그 리그에 입장한 참여자입니다
+- 리그가 진행 중입니다 (시작 후, 종료 전)
+- `stockId`가 그 리그의 종목입니다
 
 권한이 없으면 `ERROR` 프레임을 받고 **연결 전체가 끊깁니다**([5. 에러](#5-에러)).
 
@@ -69,7 +68,7 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 
 | **헤더** | **값** | **필수** | **비고** |
 | --- | --- | --- | --- |
-| destination | `/topic/leagues/{leagueId}/stocks/{stockId}/orderbook` | O | |
+| destination | `/topic/leagues/{leagueId}/stocks/{stockId}/orderbook` | O |  |
 | id | 구독 ID | O | 클라이언트가 정하는 값. STOMP 라이브러리가 자동으로 만듭니다 |
 
 ```
@@ -80,6 +79,21 @@ destination:/topic/leagues/1/stocks/1/orderbook
 ^@
 ```
 
+### 전달 시점
+
+호가나 현재가가 바뀌면 아래 표의 구독자에게 보냅니다.
+
+| **원인** | **받는 사람** |
+| --- | --- |
+| 체결 | 종목별 구독자 |
+| 지정가 주문 접수 | 종목별 구독자 |
+| 주문 취소, 거래일 변경으로 미체결 만료 | 종목별 구독자 |
+| 현재가 변경 | 리그 내 모든 구독자 |
+
+- 시장가 주문은 호가에 남지 않습니다. 체결된 만큼만 체결 메시지로 반영됩니다.
+- 체결이 몰리면 같은 내용의 메시지가 연달아 올 수 있습니다. 받은 값으로 덮어쓰면 됩니다.
+- 리그가 종료되면 더 이상 보내지 않습니다.
+
 ### 받는 메시지
 
 모든 토픽 메시지는 같은 형식(`TopicEnvelope`)으로 옵니다. REST API의 `Result`(`code`, `message`, `data`)와 다른 형식이니 주의합니다.
@@ -88,19 +102,24 @@ destination:/topic/leagues/1/stocks/1/orderbook
 | --- | --- | --- | --- |
 | type | String | 메시지 종류 | 이 토픽은 항상 `ORDER_BOOK` |
 | payload | Object | 데이터 | 아래 표 참고 |
-| publishedAt | Number | 발행 시각 | UTC epoch 밀리초, 예: `1794202325123` (= 2026-11-09 14:32:05.123 KST) |
+| publishedAt | String | 발행 시각 (KST) | REST 응답의 일시와 같은 형식(오프셋 없음, 밀리초까지), 예: `2026-11-09T14:32:05.123` |
 
 #### payload
 
+금액은 원, 수량은 주 단위입니다.
+
+REST `GET /api/leagues/{leagueId}/stocks/{stockId}/orderbook`의 `data`와 같은 필드에 `asOf`만 더해 보냅니다.
+
 | **필드** | **타입** | **설명** | **비고** |
 | --- | --- | --- | --- |
-| currentPrice | Long | 현재가 (원) | |
-| asks | Array | 매도 호가 | **낮은 가격(최우선 매도 호가)부터** |
+| currentPrice | Long | 현재가 (원) | 첫 체결 전에는 시초가 |
+| asks | Array | 매도 호가 | **낮은 가격(최우선 매도 호가)부터** 최대 5단계. 없으면 빈 배열 |
 | asks[].orderPrice | Long | 주문가격 (원) | 100원 단위 |
 | asks[].remainingQuantity | Long | 이 가격 주문의 잔량 합계 (주) | |
-| bids | Array | 매수 호가 | **높은 가격(최우선 매수 호가)부터** |
+| bids | Array | 매수 호가 | **높은 가격(최우선 매수 호가)부터** 최대 5단계. 없으면 빈 배열 |
 | bids[].orderPrice | Long | 주문가격 (원) | 100원 단위 |
 | bids[].remainingQuantity | Long | 이 가격 주문의 잔량 합계 (주) | |
+| asOf | String | 값을 계산한 시각 (KST) | REST와 같은 일시 형식 |
 
 ```
 MESSAGE
@@ -126,17 +145,20 @@ message-id:a1b2c3-0
       { "orderPrice": 12300, "remainingQuantity": 15 },
       { "orderPrice": 12200, "remainingQuantity": 60 },
       { "orderPrice": 12100, "remainingQuantity": 150 }
-    ]
+    ],
+    "asOf": "2026-11-09T14:32:05.120"
   },
-  "publishedAt": 1794202325123
+  "publishedAt": "2026-11-09T14:32:05.123"
 }^@
 ```
 
 ### 메시지 처리 방법
 
-- 메시지는 바뀐 부분만이 아니라 **그 시점의 전체 상태**를 담습니다. 받은 값으로 화면 상태를 통째로 덮어씁니다.
-- 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
-- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지로 덮어씁니다.
+- 메시지는 바뀐 부분이 아니라 **그 시점의 상태**를 담습니다. 이전 메시지와 비교해 변경분을 계산하지 않습니다.
+- 네트워크 상황이나 서버의 동시 발행으로 순서가 뒤바뀔 수 있으므로, **`asOf`가 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.** REST 응답에는 `asOf`가 없으므로 REST 값 다음에 오는 첫 메시지는 그대로 반영합니다.
+  - 이 토픽은 `publishedAt`(발행 시각)이 아니라 `asOf`(계산 시각)로 판단합니다. 먼저 계산했지만 늦게 발행된 메시지는 `publishedAt`이 더 최근이어도 이전 값입니다.
+- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
+- 받은 값으로 화면 상태를 통째로 덮어씁니다.
 - 호가창을 위에서 아래로 높은 가격부터 그린다면, `asks`는 **뒤집어서**(높은 가격부터) 위쪽에, `bids`는 그대로 아래쪽에 놓습니다.
 - 다른 종목으로 화면이 바뀌면 이전 종목 구독을 해지하고 새 종목을 구독합니다.
 
@@ -178,16 +200,16 @@ content-length:0
 
 ### 예외
 
-1. **없는 리그·종목 ID로 구독한 경우:** 지금은 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
-2. **더미 응답:** 종목과 관계없이 항상 위 예시와 같은 매도·매수 5단계를 보냅니다. 값도 바뀌지 않습니다.
-3. **호가 단계 수:** 실제 구현에서는 미체결 주문이 있는 가격만 오므로 5단계보다 적거나 많을 수 있고, 빈 배열일 수도 있습니다.
-4. **연결이 끊긴 동안의 호가:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 호가를 받습니다. (TODO: 호가 조회 REST API 추가 예정)
+1. **구독 권한이 없는 경우:** 입장하지 않은 리그, 시작 전·종료된 리그, 그 리그에 없는 `stockId`로 구독하면 `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 리그가 진행 중일 때만 구독합니다.
+2. **호가 단계 수:** 미체결 지정가 주문이 있는 가격만 오므로 0~5단계입니다. 주문이 없는 쪽은 빈 배열입니다.
+3. **리그 종료 후:** 메시지가 오지 않습니다. 종료된 리그는 REST 호가 조회도 거절됩니다.
+4. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 호가를 받습니다.
 
 ---
 
 ## 6. FE 연동 예시
 
-[`@stomp/stompjs`](https://stomp-js.github.io/) 7.x를 사용합니다.
+`@stomp/stompjs` 7.x를 사용합니다.
 
 ```bash
 npm install @stomp/stompjs
@@ -197,14 +219,14 @@ npm install @stomp/stompjs
 
 모든 토픽이 연결 하나를 같이 씁니다. 다른 토픽 문서에서 이미 만들었다면 그대로 재사용합니다.
 
-```ts
+```tsx
 import { Client, IMessage } from '@stomp/stompjs';
 
 /** 모든 토픽 메시지의 공통 형식. */
 export type TopicEnvelope<T> = {
   type: string;
   payload: T;
-  publishedAt: number; // UTC epoch 밀리초
+  publishedAt: string;
 };
 
 export const stompClient = new Client({
@@ -244,7 +266,7 @@ export function subscribeTopic<T>(
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
-    const publishedAt = envelope.publishedAt;
+    const publishedAt = Date.parse(envelope.publishedAt); // 오프셋이 없어 브라우저 시간대로 해석되지만 비교에는 문제없다
     if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
     lastPublishedAt = publishedAt;
     onMessage(envelope.payload, envelope);
@@ -278,33 +300,55 @@ import { subscribeTopic } from './stompClient';
 
 export type OrderBookLevel = { orderPrice: number; remainingQuantity: number };
 
+/** REST GET /orderbook 응답(data). */
 export type OrderBook = {
   currentPrice: number;
   asks: OrderBookLevel[]; // 낮은 가격부터
   bids: OrderBookLevel[]; // 높은 가격부터
 };
 
-/** 종목 하나의 호가를 실시간으로 받는다. */
-export function useOrderBook(leagueId: number, stockId: number) {
-  const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
+/** 토픽 메시지(payload). REST 응답에 계산 시각만 더한다. */
+export type OrderBookMessage = OrderBook & {
+  asOf: string;
+};
+```
 
-  useEffect(
-    () =>
-      subscribeTopic<OrderBook>(
-        `/topic/leagues/${leagueId}/stocks/${stockId}/orderbook`,
-        setOrderBook,
-      ),
-    [leagueId, stockId],
-  );
+```tsx
+/**
+ * 종목 하나의 호가를 실시간으로 받는다. initial은 처음 접속할 때 REST(GET /orderbook)로 받은 값이다.
+ * asOf가 마지막으로 반영한 메시지보다 이른 메시지는 버린다.
+ */
+export function useOrderBook(leagueId: number, stockId: number, initial: OrderBook) {
+  const [orderBook, setOrderBook] = useState<OrderBook | OrderBookMessage>(initial);
+
+  useEffect(() => {
+    setOrderBook(initial);
+    return subscribeTopic<OrderBookMessage>(
+      `/topic/leagues/${leagueId}/stocks/${stockId}/orderbook`,
+      (payload) =>
+        setOrderBook((prev) =>
+          'asOf' in prev && Date.parse(payload.asOf) < Date.parse(prev.asOf) ? prev : payload,
+        ),
+    );
+  }, [leagueId, stockId, initial]);
 
   return orderBook;
 }
 ```
 
+> `initial`은 렌더링마다 새 객체를 만들지 않도록 `useMemo`나 상태로 넘깁니다. 매번 새 객체면 구독을 계속 다시 합니다.
+
 ```tsx
-function OrderBookTable({ leagueId, stockId }: { leagueId: number; stockId: number }) {
-  const orderBook = useOrderBook(leagueId, stockId);
-  if (!orderBook) return null;
+function OrderBookTable({
+  leagueId,
+  stockId,
+  initial,
+}: {
+  leagueId: number;
+  stockId: number;
+  initial: OrderBook;
+}) {
+  const orderBook = useOrderBook(leagueId, stockId, initial);
 
   return (
     <table>

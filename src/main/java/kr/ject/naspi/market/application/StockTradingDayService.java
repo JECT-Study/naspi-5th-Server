@@ -1,5 +1,6 @@
 package kr.ject.naspi.market.application;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -24,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 전(09:00 이후)에는 주문 접수를 거절하므로 전환 시점의 현재가는 그 거래일의 마지막 체결가와 같다.
  * 거래량은 새 거래일 행이 0부터 시작하므로 초기화된다. 현재가는 바꾸지 않는다.
  *
- * <p>league 거래일 전환 UseCase가 호출한다. 거래일 번호는 league가 넘긴다.
+ * <p>league 거래일 전환 UseCase가 호출한다. 거래일 번호는 league가 넘긴다. 마지막 거래일의 종가 확정은
+ * league 리그 종료 UseCase가 {@link #closeLastTradingDay}로 호출한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -44,19 +46,49 @@ public class StockTradingDayService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void changeTradingDay(long leagueId, int closingDay) {
+        Map<Long, Long> closes = closeAll(leagueId, closingDay);
+        List<StockDailyPrice> nextPrices = closes.entrySet().stream()
+                .map(close -> StockDailyPrice.open(leagueId, close.getKey(), closingDay + 1,
+                        close.getValue()))
+                .toList();
+        dailyPriceRepository.saveAll(nextPrices);
+    }
+
+    /**
+     * 리그 종료 시 마지막 거래일의 종가를 확정한다. 다음 거래일 시세는 만들지 않는다. 리그 락을 잡은 종료
+     * 트랜잭션 안에서만 호출할 수 있다.
+     *
+     * <p>종료 처리는 리그 락 안에서 일어나고, 종료 시각 이후에는 주문 접수·체결을 거절하므로 종료 처리 시점의
+     * 현재가는 마지막 거래일의 마지막 체결가와 같다.
+     *
+     * @param leagueId 리그 ID
+     * @param lastDay 마지막 거래일 번호 (7)
+     * @throws IllegalStateException 종목의 마지막 거래일 시세 행이 없거나 현재가가 없는 경우
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void closeLastTradingDay(long leagueId, int lastDay) {
+        closeAll(leagueId, lastDay);
+    }
+
+    /**
+     * 리그 전 종목의 마감하는 거래일 종가를 확정한다.
+     *
+     * @return 종목 ID별 확정 종가 (종목 조회 순서 유지)
+     */
+    private Map<Long, Long> closeAll(long leagueId, int closingDay) {
         List<Stock> stocks = stockRepository.findAllByLeagueId(leagueId);
         Map<Long, StockDailyPrice> closingPrices = dailyPriceRepository
                 .findAllByLeagueIdAndTradingDay(leagueId, closingDay).stream()
                 .collect(Collectors.toMap(StockDailyPrice::getStockId, Function.identity()));
-        List<StockDailyPrice> nextPrices = stocks.stream().map(stock -> {
+        Map<Long, Long> closes = new LinkedHashMap<>();
+        for (Stock stock : stocks) {
             StockDailyPrice closing = closingPrices.get(stock.getId());
             if (closing == null || stock.getCurrentPrice() == null) {
-                throw new IllegalStateException("거래일 전환에 필요한 시세가 없습니다: leagueId="
+                throw new IllegalStateException("거래일 마감에 필요한 시세가 없습니다: leagueId="
                         + leagueId + ", stockId=" + stock.getId() + ", closingDay=" + closingDay);
             }
-            long close = closing.close(stock.getCurrentPrice());
-            return StockDailyPrice.open(leagueId, stock.getId(), closingDay + 1, close);
-        }).toList();
-        dailyPriceRepository.saveAll(nextPrices);
+            closes.put(stock.getId(), closing.close(stock.getCurrentPrice()));
+        }
+        return closes;
     }
 }

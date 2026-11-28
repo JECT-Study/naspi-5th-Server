@@ -357,6 +357,60 @@ class LeagueQueryServiceTest {
     }
 
     @Test
+    @DisplayName("종료 시각부터 결과 페이지 외 리그 화면에 접근할 수 없다")
+    void requireAccessiblePlayerAfterEndsAt() {
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        final long outsider = member("외부인");
+        // 대기실은 접근할 수 있다
+        assertThat(queryService.requireAccessiblePlayer(host, league.leagueId()))
+                .isEqualTo(league.hostPlayerId());
+        assertThat(queryService.findAccessiblePlayerId(host, league.leagueId()))
+                .contains(league.hostPlayerId());
+
+        leagueStartUseCase.start(host, league.leagueId());
+        clock.setTo(LocalDateTime.of(2026, 11, 23, 8, 59, 59));
+        assertThat(queryService.requireAccessiblePlayer(host, league.leagueId()))
+                .isEqualTo(league.hostPlayerId());
+
+        // 종료 처리 전이라도 종료 시각부터 막는다
+        clock.setTo(LocalDateTime.of(2026, 11, 23, 9, 0));
+        assertThatThrownBy(() -> queryService.requireAccessiblePlayer(host, league.leagueId()))
+                .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(e.getErrorCode())
+                        .isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED));
+        assertThat(queryService.findAccessiblePlayerId(host, league.leagueId())).isEmpty();
+
+        // 입장하지 않은 회원에게는 리그 상태를 알리지 않는다
+        assertThatThrownBy(() -> queryService.requireAccessiblePlayer(outsider, league.leagueId()))
+                .isInstanceOfSatisfying(NaspiBizException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+
+        // 종료 상태로 바뀐 뒤에도 막는다
+        League ended = entityManager.find(League.class, league.leagueId());
+        ended.end(LocalDateTime.now(clock));
+        entityManager.flush();
+        assertThatThrownBy(() -> queryService.requireAccessiblePlayer(host, league.leagueId()))
+                .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(e.getErrorCode())
+                        .isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED));
+    }
+
+    @Test
+    @DisplayName("종료 시각부터 공시·댓글·반응을 작성할 수 없다 (현재 거래일이 없다)")
+    void currentTradingDayEmptyAfterEndsAt() {
+        clock.setTo(LocalDateTime.of(2026, 11, 16, 15, 0));
+        CreatedLeague league = leagueWithParticipants(3);
+        leagueStartUseCase.start(memberOf(league), league.leagueId());
+
+        clock.setTo(LocalDateTime.of(2026, 11, 23, 8, 59, 59));
+        assertThat(queryService.findCurrentTradingDay(league.leagueId()))
+                .get().extracting(LeagueTradingDay::dayNumber).isEqualTo(7);
+
+        clock.setTo(LocalDateTime.of(2026, 11, 23, 9, 0));
+        assertThat(queryService.findCurrentTradingDay(league.leagueId())).isEmpty();
+    }
+
+    @Test
     @DisplayName("회원이 참여 중인 진행 중 리그의 플레이어를 모두 찾고, 대기실과 다른 회원은 제외한다")
     void findStartedPlayersOfMember() {
         CreatedLeague first = leagueWithParticipants(3);

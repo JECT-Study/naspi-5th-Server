@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureBody;
@@ -87,10 +86,10 @@ class FeedQueryServiceTest {
         given(stockQueryService.findAllByLeagueId(LEAGUE_ID)).willReturn(List.of(
                 new LeagueStock(STOCK_ID, "종목A", "소개", 70L, null),
                 new LeagueStock(OTHER_STOCK_ID, "종목B", "소개", 71L, null)));
-        given(leagueQueryService.findPlayerId(VIEWER_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.of(VIEWER_PLAYER_ID));
-        given(leagueQueryService.findPlayerId(OUTSIDER_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(VIEWER_MEMBER_ID, LEAGUE_ID))
+                .willReturn(VIEWER_PLAYER_ID);
+        given(leagueQueryService.requireAccessiblePlayer(OUTSIDER_MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
         given(imageStorage.signedUrl(anyString(), any()))
                 .willAnswer(invocation -> "https://signed/" + invocation.getArgument(0));
     }
@@ -230,6 +229,15 @@ class FeedQueryServiceTest {
     void outsider() {
         assertBiz(() -> feedQueryService.find(OUTSIDER_MEMBER_ID, LEAGUE_ID, null, null, null,
                 20), ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("종료된 리그의 기록(피드)은 조회할 수 없다")
+    void endedLeagueBlocked() {
+        given(leagueQueryService.requireAccessiblePlayer(VIEWER_MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertBiz(() -> find(null, null, null, 20), ErrorCode.LEAGUE_ALREADY_ENDED);
     }
 
     @Test

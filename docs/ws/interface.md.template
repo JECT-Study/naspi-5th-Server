@@ -1,0 +1,397 @@
+<!--
+WS 토픽 인터페이스 정의서 템플릿.
+
+사용법
+- 복사해서 `docs/ws/{토픽}.md`로 저장하고 `{{ }}` 자리를 채운다. 이 주석은 지운다.
+- [공통] 절(1, 2, 4, 5의 앞부분, 6-1)은 모든 토픽이 같다. 그대로 두고, 서버 설정이 바뀌면 이 템플릿과 각 문서를 함께 고친다.
+- [선택] 블록은 해당할 때만 남긴다. [A/B] 블록은 둘 중 하나만 남긴다.
+- 더미 응답이 아니면 "더미 응답입니다" 안내와 예외의 더미 항목을 지운다.
+
+작성 규칙
+- 시각 필드는 REST 응답과 같은 형식으로 적는다: String, KST 일시, 오프셋 없음 (`LocalDateTime`). 예: `2026-11-09T14:32:05.123`
+- 배열 필드는 비고에 정렬 기준과 비었을 때 값(빈 배열)을 적는다. 정렬이 화면 순서와 다르면 "메시지 처리 방법"에 그리는 법을 적는다.
+- 고정 값 필드(enum)는 비고에 가능한 값을 모두 적는다. 값마다 뜻이 다르면 payload 아래 값 설명 표로 정리한다.
+- 계산으로 나오는 필드는 비고에 계산식을 적는다. 필드가 없어 프론트가 계산하는 값은 payload 아래 안내 블록에 적는다.
+- 아직 구현되지 않아 바뀔 동작은 `> TODO: ...` 블록으로 적고, 무엇이 바뀌는지와 프론트가 바꿀 것을 함께 적는다.
+- 예시(SUBSCRIBE·MESSAGE·ERROR 프레임)는 같은 경로 변수 값을 쓰고, 예시 JSON 값은 표의 계산식·정렬 기준과 맞춘다.
+-->
+
+# {{토픽 이름}} 토픽
+
+{{무엇을 실시간으로 받는지 한 줄}}. {{어느 화면에서 쓰는지}}.
+
+> **⚠️ 더미 응답입니다.**
+> 지금은 실제 데이터 대신 더미 값을 {{N초}}마다 보냅니다. 구독 경로와 메시지 형식은 실제 구현에서도 유지할 예정이지만, 구현하면서 바뀔 수 있습니다.
+> 서버 코드: `websocket.application.topic.{{도메인}}.{{XxxTopic}}`
+
+| **항목** | **값** |
+| --- | --- |
+| 연결 엔드포인트 | `/ws` ([1. 연결 엔드포인트](#1-연결-엔드포인트)) |
+| 프로토콜 | STOMP 1.2 over WebSocket (SockJS 미사용) |
+| 인증 | 로그인 세션 쿠키 `SESSION` ([2. 연결 인증](#2-연결-인증)) |
+| 구독 | `/topic/{{경로}}` |
+| 구독 권한 | {{예: 로그인 회원 누구나 / 해당 리그 참여자 / 본인만}} |
+| 메시지 종류 (`type`) | `{{TYPE}}` |
+| 전달 시점 | {{예: N초마다 (더미) / 체결 직후}}. 구독자가 없으면 보내지 않습니다 |
+| 대응 REST | {{`GET /api/...` 또는 "없음 (TODO: 추가 예정)"}} |
+| 발행 (클라이언트 → 서버) | {{없음}} |
+
+---
+
+## 1. 연결 엔드포인트
+
+<!-- [공통] -->
+
+| **환경** | **URL** |
+| --- | --- |
+| 로컬 | `ws://localhost:8080/ws` |
+| 운영 | `wss://api.naspi.my/ws` |
+
+- 프로토콜은 **STOMP 1.2 over WebSocket**입니다. SockJS를 쓰지 않으므로 `http://` 주소나 `/ws/info` 같은 SockJS 경로는 쓰지 않습니다.
+- HTTPS 페이지에서는 반드시 `wss://`로 연결합니다. `ws://`로 연결하면 브라우저가 막습니다.
+- 서버 heartbeat 간격은 **10초**입니다(`naspi.websocket.heartbeat`).
+- 모든 토픽이 같은 엔드포인트를 씁니다. 여러 토픽을 구독할 때도 **연결 하나**에서 구독만 추가합니다.
+
+---
+
+## 2. 연결 인증
+
+<!-- [공통] -->
+
+웹에서 **카카오 로그인**을 마쳤다면 따로 인증 작업 없이 바로 연결하면 됩니다.
+
+1. 카카오 로그인(`GET /oauth2/authorization/kakao`)을 마치면 로그인 세션 쿠키(`SESSION`)가 브라우저에 저장됩니다.
+2. `/ws`로 연결하면 브라우저가 이 쿠키를 자동으로 붙이고, 서버는 로그인 회원으로 인증합니다.
+
+STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
+
+> 로그인하지 않았거나 세션이 만료되면 연결이 실패합니다. 연결이 계속 실패하면 카카오 로그인부터 다시 하도록 안내합니다.
+
+---
+
+## 3. 구독 (서버 → 클라이언트)
+
+`SUBSCRIBE /topic/{{경로}}`
+
+### 경로 변수
+
+| **변수** | **타입** | **설명** |
+| --- | --- | --- |
+| {{leagueId}} | Long | {{리그 ID}} |
+
+### 구독 권한
+
+{{누가 구독할 수 있는지, 서버가 무엇을 확인하는지}}.
+
+<!-- [선택] 권한 조건이나 경로 변수에 넣을 값이 바뀔 예정일 때 -->
+> TODO: {{바뀔 조건과 시점. 경로 변수에 넣을 값이 바뀌면 함께 적는다}}
+
+권한이 없으면 `ERROR` 프레임을 받고 **연결 전체가 끊깁니다**([5. 에러](#5-에러)).
+
+### SUBSCRIBE 프레임
+
+| **헤더** | **값** | **필수** | **비고** |
+| --- | --- | --- | --- |
+| destination | `/topic/{{경로}}` | O |  |
+| id | 구독 ID | O | 클라이언트가 정하는 값. STOMP 라이브러리가 자동으로 만듭니다 |
+
+```
+SUBSCRIBE
+id:sub-0
+destination:/topic/{{예시 경로}}
+
+^@
+```
+
+<!-- [선택] 이벤트가 생길 때 보내는 토픽. 무엇이 바뀌면 누구에게 보내는지 적고, 요약표 전달 시점에 ([전달 시점](#전달-시점)) 링크를 단다 -->
+### 전달 시점
+
+| **원인** | **받는 사람** |
+| --- | --- |
+| {{원인}} | {{받는 사람}} |
+
+### 받는 메시지
+
+모든 토픽 메시지는 같은 형식(`TopicEnvelope`)으로 옵니다. REST API의 `Result`(`code`, `message`, `data`)와 다른 형식이니 주의합니다.
+
+| **필드** | **타입** | **설명** | **비고** |
+| --- | --- | --- | --- |
+| type | String | 메시지 종류 | 이 토픽은 항상 `{{TYPE}}` |
+| payload | Object | 데이터 | 아래 표 참고 |
+| publishedAt | String | 발행 시각 (KST) | REST 응답의 일시와 같은 형식(오프셋 없음, 밀리초까지), 예: `2026-11-09T14:32:05.123` |
+
+#### payload
+
+{{단위 설명, 예: 금액은 원, 수량은 주 단위입니다.}}
+
+<!-- [선택] 전체 상태가 아니라 일부만 보낼 때. 나머지를 어디서 받는지, 각 항목이 무엇인지 적는다 -->
+{{예: 과거 데이터는 처음 접속할 때 REST API로 받고, 이 토픽은 최근 N개만 보냅니다.}}
+
+| **필드** | **타입** | **설명** | **비고** |
+| --- | --- | --- | --- |
+| {{field}} | Long | {{설명 (단위)}} | {{계산식}} |
+| {{enumField}} | String | {{설명}} | `{{VALUE_A}}`, `{{VALUE_B}}` |
+| {{timeField}} | String | {{설명}} (KST) | REST와 같은 일시 형식 |
+| {{list}} | Array | {{설명}} | **{{정렬 기준}}**. {{없으면 빈 배열}} |
+| {{list}}[].{{field}} | Long | {{설명 (단위)}} | {{값 제약, 예: 100원 단위}} |
+
+<!-- [선택] 값마다 뜻이 다른 필드를 설명할 때 -->
+| **{{값}}** | **{{의미}}** | **{{예시}}** |
+| --- | --- | --- |
+| `{{VALUE_A}}` | {{설명}} | {{예시}} |
+
+<!-- [선택] 필드가 없어 프론트가 계산하는 값이 있을 때 -->
+> **{{값 이름}}** = `{{계산식}}`. 따로 필드가 없으니 프론트에서 계산합니다.
+
+```
+MESSAGE
+destination:/topic/{{예시 경로}}
+content-type:application/json
+subscription:sub-0
+message-id:a1b2c3-0
+
+{
+  "type": "{{TYPE}}",
+  "payload": {
+    {{예시 값}}
+  },
+  "publishedAt": "2026-11-09T14:32:05.123"
+}^@
+```
+
+### 메시지 처리 방법
+
+<!-- 앞의 세 줄은 [공통]. -->
+- 메시지는 바뀐 부분이 아니라 **그 시점의 상태**를 담습니다. 이전 메시지와 비교해 변경분을 계산하지 않습니다.
+- 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
+- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
+
+<!-- [A/B] A: 전체 상태를 보내는 토픽 -->
+- 받은 값으로 화면 상태를 통째로 덮어씁니다.
+- `{{list}}`는 **전체 목록**입니다. 목록을 통째로 바꿉니다. {{이전에 있던 항목이 없어진 의미}}.
+
+<!-- [A/B] B: 일부만 보내는 토픽 -->
+- 받은 `{{list}}`를 `{{키 필드}}` 기준으로 화면 데이터에 합칩니다. 같은 키가 있으면 **덮어쓰고**, 없으면 **뒤에 추가**합니다.
+- {{경계 상황, 예: 구간이 넘어갈 때}}. 위 합치기 규칙대로 처리하면 따로 신경 쓸 필요가 없습니다.
+
+<!-- [선택] 토픽별 안내 -->
+- {{화면에 그리는 법, 예: 정렬이 화면 순서와 다르면 뒤집어서 그린다 / 일부만 쓰면 골라 쓴다}}
+- {{경로 변수가 바뀔 때, 예: 다른 종목으로 화면이 바뀌면 이전 구독을 해지하고 새로 구독한다}}
+
+---
+
+## 4. 발행 (클라이언트 → 서버)
+
+<!-- [공통] 발행이 있는 토픽이면 SEND 경로·프레임·본문을 3장과 같은 형식으로 적는다. -->
+
+**이 토픽은 발행이 없습니다.** 서버가 보내는 메시지를 구독만 합니다.
+
+- 클라이언트는 `/app/**`으로만 `SEND`할 수 있습니다. 다른 목적지(예: `/topic/**`)로 보내면 `ERROR` 프레임을 받고 연결이 끊깁니다.
+- 지금은 `/app/**`을 처리하는 서버 기능이 없어, `/app/**`으로 보내도 아무 일도 일어나지 않습니다.
+
+---
+
+## 5. 에러
+
+<!-- [공통] "예외" 전까지 -->
+
+STOMP 단계의 오류는 `ERROR` 프레임으로 옵니다. **`ERROR` 프레임을 받으면 서버가 곧바로 연결을 끊고, 같은 연결의 다른 토픽 구독도 모두 끊깁니다.** 다시 연결한 뒤 다시 구독해야 합니다.
+
+`ERROR` 프레임은 본문 없이 `message` 헤더에 사유만 담습니다(JSON 아님).
+
+```
+ERROR
+message:토픽 구독 권한이 없습니다\c /topic/{{예시 경로}}
+content-length:0
+
+^@
+```
+
+> 헤더 값의 `:`은 STOMP 규칙에 따라 `\c`로 바뀌어 전송됩니다. STOMP 라이브러리가 원래대로 되돌려 줍니다.
+
+| **상황** | **`message` 헤더** | **결과** |
+| --- | --- | --- |
+| 구독 권한 없음, 또는 경로 형식이 틀림 | `토픽 구독 권한이 없습니다: {경로}` | `ERROR` 후 연결 끊김 |
+| `/topic/`이 아닌 경로 구독 | `구독할 수 없는 토픽입니다: {경로}` | `ERROR` 후 연결 끊김 |
+| `/app/`이 아닌 목적지로 `SEND` | `메시지를 보낼 수 없는 목적지입니다: {경로}` | `ERROR` 후 연결 끊김 |
+| 로그인 정보 없이 CONNECT | `로그인이 필요합니다` | `ERROR` 후 연결 끊김. 보통은 그 전에 핸드셰이크가 `401`로 막힙니다 |
+
+> `message` 문구는 바뀔 수 있으니 화면 분기에 쓰지 말고 로그 확인용으로만 씁니다.
+
+### 예외
+
+<!-- 해당하는 항목만 남기고 순서대로 번호를 다시 매긴다. -->
+
+1. **구독 권한이 없는 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 {{경로 변수}}를 꼭 확인합니다.
+2. **없는 {{리그·종목}} ID로 구독한 경우:** {{결과}}
+3. **더미 응답:** {{더미 값이 어떻게 만들어지는지. 예: 종목과 관계없이 항상 위 예시와 같은 값, 값이 바뀌는지}}
+4. **서버가 다시 시작된 경우:** {{더미 상태가 어떻게 되는지}}
+5. **실제 구현과 다른 점:** {{더미에서는 고정이지만 실제로는 달라지는 것, 예: 항목 수, 빈 배열 가능 여부}}
+6. **{{토픽 고유 상황}}:** {{결과와 프론트 대응}} (TODO: {{바뀔 예정이면}})
+7. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 상태를 받습니다. ({{REST가 없으면: TODO: ~ 조회 REST API 추가 예정}})
+
+---
+
+## 6. FE 연동 예시
+
+`@stomp/stompjs` 7.x를 사용합니다.
+
+```bash
+npm install @stomp/stompjs
+```
+
+### 6-1. 공통 연결 (`stompClient.ts`)
+
+<!-- [공통] -->
+
+모든 토픽이 연결 하나를 같이 씁니다. 다른 토픽 문서에서 이미 만들었다면 그대로 재사용합니다.
+
+```tsx
+import { Client, IMessage } from '@stomp/stompjs';
+
+/** 모든 토픽 메시지의 공통 형식. */
+export type TopicEnvelope<T> = {
+  type: string;
+  payload: T;
+  publishedAt: string;
+};
+
+export const stompClient = new Client({
+  brokerURL: import.meta.env.VITE_WS_URL, // 로컬: ws://localhost:8080/ws, 운영: wss://api.naspi.my/ws
+  heartbeatIncoming: 10000,
+  heartbeatOutgoing: 10000,
+  reconnectDelay: 3000, // 끊기면 3초 뒤 다시 연결
+});
+
+/** 구독 중인 토픽. 다시 연결되면 모두 다시 구독한다. */
+const topics = new Map<string, (frame: IMessage) => void>();
+
+stompClient.onConnect = () => {
+  topics.forEach((handler, destination) =>
+    stompClient.subscribe(destination, handler, { id: destination }),
+  );
+};
+
+// 구독 권한 없음 등. 서버가 곧 연결을 끊고, reconnectDelay 뒤 다시 연결한다.
+stompClient.onStompError = (frame) => {
+  console.error('STOMP ERROR:', frame.headers.message);
+};
+
+// 핸드셰이크 실패(401 등)도 여기로 온다. 상태 코드는 알 수 없으므로 필요하면 REST로 로그인 상태를 확인한다.
+stompClient.onWebSocketClose = (event) => {
+  console.warn('WebSocket 연결 종료:', event.code);
+};
+
+/**
+ * 토픽을 구독한다. 반환된 함수를 호출하면 구독을 해지한다.
+ * 같은 경로는 한 곳에서만 구독한다고 가정한다.
+ */
+export function subscribeTopic<T>(
+  destination: string,
+  onMessage: (payload: T, envelope: TopicEnvelope<T>) => void,
+): () => void {
+  let lastPublishedAt = 0;
+  const handler = (frame: IMessage) => {
+    const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
+    const publishedAt = Date.parse(envelope.publishedAt); // 오프셋이 없어 브라우저 시간대로 해석되지만 비교에는 문제없다
+    if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
+    lastPublishedAt = publishedAt;
+    onMessage(envelope.payload, envelope);
+  };
+
+  topics.set(destination, handler);
+  if (stompClient.connected) {
+    stompClient.subscribe(destination, handler, { id: destination });
+  }
+  if (!stompClient.active) {
+    stompClient.activate();
+  }
+
+  return () => {
+    topics.delete(destination);
+    if (stompClient.connected) {
+      stompClient.unsubscribe(destination);
+    }
+    if (topics.size === 0) {
+      void stompClient.deactivate();
+    }
+  };
+}
+```
+
+### 6-2. {{토픽 이름}} 구독
+
+<!-- 타입은 3장 payload 표와 필드를 맞춘다 (Long → number, 시각 → string, enum → 문자열 리터럴 유니언). 배열 필드에는 정렬 기준을 주석으로 단다. -->
+
+```tsx
+import { useEffect, useState } from 'react';
+import { subscribeTopic } from './stompClient';
+
+export type {{Item}} = {
+  {{field}}: number;
+};
+
+export type {{Payload}} = {
+  {{field}}: number;
+  {{enumField}}: '{{VALUE_A}}' | '{{VALUE_B}}';
+  {{list}}: {{Item}}[]; // {{정렬 기준}}
+};
+```
+
+<!-- [A/B] A: 덮어쓰기 -->
+
+```tsx
+/** {{무엇을 받는지}}. */
+export function use{{Xxx}}({{leagueId}}: number) {
+  const [value, setValue] = useState<{{Payload}} | null>(null);
+
+  useEffect(
+    () => subscribeTopic<{{Payload}}>(`/topic/{{경로}}`, setValue),
+    [{{leagueId}}],
+  );
+
+  return value;
+}
+```
+
+<!-- [A/B] B: 합치기 -->
+
+```tsx
+/** 같은 {{키 필드}}면 덮어쓰고, 없으면 뒤에 추가한다. */
+function merge(current: {{Item}}[], recent: {{Item}}[]): {{Item}}[] {
+  const merged = [...current];
+  for (const item of recent) {
+    const index = merged.findIndex((c) => c.{{키 필드}} === item.{{키 필드}});
+    if (index >= 0) merged[index] = item;
+    else merged.push(item);
+  }
+  return merged;
+}
+
+/** {{무엇을 받는지}}. initialItems는 처음 접속할 때 REST로 받은 값이다. */
+export function use{{Xxx}}({{leagueId}}: number, initialItems: {{Item}}[] = []) {
+  const [items, setItems] = useState<{{Item}}[]>(initialItems);
+
+  useEffect(() => {
+    setItems(initialItems);
+    return subscribeTopic<{{Payload}}>(`/topic/{{경로}}`, (payload) =>
+      setItems((prev) => merge(prev, payload.{{list}})),
+    );
+  }, [{{leagueId}}, initialItems]);
+
+  return items;
+}
+```
+
+> `initialItems`는 렌더링마다 새 배열을 만들지 않도록 `useMemo`나 상태로 넘깁니다. 매번 새 배열이면 구독을 계속 다시 합니다.
+
+<!-- [선택] 화면 예시. 3장 "메시지 처리 방법"의 그리는 법·프론트 계산 값을 코드로 보여 준다. -->
+
+```tsx
+function {{Xxx}}View({ {{leagueId}} }: { {{leagueId}}: number }) {
+  const value = use{{Xxx}}({{leagueId}});
+  if (!value) return null;
+
+  return <div>{{화면 예시}}</div>;
+}
+```

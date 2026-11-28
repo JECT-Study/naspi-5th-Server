@@ -69,6 +69,16 @@ public interface LeagueRepository {
     List<Long> findIdsByStatus(LeagueStatus status);
 
     /**
+     * 주어진 상태이면서 종료 일시가 기준 일시 이전인(같은 시각 포함) 리그의 ID를 모두 조회한다.
+     * 리그 종료 처리 대상을 찾을 때 쓴다.
+     *
+     * @param status 리그 상태
+     * @param now 기준 일시
+     * @return 리그 ID 목록
+     */
+    List<Long> findIdsByStatusAndEndsAtLessThanEqual(LeagueStatus status, LocalDateTime now);
+
+    /**
      * 주어진 상태이면서 기준 일시 이전에(같은 시각 포함) 생성된 리그를 모두 찾아 비관적 쓰기 락을 건다.
      * 만료 처리 중에 같은 대기실로 입장하는 요청이 끼어들지 않게 한다.
      *

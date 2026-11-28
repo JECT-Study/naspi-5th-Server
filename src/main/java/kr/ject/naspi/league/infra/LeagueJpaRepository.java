@@ -30,6 +30,10 @@ interface LeagueJpaRepository extends Repository<League, Long>, LeagueRepository
     List<Long> findIdsByStatus(LeagueStatus status);
 
     @Override
+    @Query("select l.id from League l where l.status = :status and l.endsAt <= :now")
+    List<Long> findIdsByStatusAndEndsAtLessThanEqual(LeagueStatus status, LocalDateTime now);
+
+    @Override
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<League> findAllWithLockByStatusAndCreatedAtLessThanEqual(LeagueStatus status,
             LocalDateTime createdAt);
