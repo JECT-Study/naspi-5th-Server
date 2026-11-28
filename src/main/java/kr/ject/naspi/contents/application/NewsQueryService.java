@@ -67,7 +67,7 @@ public class NewsQueryService {
      * @param cursor 이전 페이지의 {@link NewsPage#nextCursor()}. 첫 페이지면 null
      * @param size 한 페이지 개수 (1~{@value #MAX_PAGE_SIZE})
      * @return 뉴스 목록 한 페이지
-     * @throws NaspiBizException 리그에 입장하지 않았거나 커서 형식이 올바르지 않은 경우
+     * @throws NaspiBizException 리그에 입장하지 않았거나, 종료 시각이 지난 리그이거나, 커서 형식이 올바르지 않은 경우
      */
     public NewsPage findByStock(long memberId, long leagueId, long stockId, String cursor,
                                 int size) {
@@ -102,7 +102,7 @@ public class NewsQueryService {
 
         return news.stream()
                 .map(n -> new NewsListItem(n.getId(), n.getStockId(),
-                        stockNames.get(n.getStockId()), n.getTitle(), n.getBody(),
+                        stockNames.get(n.getStockId()), n.getType(), n.getTitle(), n.getBody(),
                         n.getSentiment(), n.getTradingDay(), n.getCreatedAt(),
                         n.getPublishedAt(), comments.get(n.getId())))
                 .toList();
@@ -116,7 +116,7 @@ public class NewsQueryService {
      * @param stockId 종목 ID
      * @param newsId 뉴스 ID
      * @return 뉴스 상세
-     * @throws NaspiBizException 리그에 입장하지 않았거나, 뉴스가 없거나 발행되지 않은 경우
+     * @throws NaspiBizException 리그에 입장하지 않았거나, 종료 시각이 지난 리그이거나, 뉴스가 없거나 발행되지 않은 경우
      */
     public NewsDetail getDetail(long memberId, long leagueId, long stockId, long newsId) {
         long playerId = viewerPlayerId(memberId, leagueId);
@@ -126,7 +126,7 @@ public class NewsQueryService {
                         && found.getStockId() == stockId)
                 .filter(found -> found.getStatus() == NewsStatus.PUBLISHED)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.NEWS_NOT_FOUND));
-        return new NewsDetail(n.getId(), n.getStockId(), n.getTitle(), n.getBody(),
+        return new NewsDetail(n.getId(), n.getStockId(), n.getType(), n.getTitle(), n.getBody(),
                 n.getSentiment(), n.getTradingDay(), n.getCreatedAt(), n.getPublishedAt(),
                 commentService.findAll(leagueId, n.getId(), playerId),
                 findDisclosure(n));
@@ -143,9 +143,8 @@ public class NewsQueryService {
                 .orElse(null);
     }
 
-    /** 리그 참여자만 뉴스를 볼 수 있다. 리그 상태는 따지지 않아 종료된 리그도 조회할 수 있다. */
+    /** 리그 참여자만 뉴스를 볼 수 있다. 종료 시각이 지난 리그는 결과 페이지 외에 접근할 수 없어 조회할 수 없다. */
     private long viewerPlayerId(long memberId, long leagueId) {
-        return leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        return leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
     }
 }

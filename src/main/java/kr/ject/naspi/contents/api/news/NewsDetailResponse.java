@@ -5,12 +5,14 @@ import java.util.List;
 import kr.ject.naspi.contents.api.comment.CommentResponse;
 import kr.ject.naspi.contents.application.NewsDetail;
 import kr.ject.naspi.contents.domain.NewsSentiment;
+import kr.ject.naspi.contents.domain.NewsType;
 
 /**
  * 뉴스 상세 응답. 목록 항목과 같은 필드에서 가장 먼저 등록된 댓글 대신 댓글 전체를 주고, 원본 공시가 더해진다.
  *
  * @param newsId 뉴스 ID
  * @param stockId 종목 ID
+ * @param newsType 뉴스 유형. 공시 기반 {@code DISCLOSURE}, 사용자 제보 기반 {@code REPORT}
  * @param title 제목
  * @param body 본문
  * @param sentiment 호재(POSITIVE)·악재(NEGATIVE)
@@ -21,15 +23,15 @@ import kr.ject.naspi.contents.domain.NewsSentiment;
  * @param comments 댓글 전체 (오래된 순). 댓글이 없으면 빈 목록
  * @param disclosure 원본 공시. 공시 없이 만든 뉴스이거나 공시가 삭제됐으면 null
  */
-record NewsDetailResponse(long newsId, long stockId, String title, String body,
+record NewsDetailResponse(long newsId, long stockId, NewsType newsType, String title, String body,
                           NewsSentiment sentiment, int tradingDay, LocalDateTime createdAt,
                           LocalDateTime publishedAt, long commentCount,
                           List<CommentResponse> comments, NewsDisclosureResponse disclosure) {
 
     static NewsDetailResponse from(NewsDetail detail) {
-        return new NewsDetailResponse(detail.newsId(), detail.stockId(), detail.title(),
-                detail.body(), detail.sentiment(), detail.tradingDay(), detail.createdAt(),
-                detail.publishedAt(), detail.comments().size(),
+        return new NewsDetailResponse(detail.newsId(), detail.stockId(), detail.newsType(),
+                detail.title(), detail.body(), detail.sentiment(), detail.tradingDay(),
+                detail.createdAt(), detail.publishedAt(), detail.comments().size(),
                 detail.comments().stream().map(CommentResponse::from).toList(),
                 NewsDisclosureResponse.from(detail.disclosure()));
     }

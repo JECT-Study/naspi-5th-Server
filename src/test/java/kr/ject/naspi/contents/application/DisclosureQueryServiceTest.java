@@ -12,7 +12,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Optional;
 import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureBody;
@@ -81,12 +80,12 @@ class DisclosureQueryServiceTest {
         given(stockQueryService.findAllByLeagueId(LEAGUE_ID)).willReturn(List.of(
                 new LeagueStock(STOCK_ID, "종목A", "소개", 70L, null),
                 new LeagueStock(OTHER_STOCK_ID, "종목B", "소개", 71L, null)));
-        given(leagueQueryService.findPlayerId(AUTHOR_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.of(AUTHOR_PLAYER_ID));
-        given(leagueQueryService.findPlayerId(VIEWER_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.of(VIEWER_PLAYER_ID));
-        given(leagueQueryService.findPlayerId(OUTSIDER_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(AUTHOR_MEMBER_ID, LEAGUE_ID))
+                .willReturn(AUTHOR_PLAYER_ID);
+        given(leagueQueryService.requireAccessiblePlayer(VIEWER_MEMBER_ID, LEAGUE_ID))
+                .willReturn(VIEWER_PLAYER_ID);
+        given(leagueQueryService.requireAccessiblePlayer(OUTSIDER_MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
         given(imageStorage.signedUrl(anyString(), any()))
                 .willAnswer(invocation -> "https://signed/" + invocation.getArgument(0));
     }
@@ -213,7 +212,7 @@ class DisclosureQueryServiceTest {
     }
 
     @Test
-    @DisplayName("공시 상세에서 제목·본문·전체 첨부 이미지(첨부 순서)·작성 정보·반응을 확인할 수 있다")
+    @DisplayName("공시 상세에서 종목 이름·제목·본문·전체 첨부 이미지(첨부 순서)·작성 정보·반응을 확인할 수 있다")
     void getDetail() {
         long id = publish(STOCK_ID, "상세 공시", 3);
         attachImages(id, 2);
@@ -222,6 +221,7 @@ class DisclosureQueryServiceTest {
         DisclosureDetail detail = queryService.getDetail(AUTHOR_MEMBER_ID, LEAGUE_ID, STOCK_ID,
                 id);
 
+        assertThat(detail.stockName()).isEqualTo("종목A");
         assertThat(detail.title()).isEqualTo("상세 공시");
         assertThat(detail.body()).isEqualTo("본문");
         assertThat(detail.tradingDay()).isEqualTo(3);
@@ -309,15 +309,16 @@ class DisclosureQueryServiceTest {
     }
 
     @Test
-    @DisplayName("종료된 리그의 공시도 조회할 수 있다 (리그 진행 상태와 무관)")
-    void endedLeague() {
+    @DisplayName("종료된 리그의 기록(공시)은 조회할 수 없다")
+    void endedLeagueBlocked() {
         long id = publish(STOCK_ID, "공시", 7);
-        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(VIEWER_MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
 
-        assertThat(queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null, 20)
-                .items()).hasSize(1);
-        assertThat(queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id).title())
-                .isEqualTo("공시");
+        assertBiz(() -> queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null,
+                20), ErrorCode.LEAGUE_ALREADY_ENDED);
+        assertBiz(() -> queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id),
+                ErrorCode.LEAGUE_ALREADY_ENDED);
     }
 
     private long publish(long stockId, String title, int tradingDay) {

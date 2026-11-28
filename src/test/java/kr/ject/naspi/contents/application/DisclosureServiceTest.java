@@ -258,6 +258,21 @@ class DisclosureServiceTest {
     }
 
     @Test
+    @DisplayName("종료 시각이 지난 리그에서는 공시를 작성할 수 없고 리그 종료로 거절된다")
+    void publishInEndedLeague() {
+        League league = startedLeague();
+        // 종료 시각이 지난 리그는 거래일이 없고, 결과 페이지 외 리그 화면에 접근할 수 없다
+        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(league.hostMemberId, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertBiz(() -> disclosureService.publish(league.hostMemberId, LEAGUE_ID,
+                league.hostStockId, "제목", "본문", List.of(png("a.png"))),
+                ErrorCode.LEAGUE_ALREADY_ENDED);
+        then(imageStorage).shouldHaveNoInteractions();
+    }
+
+    @Test
     @DisplayName("공시 저장이 실패하면 이미 올린 이미지 파일을 지운다")
     void compensateOnFailure() {
         League league = startedLeague();
@@ -324,20 +339,21 @@ class DisclosureServiceTest {
     }
 
     @Test
-    @DisplayName("종료된 리그의 공시도 작성자는 삭제할 수 있다")
-    void deleteInEndedLeague() {
+    @DisplayName("종료된 리그의 기록(공시)은 작성자도 삭제할 수 없다")
+    void deleteInEndedLeagueBlocked() {
         League league = startedLeague();
         PublishedDisclosure result = publishAsHost(league, "제목", "본문");
-        // 리그가 끝나면 현재 거래일이 없다
-        given(leagueQueryService.findCurrentTradingDay(LEAGUE_ID)).willReturn(Optional.empty());
+        // 종료 시각이 지나면 결과 페이지 외 리그 화면에 접근할 수 없다
+        given(leagueQueryService.requireAccessiblePlayer(league.hostMemberId, league.leagueId))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
 
-        disclosureService.delete(league.hostMemberId, league.leagueId, league.hostStockId,
-                result.disclosureId());
+        assertBiz(() -> disclosureService.delete(league.hostMemberId, league.leagueId,
+                league.hostStockId, result.disclosureId()), ErrorCode.LEAGUE_ALREADY_ENDED);
 
         entityManager.flush();
         entityManager.clear();
         assertThat(entityManager.find(Disclosure.class, result.disclosureId()).isDeleted())
-                .isTrue();
+                .isFalse();
     }
 
     @Test
@@ -396,10 +412,16 @@ class DisclosureServiceTest {
                         NOW.plusDays(6))));
         given(leagueQueryService.findPlayerId(HOST_MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.of(HOST_PLAYER_ID));
+        given(leagueQueryService.requireAccessiblePlayer(HOST_MEMBER_ID, LEAGUE_ID))
+                .willReturn(HOST_PLAYER_ID);
         given(leagueQueryService.findPlayerId(OTHER_MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.of(OTHER_PLAYER_ID));
+        given(leagueQueryService.requireAccessiblePlayer(OTHER_MEMBER_ID, LEAGUE_ID))
+                .willReturn(OTHER_PLAYER_ID);
         given(leagueQueryService.findPlayerId(OUTSIDER_MEMBER_ID, LEAGUE_ID))
                 .willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(OUTSIDER_MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
         given(stockQueryService.isListedBy(LEAGUE_ID, HOST_STOCK_ID, HOST_PLAYER_ID))
                 .willReturn(true);
         given(stockQueryService.isListedBy(LEAGUE_ID, HOST_STOCK_ID, OTHER_PLAYER_ID))

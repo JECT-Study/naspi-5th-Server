@@ -196,7 +196,7 @@ class AssetTopicTest {
     @DisplayName("내 자산은 로그인 회원 본인의 리그 플레이어 경로만 구독할 수 있다")
     void onlyOwnerCanSubscribe() {
         LoginMember member = new LoginMember(7L);
-        when(leagueQueryService.findPlayerId(7L, 1L)).thenReturn(Optional.of(30L));
+        when(leagueQueryService.findAccessiblePlayerId(7L, 1L)).thenReturn(Optional.of(30L));
 
         assertThat(authorizer.supports("/topic/leagues/1/players/30/assets")).isTrue();
         assertThat(authorizer.canSubscribe(member, "/topic/leagues/1/players/30/assets")).isTrue();
@@ -209,9 +209,19 @@ class AssetTopicTest {
     @DisplayName("리그에 입장하지 않은 회원은 내 자산 토픽을 구독할 수 없다")
     void outsiderCannotSubscribe() {
         LoginMember member = new LoginMember(7L);
-        when(leagueQueryService.findPlayerId(7L, 2L)).thenReturn(Optional.empty());
+        when(leagueQueryService.findAccessiblePlayerId(7L, 2L)).thenReturn(Optional.empty());
 
         assertThat(authorizer.canSubscribe(member, "/topic/leagues/2/players/30/assets")).isFalse();
+    }
+
+    @Test
+    @DisplayName("종료된 리그의 자산 토픽은 구독할 수 없다")
+    void endedLeagueRejected() {
+        LoginMember member = new LoginMember(7L);
+        // 종료 시각이 지난 리그는 입장한 회원이어도 접근 가능한 플레이어가 없다
+        when(leagueQueryService.findAccessiblePlayerId(7L, 3L)).thenReturn(Optional.empty());
+
+        assertThat(authorizer.canSubscribe(member, "/topic/leagues/3/players/30/assets")).isFalse();
     }
 
     private void subscribe(long leagueId, String... destinations) {

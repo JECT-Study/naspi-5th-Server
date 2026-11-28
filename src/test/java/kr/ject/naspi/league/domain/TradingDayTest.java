@@ -101,6 +101,24 @@ class TradingDayTest {
         assertThat(day1.isClosed()).isFalse();
     }
 
+    @Test
+    @DisplayName("마지막 거래일은 리그 종료 시각에 마감된다")
+    void closeLastDay() {
+        List<TradingDay> days = days(STARTED_AT);
+        TradingDay last = days.get(6);
+
+        assertThatThrownBy(() -> last.closeLast(last.getEndsAt().minusSeconds(1)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> days.get(5).closeLast(last.getEndsAt()))
+                .isInstanceOf(IllegalStateException.class);
+
+        last.closeLast(last.getEndsAt());
+
+        assertThat(last.getClosedAt()).isEqualTo(last.getEndsAt());
+        assertThatThrownBy(() -> last.closeLast(last.getEndsAt().plusSeconds(1)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
     private static List<TradingDay> days(LocalDateTime startedAt) {
         return TradingDay.of(1L, new TradingSchedule(startedAt));
     }

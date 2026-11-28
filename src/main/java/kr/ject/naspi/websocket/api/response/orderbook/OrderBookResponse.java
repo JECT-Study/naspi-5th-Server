@@ -1,5 +1,6 @@
 package kr.ject.naspi.websocket.api.response.orderbook;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -7,11 +8,16 @@ import java.util.List;
  *
  * <p>토픽: {@code /topic/leagues/{leagueId}/stocks/{stockId}/orderbook}
  *
+ * <p>REST {@code GET /api/leagues/{leagueId}/stocks/{stockId}/orderbook} 응답과 같은 필드에 {@code asOf}만
+ * 더한다.
+ *
  * @param currentPrice 현재가
  * @param asks 매도 호가. 낮은 가격(최우선 매도 호가)부터
  * @param bids 매수 호가. 높은 가격(최우선 매수 호가)부터
+ * @param asOf 계산 시각 (KST). 표시 중인 값보다 이른 메시지는 무시한다
  */
-public record OrderBookResponse(long currentPrice, List<Level> asks, List<Level> bids) {
+public record OrderBookResponse(long currentPrice, List<Level> asks, List<Level> bids,
+        LocalDateTime asOf) {
 
     /** 메시지 종류 ({@code TopicEnvelope.type}). */
     public static final String TYPE = "ORDER_BOOK";

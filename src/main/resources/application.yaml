@@ -120,9 +120,6 @@ naspi:
       # 알림 (AlertTopic)
       alerts:
         interval: 10s
-      # 호가 (OrderBookTopic)
-      orderbook:
-        interval: 1s
   # 카카오 어드민 키 API (KakaoAdminProperties). 회원 탈퇴 시 카카오 연결 끊기에 쓴다. 타임아웃은 기본값을 쓴다
   # 카카오 개발자 콘솔의 어드민 키 > 호출 허용 IP 에 서버 출구 IP 를 등록해야 한다 (미등록 시 -401)
   kakao:

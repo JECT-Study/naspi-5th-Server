@@ -10,7 +10,6 @@ import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
 import kr.ject.naspi.contents.domain.News;
 import kr.ject.naspi.contents.domain.NewsRepository;
-import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
 import org.springframework.stereotype.Service;
@@ -70,12 +69,11 @@ public class FeedQueryService {
      * @param cursor 이전 페이지의 {@link FeedPage#nextCursor()}. 첫 페이지면 null
      * @param size 한 페이지 개수 (1~{@value #MAX_PAGE_SIZE})
      * @return 통합 피드 한 페이지
-     * @throws NaspiBizException 리그에 입장하지 않았거나 커서 형식이 올바르지 않은 경우
+     * @throws NaspiBizException 리그에 입장하지 않았거나, 종료 시각이 지난 리그이거나, 커서 형식이 올바르지 않은 경우
      */
     public FeedPage find(long memberId, long leagueId, Long stockId, FeedItemType type,
                          String cursor, int size) {
-        final long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        final long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
         ContentCursor after = ContentCursor.decode(cursor);
 
         // 종류별로 다음 페이지 여부를 알 만큼(size + 1) 읽어 합친 뒤 앞에서부터 자른다

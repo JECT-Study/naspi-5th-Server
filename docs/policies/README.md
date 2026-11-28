@@ -36,7 +36,7 @@ member ← league ← market ← asset ← order
 | 리그 시작 | league (`LeagueStartUseCase`) | asset: 초기 자산 배분 / market: 시초가 적용 |
 | 회원 탈퇴 | member (`MemberWithdrawalUseCase`) | league: 대기실 퇴장, 시작된 리그 플레이어에 탈퇴 일시 기록 / order: 미체결 주문 취소 (예약 해제 포함) → asset: 현금 폐기 (`AssetWithdrawalService`, 주문 취소 뒤 순서 보장) / market: 처리 없음 (상장 종목은 그대로 남아 계속 거래, MKT-09) |
 | 거래일 전환 (매일 09:00 KST) | league | market: 종가 확정·기준가 적용 / order: 미체결 만료 |
-| 리그 종료 | league | order: 미체결 전체 취소 / league: 결과 산정 |
+| 리그 종료 (매일 09:00 KST, 종료 시각 도달 리그) | league (`LeagueEndUseCase`) | league: 밀린 거래일 전환 보정 / market: 7일차 종가 확정 / order: 미체결 전체 취소 (예약 해제 포함) / league: 결과 산정 (LEA-13) → 종료 상태 전환·초대 코드 폐기 |
 
 체결 시 market 현재가·거래량 갱신은 order가 상위 모듈인 market을 직접 호출한다.
 
@@ -44,8 +44,12 @@ Spring 이벤트는 `websocket` 발행과 모듈 내부 비동기 처리에만 �
 
 | 이벤트 | 발행 | 구독 |
 |---|---|---|
-| 체결 (`TradeExecuted`) | order | websocket: 매수자·매도자 자산 즉시 발행 (커밋 이후, [설계](../design/asset-realtime.md)), 리그 종목 시세 발행 (커밋 이후) |
+| 체결 (`TradeExecuted`) | order | websocket: 매수자·매도자 자산, 그 종목 호가, 리그 종목 시세 발행 (커밋 이후, [설계](../design/asset-realtime.md)) |
+| 지정가 주문 접수 (`OrderPlaced`) | order | websocket: 주문자 자산, 그 종목 호가 발행 (커밋 이후) |
+| 주문 취소·만료 (`OrderCanceled`) | order | websocket: 주문자 자산, 그 종목 호가 발행 (커밋 이후. 리그 종료 일괄 취소는 호가 발행 안 함) |
+| 현재가 변경 (`CurrentPricesChanged`) | market | websocket: 그 리그 구독자 전원의 자산, 구독 중인 종목 호가 다시 발행 |
 | 공시 게시 (`DisclosurePublished`) | contents | contents: AI 뉴스 비동기 생성 |
+| 리그 종료 (`LeagueEnded`) | league | websocket: 리그 종료 알림 (WS-04에서 구독) |
 
 ## 작성 규칙
 

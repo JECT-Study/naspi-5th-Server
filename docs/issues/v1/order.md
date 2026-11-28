@@ -135,7 +135,7 @@
   - [x] 종료 시각 이후 주문 접수·체결 불가
   - [x] 모든 미체결 주문 취소 및 예약 자산 해제 (order 메서드 기준)
 - 테스트: `./gradlew test --tests "kr.ject.naspi.order.application.OpenOrderClosing*" --tests "kr.ject.naspi.order.application.LeagueEndOrderConcurrencyTest"`
-- 진행: order 메서드 `OpenOrderClosingService#cancelAllOfLeague(leagueId, endedAt)`(`lockForClosing` → 리그 지정가 열린 주문 `LEAGUE_ENDED` 취소·잔여 예약 해제, `MANDATORY`) 완료. LEA-12 리그 종료 UseCase 연결은 ND-85에서 한다
+- 진행: order 메서드 `OpenOrderClosingService#cancelAllOfLeague(leagueId, endedAt)`(`lockForClosing` → 리그 지정가 열린 주문 `LEAGUE_ENDED` 취소·잔여 예약 해제, `MANDATORY`) 완료. LEA-12 리그 종료 UseCase(`LeagueEndUseCase`) 연결 완료(ND-85)
 - 결정: 리그 락을 직접 잡고(`lockForClosing`) 주문 행 락은 쓰지 않는다. 취소 시각은 호출자가 넘기는 종료 시각이고, 종료 시각 전 호출은 막지 않는다(LEA-12 책임). 주문을 바꾸는 모든 경로가 리그 락 안에 있어 `LimitOrderService#cancelOrder`의 주문 행 락은 중복 방어로 유지하기로 확정했다. 호출자(LEA-12)는 밀린 거래일 전환을 먼저 끝낸 뒤 이 메서드를 호출하고, 남은 열린 지정가 주문은 거래일 구분 없이 모두 `LEAGUE_ENDED`로 취소한다.
 
 ### ORD-11 회원이 탈퇴하면 참여 중인 모든 리그의 미체결 주문이 취소된다

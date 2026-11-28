@@ -3,6 +3,7 @@ package kr.ject.naspi.contents.application;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureBody;
 import kr.ject.naspi.contents.domain.DisclosureRepository;
@@ -87,10 +88,14 @@ public class DisclosureService {
                                        String body, List<ImageFile> images) {
         DisclosureTitle disclosureTitle = DisclosureTitle.of(title);
         DisclosureBody disclosureBody = DisclosureBody.of(body);
-        LeagueTradingDay tradingDay = leagueQueryService.findCurrentTradingDay(leagueId)
+        // 리그가 없으면(204) 여기서 오류
+        Optional<LeagueTradingDay> currentTradingDay =
+                leagueQueryService.findCurrentTradingDay(leagueId);
+        // 입장하지 않았거나(004) 종료 시각이 지난 리그면(212) 여기서 오류
+        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
+        // 남은 경우는 시작 전(대기실) 리그
+        LeagueTradingDay tradingDay = currentTradingDay
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.DISCLOSURE_LEAGUE_NOT_STARTED));
-        long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
         if (!stockQueryService.isListedBy(leagueId, stockId, playerId)) {
             throw new NaspiBizException(ErrorCode.DISCLOSURE_STOCK_NOT_OWNED);
         }
@@ -136,9 +141,8 @@ public class DisclosureService {
      *         작성자가 아닌 경우
      */
     public void delete(long memberId, long leagueId, long stockId, long disclosureId) {
-        // 회원의 플레이어 정보 조회
-        long playerId = leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        // 회원의 플레이어 정보 조회 (종료 시각이 지난 리그의 기록은 지울 수 없다)
+        long playerId = leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
         // 공시 상태 변경과 이미지 메타데이터 삭제를 한 트랜잭션으로 묶는다
         transactionTemplate.executeWithoutResult(status -> {
             // 경로의 리그·종목에 속한 공시만 삭제 대상으로 본다 (다른 리그·종목의 공시 ID로 지우는 것 방지)

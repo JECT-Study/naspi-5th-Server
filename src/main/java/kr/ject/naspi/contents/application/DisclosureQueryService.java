@@ -87,7 +87,7 @@ public class DisclosureQueryService {
      * @param cursor 이전 페이지의 {@link DisclosurePage#nextCursor()}. 첫 페이지면 null
      * @param size 한 페이지 개수 (1~{@value #MAX_PAGE_SIZE})
      * @return 공시 목록 한 페이지
-     * @throws NaspiBizException 리그에 입장하지 않았거나 커서 형식이 올바르지 않은 경우
+     * @throws NaspiBizException 리그에 입장하지 않았거나, 종료 시각이 지난 리그이거나, 커서 형식이 올바르지 않은 경우
      */
     public DisclosurePage findByStock(long memberId, long leagueId, long stockId, String cursor,
                                       int size) {
@@ -144,7 +144,7 @@ public class DisclosureQueryService {
      * @param stockId 종목 ID
      * @param disclosureId 공시 ID
      * @return 공시 상세
-     * @throws NaspiBizException 리그에 입장하지 않았거나, 공시가 없거나 삭제된 경우
+     * @throws NaspiBizException 리그에 입장하지 않았거나, 종료 시각이 지난 리그이거나, 공시가 없거나 삭제된 경우
      */
     public DisclosureDetail getDetail(long memberId, long leagueId, long stockId,
                                       long disclosureId) {
@@ -155,9 +155,9 @@ public class DisclosureQueryService {
                         && found.getStockId() == stockId)
                 .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.DISCLOSURE_NOT_FOUND));
-        return new DisclosureDetail(d.getId(), d.getStockId(), d.getTitle().getValue(),
-                d.getBody().getValue(), d.getTradingDay(), d.getCreatedAt(),
-                d.getAuthorPlayerId(), d.getAuthorPlayerId() == playerId,
+        return new DisclosureDetail(d.getId(), d.getStockId(), stockName(leagueId, stockId),
+                d.getTitle().getValue(), d.getBody().getValue(), d.getTradingDay(),
+                d.getCreatedAt(), d.getAuthorPlayerId(), d.getAuthorPlayerId() == playerId,
                 imageService.issueUrls(d.getId()),
                 reactionService.summarizeAll(List.of(d.getId()), playerId).get(d.getId()),
                 commentService.findAll(leagueId, d.getId(), playerId),
@@ -167,9 +167,16 @@ public class DisclosureQueryService {
                         .orElse(null));
     }
 
-    /** 리그 참여자만 공시를 볼 수 있다. 리그 상태는 따지지 않아 종료된 리그도 조회할 수 있다. */
+    private String stockName(long leagueId, long stockId) {
+        return stockQueryService.findAllByLeagueId(leagueId).stream()
+                .filter(stock -> stock.stockId() == stockId)
+                .map(LeagueStock::name)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** 리그 참여자만 공시를 볼 수 있다. 종료 시각이 지난 리그는 결과 페이지 외에 접근할 수 없어 조회할 수 없다. */
     private long viewerPlayerId(long memberId, long leagueId) {
-        return leagueQueryService.findPlayerId(memberId, leagueId)
-                .orElseThrow(() -> new NaspiBizException(ErrorCode.FORBIDDEN));
+        return leagueQueryService.requireAccessiblePlayer(memberId, leagueId);
     }
 }

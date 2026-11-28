@@ -203,8 +203,8 @@ class LeagueStockLookupServiceTest {
     }
 
     @Test
-    @DisplayName("종료된 리그는 마지막 거래일의 시세를 그대로 보여 준다")
-    void quoteInEndedLeague() {
+    @DisplayName("거래일이 여러 개면 가장 최근 거래일의 시세를 보여 준다")
+    void quoteOfLatestTradingDay() {
         joined();
         long id = openedStock(1L, PLAYER_ID);
         entityManager.persist(StockDailyPrice.open(1L, id, 1, 10_000));
@@ -217,6 +217,38 @@ class LeagueStockLookupServiceTest {
         assertThat(quote.currentPrice()).isEqualTo(9_000);
         assertThat(quote.changeRate()).isEqualTo(new BigDecimal("-10.0"));
         assertThat(quote.volume()).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("종료된 리그의 기록(종목)은 조회할 수 없다")
+    void endedLeagueBlocked() {
+        joined();
+        long id = openedStock(1L, PLAYER_ID);
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_ID, 1L))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertThatThrownBy(() -> service.findAll(MEMBER_ID, 1L))
+                .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(e.getErrorCode())
+                        .isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED));
+        assertThatThrownBy(() -> service.findOne(MEMBER_ID, 1L, id))
+                .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(e.getErrorCode())
+                        .isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED));
+    }
+
+    @Test
+    @DisplayName("없는 리그의 종목은 리그 없음으로 거절된다")
+    void leagueNotFound() {
+        given(leagueQueryService.getPlayers(MEMBER_ID, 1L))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_NOT_FOUND));
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_ID, 1L))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
+
+        assertThatThrownBy(() -> service.findAll(MEMBER_ID, 1L))
+                .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(e.getErrorCode())
+                        .isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
+        assertThatThrownBy(() -> service.findOne(MEMBER_ID, 1L, 1L))
+                .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(e.getErrorCode())
+                        .isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
     }
 
     @Test
@@ -288,10 +320,12 @@ class LeagueStockLookupServiceTest {
         given(leagueQueryService.getPlayers(MEMBER_ID, 1L)).willReturn(new LeaguePlayers(1L,
                 "리그", "ABC1234", null, false, null,
                 List.of(player(PLAYER_ID, "나"), player(11L, "친구"))));
-        given(leagueQueryService.findPlayerId(MEMBER_ID, 1L)).willReturn(Optional.of(PLAYER_ID));
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_ID, 1L)).willReturn(PLAYER_ID);
     }
 
     private void notJoined() {
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_ID, 1L))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
         given(leagueQueryService.getPlayers(MEMBER_ID, 1L))
                 .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
     }

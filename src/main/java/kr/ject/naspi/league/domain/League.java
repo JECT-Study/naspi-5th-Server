@@ -193,13 +193,15 @@ public class League {
     }
 
     /**
-     * 거래할 수 있는 리그인지 확인한다. 시작되어 진행 중인 리그만 거래할 수 있다.
+     * 지금 거래할 수 있는 리그인지 확인한다. 시작되어 종료 시각 전인 리그만 거래할 수 있다.
+     * 종료 시각이 지났으면 종료 처리 전이라도 거래할 수 없다.
      * 시작할 때 초기 자산 배분이 같은 트랜잭션에서 끝나므로 시작 상태면 배분도 완료된 것이다.
      *
-     * @return 시작 상태면 true
+     * @param now 판정 시각
+     * @return 시작 상태이고 종료 시각 전이면 true
      */
-    public boolean isTradable() {
-        return status == LeagueStatus.STARTED;
+    public boolean isTradable(LocalDateTime now) {
+        return status == LeagueStatus.STARTED && now.isBefore(endsAt);
     }
 
     /**
@@ -354,6 +356,34 @@ public class League {
         if (status != LeagueStatus.STARTED) {
             throw new NaspiBizException(ErrorCode.LEAGUE_NOT_TRADABLE);
         }
+    }
+
+    /**
+     * 종료 처리할 차례인 리그인지 확인한다. 진행 중이고 종료 시각이 지났으면 종료 대상이다.
+     *
+     * @param now 판정 시각
+     * @return 시작 상태이고 종료 시각 이후(같은 시각 포함)면 true
+     */
+    public boolean isEndDue(LocalDateTime now) {
+        return status == LeagueStatus.STARTED && !now.isBefore(endsAt);
+    }
+
+    /**
+     * 종료 시각이 지난 진행 중인 리그를 종료하고 초대 코드를 폐기한다. 폐기된 코드는 다른 리그에 다시 발급될 수 있다.
+     *
+     * <p>정책 (docs/policies/v1/domain/league.md "리그 시작 및 운영", "리그 생성 및 초대"): 리그는 종료 일시
+     * (시작의 KST 날짜 + 7일, 09:00 KST)에 종료되며 조기 종료할 수 없다. 리그가 종료되면 초대 코드를 폐기한다.
+     *
+     * @param now 종료 처리 일시
+     * @throws IllegalStateException 진행 중인 리그가 아니거나 아직 종료 시각 전인 경우
+     */
+    public void end(LocalDateTime now) {
+        if (!isEndDue(now)) {
+            throw new IllegalStateException(
+                    "종료할 수 없는 리그입니다. id=" + id + ", status=" + status + ", endsAt=" + endsAt);
+        }
+        this.status = LeagueStatus.ENDED;
+        closeInvitation();
     }
 
     private boolean isEnded(LocalDateTime now) {

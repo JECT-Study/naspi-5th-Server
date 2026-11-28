@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class DisclosureLookupController {
 
     private static final String FIELDS = """
+            - 종목: `stockId`, `stockName`(종목 이름).
             - 작성 정보: `tradingDay`(작성한 거래일 1~7), `createdAt`(KST), `authorPlayerId`. \
             공시 작성자는 항상 그 종목의 상장자이므로 작성자 이름은 종목 조회의 `listerName`을 쓴다. \
             `mine`이 `true`이면 내가 작성한 공시다 (삭제 버튼 노출).
@@ -78,6 +79,7 @@ public class DisclosureLookupController {
                     | HTTP | code | 상황 | 프론트 처리 |
                     |---|---|---|---|
                     | 200 | `"004"` | 리그에 입장하지 않은 회원 (리그가 없는 경우 포함) | 안내 후 홈으로 |
+                    | 200 | `"212"` | 이미 종료된 리그 (종료 시각 이후 포함) | 안내 후 리그 결과로 |
                     | 200 | `"002"` | `cursor` 형식이 올바르지 않음 | 첫 페이지부터 다시 조회 |
                     | 400 | `"002"` | `size`가 1~50을 벗어남 | 요청 값 확인 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
@@ -130,6 +132,7 @@ public class DisclosureLookupController {
                     |---|---|---|---|
                     | 200 | `"607"` | 공시가 없거나 삭제됨 (다른 리그·종목의 공시 포함) | 안내 후 목록으로 |
                     | 200 | `"004"` | 리그에 입장하지 않은 회원 (리그가 없는 경우 포함) | 안내 후 홈으로 |
+                    | 200 | `"212"` | 이미 종료된 리그 (종료 시각 이후 포함) | 안내 후 리그 결과로 |
                     | 401 | `"003"` | 로그인하지 않음 (세션 만료) | 카카오 로그인부터 다시 |
                     """)
     @GetMapping("/{disclosureId}")

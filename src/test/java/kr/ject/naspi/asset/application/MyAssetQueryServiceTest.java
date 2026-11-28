@@ -10,7 +10,6 @@ import static org.mockito.Mockito.never;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -33,8 +32,8 @@ class MyAssetQueryServiceTest {
     void getMyAsset() {
         PlayerAsset asset = new PlayerAsset(PLAYER_ID, 50_000_000, 0, 50_000_000, 50_000_000,
                 100_000_000, 0, new BigDecimal("0.0"), List.of());
-        given(leagueQueryService.findPlayerId(MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.of(PLAYER_ID));
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_ID, LEAGUE_ID))
+                .willReturn(PLAYER_ID);
         given(assetQueryService.getPlayerAsset(LEAGUE_ID, PLAYER_ID)).willReturn(asset);
 
         assertThat(service.getMyAsset(MEMBER_ID, LEAGUE_ID)).isEqualTo(asset);
@@ -43,11 +42,24 @@ class MyAssetQueryServiceTest {
     @Test
     @DisplayName("리그에 입장하지 않은 회원은 자산을 조회할 수 없다 (본인의 자산만 조회 가능)")
     void outsiderCannotGetAsset() {
-        given(leagueQueryService.findPlayerId(MEMBER_ID, LEAGUE_ID)).willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
 
         assertThatThrownBy(() -> service.getMyAsset(MEMBER_ID, LEAGUE_ID))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        then(assetQueryService).should(never()).getPlayerAsset(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("종료된 리그의 기록(자산)은 조회할 수 없다")
+    void endedLeagueBlocked() {
+        given(leagueQueryService.requireAccessiblePlayer(MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertThatThrownBy(() -> service.getMyAsset(MEMBER_ID, LEAGUE_ID))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_ALREADY_ENDED);
         then(assetQueryService).should(never()).getPlayerAsset(anyLong(), anyLong());
     }
 }

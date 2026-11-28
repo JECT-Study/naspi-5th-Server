@@ -8,7 +8,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Optional;
 import kr.ject.naspi.contents.domain.CommentContent;
 import kr.ject.naspi.contents.domain.Disclosure;
 import kr.ject.naspi.contents.domain.DisclosureBody;
@@ -17,6 +16,7 @@ import kr.ject.naspi.contents.domain.News;
 import kr.ject.naspi.contents.domain.NewsComment;
 import kr.ject.naspi.contents.domain.NewsGenerationResult;
 import kr.ject.naspi.contents.domain.NewsSentiment;
+import kr.ject.naspi.contents.domain.NewsType;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -68,10 +68,10 @@ class NewsQueryServiceTest {
         given(stockQueryService.findAllByLeagueId(LEAGUE_ID)).willReturn(List.of(
                 new LeagueStock(STOCK_ID, "종목A", "소개", 70L, null),
                 new LeagueStock(OTHER_STOCK_ID, "종목B", "소개", 71L, null)));
-        given(leagueQueryService.findPlayerId(VIEWER_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.of(VIEWER_PLAYER_ID));
-        given(leagueQueryService.findPlayerId(OUTSIDER_MEMBER_ID, LEAGUE_ID))
-                .willReturn(Optional.empty());
+        given(leagueQueryService.requireAccessiblePlayer(VIEWER_MEMBER_ID, LEAGUE_ID))
+                .willReturn(VIEWER_PLAYER_ID);
+        given(leagueQueryService.requireAccessiblePlayer(OUTSIDER_MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.FORBIDDEN));
     }
 
     @Test
@@ -87,6 +87,8 @@ class NewsQueryServiceTest {
                 .containsExactly(NewsSentiment.POSITIVE, NewsSentiment.NEGATIVE);
         assertThat(page1.items()).extracting(NewsListItem::stockName)
                 .containsOnly("종목A");
+        assertThat(page1.items()).extracting(NewsListItem::newsType)
+                .containsOnly(NewsType.DISCLOSURE);
         assertThat(page1.nextCursor()).isNotNull();
 
         NewsPage page2 = queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID,
@@ -197,7 +199,7 @@ class NewsQueryServiceTest {
         NewsDetail detail = queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id);
 
         assertThat(detail).usingRecursiveComparison().ignoringFields("comments")
-                .isEqualTo(new NewsDetail(id, STOCK_ID, "뉴스 제목", "뉴스 본문",
+                .isEqualTo(new NewsDetail(id, STOCK_ID, NewsType.DISCLOSURE, "뉴스 제목", "뉴스 본문",
                         NewsSentiment.NEGATIVE, 2, NOW, PUBLISHED_AT, null,
                         new NewsDisclosure(disclosureId, "공시", "본문", NOW)));
         assertThat(detail.comments()).extracting(CommentItem::commentId)
@@ -231,6 +233,19 @@ class NewsQueryServiceTest {
                 20), ErrorCode.FORBIDDEN);
         assertBiz(() -> queryService.getDetail(OUTSIDER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id),
                 ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("종료된 리그의 기록(뉴스)은 조회할 수 없다")
+    void endedLeagueBlocked() {
+        long id = published(LEAGUE_ID, STOCK_ID, NewsSentiment.POSITIVE);
+        given(leagueQueryService.requireAccessiblePlayer(VIEWER_MEMBER_ID, LEAGUE_ID))
+                .willThrow(new NaspiBizException(ErrorCode.LEAGUE_ALREADY_ENDED));
+
+        assertBiz(() -> queryService.findByStock(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, null,
+                20), ErrorCode.LEAGUE_ALREADY_ENDED);
+        assertBiz(() -> queryService.getDetail(VIEWER_MEMBER_ID, LEAGUE_ID, STOCK_ID, id),
+                ErrorCode.LEAGUE_ALREADY_ENDED);
     }
 
     private long published(long leagueId, long stockId, NewsSentiment sentiment) {
