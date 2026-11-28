@@ -219,7 +219,16 @@ public enum ErrorCode {
     COMMENT_NOT_FOUND("617", "댓글을 찾을 수 없습니다."),
 
     /** 댓글 작성자가 아닌 플레이어가 댓글을 삭제하려는 경우. */
-    COMMENT_NOT_AUTHOR("618", "댓글 작성자만 삭제할 수 있습니다.");
+    COMMENT_NOT_AUTHOR("618", "댓글 작성자만 삭제할 수 있습니다."),
+
+    /** 제보 본문이 비었거나(공백만 포함) 300자를 넘는 경우. */
+    INVALID_REPORT_BODY("619", "제보 본문은 1~300자로 입력해야 합니다."),
+
+    /** 자신이 상장한 종목에 제보하려는 경우 (자기 종목은 공시로 작성). */
+    REPORT_OWN_STOCK("620", "자신이 상장한 종목에는 제보할 수 없습니다."),
+
+    /** 진행 중이 아닌 리그(대기실)에 제보를 작성하려는 경우. */
+    REPORT_LEAGUE_NOT_STARTED("621", "진행 중인 리그에서만 제보를 작성할 수 있습니다.");
 
     private final String code;
     private final String message;

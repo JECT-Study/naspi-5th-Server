@@ -5,6 +5,7 @@ import java.util.function.LongFunction;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import kr.ject.naspi.contents.application.NewsGenerationCompleted;
 import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.league.application.TradingDayChanged;
 import kr.ject.naspi.order.application.TradeExecuted;
@@ -30,6 +31,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   <li>체결({@link TradeExecuted}): 대기 주문 주인. 체결 1건이 체결된 대기 주문 1건이므로 체결마다 한 번</li>
  *   <li>거래일 전환({@link TradingDayChanged}): 그 리그의 구독자 전원. 주문이 만료된 플레이어와 아닌 플레이어의
  *       알림 종류가 다르다</li>
+ *   <li>뉴스 생성 결과({@link NewsGenerationCompleted}): 원문 작성자(공시 작성자, 제보자) 본인</li>
  * </ul>
  * 도메인 이벤트는 커밋 이후에 발행해 롤백된 변경은 보내지 않는다. 구독 중인 플레이어에게만 보내고 보관하지 않으며,
  * 구독자가 없으면 조회하지 않는다. 예외는 원인별(DB 조회 실패, 데이터 불일치, 그 밖의 오류)로 잡아 기록만 하므로
@@ -78,6 +80,19 @@ public class AlertTopic {
     public void onTradingDayChanged(TradingDayChanged event) {
         publish("거래일 전환", event.leagueId(), playerId -> true,
                 playerId -> alertMessageQuery.tradingDayChanged(event, playerId));
+    }
+
+    /**
+     * 뉴스 생성 결과 반영 커밋 후 원문 작성자(공시 작성자, 제보자) 본인에게 뉴스 생성 알림을 보낸다.
+     *
+     * @param event 뉴스 생성 결과 이벤트
+     */
+    @Async(PUBLISH_EXECUTOR)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onNewsGenerationCompleted(NewsGenerationCompleted event) {
+        long authorPlayerId = event.authorPlayerId();
+        publish("뉴스 생성", event.leagueId(), playerId -> playerId == authorPlayerId,
+                playerId -> alertMessageQuery.newsGenerationCompleted(event));
     }
 
     /**

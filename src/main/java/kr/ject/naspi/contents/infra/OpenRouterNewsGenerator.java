@@ -1,10 +1,10 @@
 package kr.ject.naspi.contents.infra;
 
+import static kr.ject.naspi.contents.infra.AiResources.read;
+import static kr.ject.naspi.contents.infra.AiResources.sentiment;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -12,10 +12,8 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import kr.ject.naspi.contents.domain.NewsGenerationResult;
 import kr.ject.naspi.contents.domain.NewsGenerator;
-import kr.ject.naspi.contents.domain.NewsSentiment;
 import kr.ject.naspi.contents.domain.NewsSource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
@@ -121,22 +119,6 @@ class OpenRouterNewsGenerator implements NewsGenerator {
         }
         return new NewsGenerationResult.Generated(output.title(), output.body(),
                 sentiment(output.sentiment()), output.summary());
-    }
-
-    private static NewsSentiment sentiment(String value) {
-        try {
-            return NewsSentiment.valueOf(value);
-        } catch (IllegalArgumentException | NullPointerException e) {
-            throw new IllegalArgumentException("호재·악재 값이 올바르지 않습니다: " + value, e);
-        }
-    }
-
-    private static String read(String path) {
-        try {
-            return new ClassPathResource(path).getContentAsString(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("리소스를 읽을 수 없습니다: " + path, e);
-        }
     }
 
     /**

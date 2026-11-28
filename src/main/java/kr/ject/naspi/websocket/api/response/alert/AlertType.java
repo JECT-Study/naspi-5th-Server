@@ -9,6 +9,12 @@ public enum AlertType {
     ORDER_EXPIRED,
     /** 새 거래일이 시작됨 (만료된 내 주문 없음). */
     TRADING_DAY_CHANGED,
+    /** 내 공시·제보로 AI 뉴스가 게시됨. */
+    NEWS_PUBLISHED,
+    /** 내 공시·제보의 내용이 부족해 AI 뉴스가 생성되지 않음. */
+    NEWS_SKIPPED,
+    /** 내 공시·제보의 AI 뉴스 생성이 실패함. */
+    NEWS_FAILED,
     /** 공시 게시. */
     DISCLOSURE,
     /** 뉴스 게시. */

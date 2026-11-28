@@ -25,6 +25,9 @@ import kr.ject.naspi.contents.domain.News;
 import kr.ject.naspi.contents.domain.NewsComment;
 import kr.ject.naspi.contents.domain.NewsGenerationResult;
 import kr.ject.naspi.contents.domain.NewsSentiment;
+import kr.ject.naspi.contents.domain.Report;
+import kr.ject.naspi.contents.domain.ReportBody;
+import kr.ject.naspi.contents.domain.ReportNewsGenerationResult;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeagueQueryService;
@@ -244,6 +247,26 @@ class FeedQueryServiceTest {
     @DisplayName("형식이 올바르지 않은 커서는 거절한다")
     void invalidCursor() {
         assertBiz(() -> find(null, null, "not-a-cursor", 20), ErrorCode.INVALID_INPUT);
+    }
+
+    @Test
+    @DisplayName("발행된 제보 뉴스는 통합 피드에 공시·공시 뉴스와 함께 등록 일시 최신순으로 표시된다")
+    void reportNewsInFeed() {
+        Disclosure disclosure = disclosure(LEAGUE_ID, STOCK_ID, NOW);
+        long disclosureNews = publishedNews(disclosure, NOW.plusMinutes(1));
+        Report report = entityManager.persistAndFlush(Report.submit(LEAGUE_ID, OTHER_STOCK_ID,
+                VIEWER_PLAYER_ID, ReportBody.of("제보"), 2, NOW));
+        News reportNews = News.requestFromReport(report, NOW);
+        reportNews.complete(new ReportNewsGenerationResult.Generated("종목B, 소식",
+                "본문 제보자 철수", NewsSentiment.NEGATIVE), NOW.plusMinutes(2));
+        long reportNewsId = entityManager.persistAndFlush(reportNews).getId();
+
+        FeedPage page = find(null, null, null, 20);
+
+        assertThat(keys(page)).containsExactly(
+                FeedItemType.NEWS + ":" + reportNewsId,
+                FeedItemType.NEWS + ":" + disclosureNews,
+                FeedItemType.DISCLOSURE + ":" + disclosure.getId());
     }
 
     private FeedPage find(Long stockId, FeedItemType type, String cursor, int size) {

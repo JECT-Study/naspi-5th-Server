@@ -12,6 +12,7 @@ import kr.ject.naspi.contents.domain.NewsRepository;
 import kr.ject.naspi.contents.domain.NewsSource;
 import kr.ject.naspi.contents.domain.NewsStatus;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -36,6 +37,7 @@ public class NewsGenerationService {
     private final NewsGenerator newsGenerator;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 뉴스 생성 서비스를 만든다.
@@ -46,12 +48,14 @@ public class NewsGenerationService {
      * @param newsGenerator AI 뉴스 생성기
      * @param transactionManager 뉴스 저장 트랜잭션
      * @param clock 발행 일시 기준 시계
+     * @param eventPublisher 생성 결과 이벤트 발행
      */
     public NewsGenerationService(NewsRepository newsRepository,
                                  DisclosureRepository disclosureRepository,
                                  ImageService imageService, NewsGenerator newsGenerator,
                                  PlatformTransactionManager transactionManager,
-                                 Clock clock) {
+                                 Clock clock, ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
         this.newsRepository = newsRepository;
         this.disclosureRepository = disclosureRepository;
         this.imageService = imageService;
@@ -124,24 +128,31 @@ public class NewsGenerationService {
     private void complete(long disclosureId, NewsGenerationResult result) {
         News news = newsRepository.findByDisclosureId(disclosureId).orElseThrow();
         news.complete(result, LocalDateTime.now(clock));
-        switch (result) {
+        Disclosure disclosure = disclosureRepository.findById(disclosureId).orElseThrow();
+        NewsGenerationOutcome outcome = switch (result) {
             case NewsGenerationResult.Generated generated -> {
                 // 같은 종목의 다음 뉴스 생성에 과거 맥락으로 쓴다
-                disclosureRepository.findById(disclosureId).orElseThrow()
-                        .recordAiSummary(generated.summary());
+                disclosure.recordAiSummary(generated.summary());
                 log.info("AI 뉴스 발행: disclosureId={}, newsId={}, sentiment={}", disclosureId,
                         news.getId(), generated.sentiment());
+                yield NewsGenerationOutcome.PUBLISHED;
             }
             case NewsGenerationResult.Skipped skipped -> {
-                disclosureRepository.findById(disclosureId).orElseThrow()
-                        .recordAiSkipReason(skipped.reason());
+                disclosure.recordAiSkipReason(skipped.reason());
                 log.info("AI 뉴스 미생성: disclosureId={}, reason={}", disclosureId,
                         skipped.reason());
+                yield NewsGenerationOutcome.SKIPPED;
             }
-            case NewsGenerationResult.Failed failed ->
-                    log.warn("AI 뉴스 생성 실패, 수동 재시도 대상: disclosureId={}, reason={}",
-                            disclosureId, failed.reason());
-        }
+            case NewsGenerationResult.Failed failed -> {
+                log.warn("AI 뉴스 생성 실패, 수동 재시도 대상: disclosureId={}, reason={}",
+                        disclosureId, failed.reason());
+                yield NewsGenerationOutcome.FAILED;
+            }
+        };
+        // 커밋 후 공시 작성자에게 결과를 알린다
+        eventPublisher.publishEvent(new NewsGenerationCompleted(disclosure.getLeagueId(),
+                news.getId(), disclosure.getAuthorPlayerId(), NewsGenerationType.DISCLOSURE,
+                outcome));
     }
 
     /** AI에 넘길 공시 내용. */

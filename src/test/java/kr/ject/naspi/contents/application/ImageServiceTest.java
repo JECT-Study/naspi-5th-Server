@@ -26,6 +26,8 @@ import kr.ject.naspi.contents.domain.Image;
 import kr.ject.naspi.contents.domain.ImageFormat;
 import kr.ject.naspi.contents.domain.ImageRepository;
 import kr.ject.naspi.contents.domain.ImageStorage;
+import kr.ject.naspi.contents.domain.ReportImage;
+import kr.ject.naspi.contents.domain.ReportImageRepository;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.global.exception.NaspiRuntimeException;
@@ -46,6 +48,7 @@ class ImageServiceTest {
 
     private static final long LEAGUE_ID = 3L;
     private static final long DISCLOSURE_ID = 5L;
+    private static final long REPORT_ID = 6L;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 17, 10, 0);
     private static final byte[] PNG = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0};
@@ -55,6 +58,9 @@ class ImageServiceTest {
     private ImageRepository imageRepository;
 
     @Mock
+    private ReportImageRepository reportImageRepository;
+
+    @Mock
     private ImageStorage imageStorage;
 
     private ImageService imageService;
@@ -62,8 +68,8 @@ class ImageServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(NOW.atZone(KST).toInstant(), KST);
-        imageService =
-                new ImageService(imageRepository, imageStorage, clock, Duration.ofMinutes(5));
+        imageService = new ImageService(imageRepository, reportImageRepository, imageStorage,
+                clock, Duration.ofMinutes(5));
     }
 
     @AfterEach
@@ -238,6 +244,45 @@ class ImageServiceTest {
         TransactionSynchronizationManager.getSynchronizations()
                 .forEach(TransactionSynchronization::afterCommit);
         then(imageStorage).should().delete(image.getObjectKey());
+    }
+
+    @Test
+    @DisplayName("제보 이미지는 첨부 순서대로 저장하고 서명 URL도 첨부 순서대로 발급한다")
+    void reportImages() {
+        AtomicLong ids = new AtomicLong(10);
+        given(reportImageRepository.saveAll(anyList())).willAnswer(invocation -> {
+            List<ReportImage> images = invocation.getArgument(0);
+            images.forEach(
+                    image -> ReflectionTestUtils.setField(image, "id", ids.incrementAndGet()));
+            return images;
+        });
+        List<StoredImage> stored = List.of(
+                new StoredImage("k1", "a.png", ImageFormat.PNG, 9),
+                new StoredImage("k2", "b.jpg", ImageFormat.JPEG, 7));
+
+        assertThat(imageService.attachToReport(LEAGUE_ID, REPORT_ID, stored))
+                .containsExactly(11L, 12L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ReportImage>> saved = ArgumentCaptor.forClass(List.class);
+        then(reportImageRepository).should().saveAll(saved.capture());
+        assertThat(saved.getValue())
+                .extracting(ReportImage::getLeagueId, ReportImage::getReportId,
+                        ReportImage::getSortOrder, ReportImage::getObjectKey,
+                        ReportImage::getContentType, ReportImage::getCreatedAt)
+                .containsExactly(
+                        tuple(LEAGUE_ID, REPORT_ID, 0, "k1", "image/png", NOW),
+                        tuple(LEAGUE_ID, REPORT_ID, 1, "k2", "image/jpeg", NOW));
+
+        List<ReportImage> attached = saved.getValue();
+        given(reportImageRepository.findAllByReportIdOrderBySortOrderAsc(REPORT_ID))
+                .willReturn(attached);
+        given(imageStorage.signedUrl("k1", Duration.ofMinutes(5))).willReturn("https://signed/1");
+        given(imageStorage.signedUrl("k2", Duration.ofMinutes(5))).willReturn("https://signed/2");
+
+        assertThat(imageService.issueReportUrls(REPORT_ID)).containsExactly(
+                new ImageUrl(11L, "https://signed/1", NOW.plusMinutes(5)),
+                new ImageUrl(12L, "https://signed/2", NOW.plusMinutes(5)));
     }
 
     private static Image stored(long id, int sortOrder) {

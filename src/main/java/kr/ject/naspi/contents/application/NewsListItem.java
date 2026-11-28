@@ -14,8 +14,8 @@ import kr.ject.naspi.contents.domain.NewsType;
  * @param title 제목
  * @param body 본문
  * @param sentiment 호재(POSITIVE)·악재(NEGATIVE)
- * @param tradingDay 원본 공시를 작성한 거래일 번호 (1~7)
- * @param createdAt 뉴스 생성을 요청한 일시 (공시 작성 일시, KST)
+ * @param tradingDay 원본 공시·제보를 작성한 거래일 번호 (1~7)
+ * @param createdAt 뉴스 생성을 요청한 일시 (원본 공시·제보 작성 일시, KST)
  * @param publishedAt 발행 일시 (KST)
  * @param comments 댓글 수와 가장 먼저 등록된 댓글
  */

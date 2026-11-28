@@ -1,6 +1,6 @@
 # 알림 토픽
 
-내가 요청하지 않았는데 내 주문 상태가 바뀐 경우(대기 주문 체결, 거래일 갱신에 따른 주문 만료)를 실시간으로 받습니다. 토스트에서 씁니다.
+내가 요청하지 않았는데 내 주문 상태가 바뀐 경우(대기 주문 체결, 거래일 갱신에 따른 주문 만료)와, 내가 쓴 공시·제보의 AI 뉴스 생성이 끝난 경우(게시, 미생성, 실패)를 실시간으로 받습니다. 토스트에서 씁니다.
 
 내가 넣은 주문의 접수·체결·취소 결과는 이 토픽으로 오지 않습니다. 주문·취소 API 응답으로 토스트를 띄웁니다.
 
@@ -15,7 +15,7 @@
 | 전달 시점 | 알림이 생길 때 ([전달 시점](#전달-시점)). 구독 중일 때만 받으며 보관하지 않습니다 |
 | 대응 REST | 없음 |
 | 발행 (클라이언트 → 서버) | 없음 |
-| 정책 | [order.md#주문-알림](../policies/v1/domain/order.md#주문-알림) |
+| 정책 | [order.md#주문-알림](../policies/v1/domain/order.md#주문-알림), [contents.md#뉴스-생성-알림](../policies/v1/domain/contents.md#뉴스-생성-알림) |
 
 ---
 
@@ -85,8 +85,12 @@ destination:/topic/leagues/1/players/12/alerts
 | 대기 중이던 내 주문이 다른 사용자의 주문으로 일부 또는 전량 체결 | 대기 주문의 주인 | `TRADE_EXECUTED` | 체결된 대기 주문 1건당 1회. 다른 사용자의 주문 1건으로 내 대기 주문 3건이 체결되면 3회 |
 | 거래일 갱신(09:00)으로 대기 중이던 내 주문이 만료 | 그 리그의 구독자 중 주문이 만료된 사람 | `ORDER_EXPIRED` | 거래일 갱신 1회당 1회 (여러 건이 만료되어도 1회) |
 | 거래일 갱신(09:00), 만료된 내 주문 없음 | 그 리그의 나머지 구독자 | `TRADING_DAY_CHANGED` | 거래일 갱신 1회당 1회 |
+| 내 공시·제보로 AI 뉴스가 게시됨 | 공시 작성자 또는 제보자 본인 | `NEWS_PUBLISHED` | 뉴스 생성 결과가 반영될 때마다 1회 |
+| 내 공시·제보의 내용이 부족해 AI 뉴스가 생성되지 않음 | 공시 작성자 또는 제보자 본인 | `NEWS_SKIPPED` | 뉴스 생성 결과가 반영될 때마다 1회 |
+| 내 공시·제보의 AI 뉴스 생성이 실패 | 공시 작성자 또는 제보자 본인 | `NEWS_FAILED` | 뉴스 생성 결과가 반영될 때마다 1회 |
 
 - 주문을 넣은 사람에게는 체결 알림을 보내지 않습니다. 주문 API 응답으로 체결 결과를 받기 때문입니다.
+- 공시 뉴스를 수동으로 다시 생성한 결과도 같은 알림으로 옵니다.
 - 리그 종료, 회원 탈퇴로 주문이 취소될 때는 알림을 보내지 않습니다. 리그가 종료되는 시각에는 거래일 갱신 알림도 보내지 않습니다.
 
 ### 받는 메시지
@@ -106,14 +110,19 @@ destination:/topic/leagues/1/players/12/alerts
 | alertType | String | 알림 종류 | 아래 표 참고 |
 | message | String | 알림 내용 | 화면에 그대로 보여 줍니다 |
 | url | String \| null | 알림을 눌렀을 때 이동할 프론트 경로 | `null`이면 이동할 곳이 없습니다 ('확인하기' 버튼 없음) |
+| newsType | String \| null | 뉴스 알림의 원문 종류 | `DISCLOSURE`(공시 기반), `REPORT`(제보 기반). 뉴스 알림이 아니면 `null` |
+| newsId | Long \| null | 뉴스 알림의 뉴스 ID | 뉴스 알림이 아니면 `null`. 미생성·실패 알림의 뉴스 ID도 채워집니다 |
 
 | **alertType** | **설명** | **message** | **url** |
 | --- | --- | --- | --- |
 | TRADE_EXECUTED | 대기 중이던 내 주문이 체결됨 | `{종목 이름} {매수\|매도} 주문이 체결됐어요.` | `/leagues/{leagueId}/stocks/{stockId}` |
 | ORDER_EXPIRED | 새 거래일이 시작되어 대기 중이던 내 주문이 만료됨 | `새 거래일이 시작돼 대기 중인 주문이 취소됐어요.` | `null` |
 | TRADING_DAY_CHANGED | 새 거래일이 시작됨 (만료된 내 주문 없음) | `새 거래일이 시작됐어요.` | `null` |
+| NEWS_PUBLISHED | 내 공시·제보로 AI 뉴스가 게시됨 | 제보: `제보를 바탕으로 뉴스가 게시되었어요.`<br>공시: `공시를 바탕으로 뉴스가 게시되었어요.` | `null` |
+| NEWS_SKIPPED | 내 공시·제보의 내용이 부족해 뉴스가 생성되지 않음 | 제보: `제보 내용이 부족해 뉴스를 생성하지 못했어요.\n내용을 보완한 뒤 다시 시도해 주세요.` (두 줄, 줄바꿈 `\n`)<br>공시: `공시 내용이 부족해 뉴스를 생성하지 못했어요.` | `null` |
+| NEWS_FAILED | 내 공시·제보의 뉴스 생성이 실패함 | `뉴스를 생성하지 못했어요. 다시 시도해 주세요.` (공시·제보 공통) | `null` |
 
-> `DISCLOSURE`(공시 게시), `NEWS`(뉴스 게시), `LEAGUE`(리그 진행)는 예약된 값으로 지금은 보내지 않습니다.
+> `DISCLOSURE`(공시 게시), `NEWS`(뉴스 게시), `LEAGUE`(리그 진행)는 예약된 값으로 지금은 보내지 않습니다. 뉴스 생성 결과는 `NEWS` 가 아니라 `NEWS_PUBLISHED`·`NEWS_SKIPPED`·`NEWS_FAILED`로 옵니다.
 
 ```
 MESSAGE
@@ -127,7 +136,9 @@ message-id:a1b2c3-0
   "payload": {
     "alertType": "TRADE_EXECUTED",
     "message": "진영전자 매도 주문이 체결됐어요.",
-    "url": "/leagues/1/stocks/3"
+    "url": "/leagues/1/stocks/3",
+    "newsType": null,
+    "newsId": null
   },
   "publishedAt": "2026-11-09T14:32:05.123"
 }^@
@@ -145,9 +156,31 @@ message-id:a1b2c3-1
   "payload": {
     "alertType": "ORDER_EXPIRED",
     "message": "새 거래일이 시작돼 대기 중인 주문이 취소됐어요.",
-    "url": null
+    "url": null,
+    "newsType": null,
+    "newsId": null
   },
   "publishedAt": "2026-11-10T09:00:00.412"
+}^@
+```
+
+```
+MESSAGE
+destination:/topic/leagues/1/players/12/alerts
+content-type:application/json
+subscription:sub-0
+message-id:a1b2c3-2
+
+{
+  "type": "ALERT",
+  "payload": {
+    "alertType": "NEWS_SKIPPED",
+    "message": "제보 내용이 부족해 뉴스를 생성하지 못했어요.\n내용을 보완한 뒤 다시 시도해 주세요.",
+    "url": null,
+    "newsType": "REPORT",
+    "newsId": 31
+  },
+  "publishedAt": "2026-11-10T10:12:41.208"
 }^@
 ```
 
@@ -297,12 +330,20 @@ export function subscribeTopic<T>(
 import { useEffect, useState } from 'react';
 import { subscribeTopic } from './stompClient';
 
-export type AlertType = 'TRADE_EXECUTED' | 'ORDER_EXPIRED' | 'TRADING_DAY_CHANGED';
+export type AlertType =
+  | 'TRADE_EXECUTED'
+  | 'ORDER_EXPIRED'
+  | 'TRADING_DAY_CHANGED'
+  | 'NEWS_PUBLISHED'
+  | 'NEWS_SKIPPED'
+  | 'NEWS_FAILED';
 
 export type Alert = {
   alertType: AlertType | string; // 알 수 없는 값은 기본 모양으로 보여 준다
   message: string;
   url: string | null; // null이면 '확인하기' 버튼 없음
+  newsType: 'DISCLOSURE' | 'REPORT' | null; // 뉴스 알림만 값이 있다
+  newsId: number | null;
 };
 ```
 

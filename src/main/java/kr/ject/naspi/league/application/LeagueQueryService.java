@@ -261,6 +261,20 @@ public class LeagueQueryService {
     }
 
     /**
+     * 플레이어가 탈퇴했는지 확인한다. contents가 제보 뉴스를 만들기 전에 제보자의 탈퇴 여부를 확인할 때 쓴다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 플레이어 ID
+     * @return 탈퇴했으면 true. 이 리그의 플레이어가 아니면 false
+     */
+    public boolean isPlayerWithdrawn(long leagueId, long playerId) {
+        return playerRepository.findById(playerId)
+                .filter(player -> player.getLeagueId() == leagueId)
+                .map(Player::isWithdrawn)
+                .orElse(false);
+    }
+
+    /**
      * 진행 중인 리그의 현재 거래일을 조회한다. contents가 공시를 진행 중인 리그에서만 받고, 몇 거래일차에
      * 작성됐는지 기록할 때 쓴다.
      *

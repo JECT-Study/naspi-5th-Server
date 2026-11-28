@@ -1,0 +1,321 @@
+<title>제보 뉴스 생성 흐름</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 단일 칼럼 문서. 공시 뉴스와의 차이 → 제보 작성 → AI 뉴스 생성 → 출력 검증 → 뉴스 상태 순서 */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1c2330;
+  --muted: #5d6676;
+  --line: #c9cfd9;
+  --tx: #2f6fd6;
+  --tx-fill: rgba(47, 111, 214, 0.07);
+  --retry: #b7791f;
+  --retry-fill: rgba(183, 121, 31, 0.08);
+  --fail: #c2413a;
+  --ok: #2e8a57;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --surface: #1a2029; --fg: #e3e7ee; --muted: #98a2b3; --line: #3a4352;
+    --tx: #6ea2f2; --tx-fill: rgba(110, 162, 242, 0.10);
+    --retry: #e0a64a; --retry-fill: rgba(224, 166, 74, 0.10);
+    --fail: #ef7a72; --ok: #5cc28a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a2029; --fg: #e3e7ee; --muted: #98a2b3; --line: #3a4352;
+  --tx: #6ea2f2; --tx-fill: rgba(110, 162, 242, 0.10);
+  --retry: #e0a64a; --retry-fill: rgba(224, 166, 74, 0.10);
+  --fail: #ef7a72; --ok: #5cc28a; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.6;
+}
+main {
+  max-width: 1040px; margin: 0 auto;
+  padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px;
+}
+header { display: grid; gap: 8px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1 { font-size: 28px; line-height: 1.3; margin: 0; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0; text-wrap: balance; }
+p { margin: 0; max-width: 68ch; }
+.lead { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: 0.9em; }
+section { display: grid; gap: 14px; min-width: 0; }
+
+.compare-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 620px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+tr:last-child td, tr:last-child th { border-bottom: none; }
+thead th { font-size: 13px; color: var(--muted); font-weight: 500; }
+tbody th { font-weight: 500; color: var(--muted); white-space: nowrap; width: 110px; }
+.pass { color: var(--ok); font-family: var(--font-mono); font-size: 13px; }
+.reject { color: var(--fail); font-family: var(--font-mono); font-size: 13px; }
+
+figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; padding: 8px; }
+.diagram svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--fg); font-family: var(--font-body); }
+figcaption { color: var(--muted); font-size: 14px; max-width: 80ch; }
+
+.sample { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 6px; min-width: 0; }
+.sample .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+.sample .headline { font-weight: 700; font-size: 16px; }
+.sample .src { color: var(--tx); font-weight: 500; }
+
+/* SVG 요소 스타일 (토큰 사용) */
+.hd rect { fill: var(--surface); stroke: var(--fg); stroke-width: 1.2; }
+.hd .name { font-size: 12.5px; font-weight: 700; fill: var(--fg); }
+.hd .layer { font-size: 10.5px; fill: var(--muted); font-family: var(--font-mono); }
+.life { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 4 4; }
+.msg { stroke: currentColor; stroke-width: 1.4; fill: none; }
+.ret { stroke: currentColor; stroke-width: 1.2; stroke-dasharray: 5 4; fill: none; }
+.bad { stroke: var(--fail); stroke-width: 1.3; stroke-dasharray: 5 4; fill: none; }
+.lbl { font-size: 12px; fill: var(--fg); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.lbl.bad-t { fill: var(--fail); }
+.lbl.muted { fill: var(--muted); }
+.txbox { fill: var(--tx-fill); stroke: var(--tx); stroke-width: 1.2; stroke-dasharray: 6 3; }
+.txlbl { font-size: 11.5px; font-weight: 700; fill: var(--tx); font-family: var(--font-mono); }
+.rtbox { fill: var(--retry-fill); stroke: var(--retry); stroke-width: 1.2; stroke-dasharray: 6 3; }
+.rtlbl { font-size: 11.5px; font-weight: 700; fill: var(--retry); }
+.handoff { stroke: var(--tx); stroke-width: 1.6; fill: none; }
+.handoff-t { font-size: 12px; font-weight: 700; fill: var(--tx); }
+.st rect { fill: var(--surface); stroke-width: 1.6; }
+.st text { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+.st.pending rect { stroke: var(--muted); } .st.pending text { fill: var(--muted); }
+.st.ok rect { stroke: var(--ok); } .st.ok text { fill: var(--ok); }
+.st.skip rect { stroke: var(--fg); } .st.skip text { fill: var(--fg); }
+.st.fail rect { stroke: var(--fail); } .st.fail text { fill: var(--fail); }
+.note { font-size: 12.5px; fill: var(--fg); }
+.note.sub { fill: var(--muted); font-size: 11.5px; }
+.mk-fg { fill: currentColor; }
+.mk-fail { fill: var(--fail); }
+.mk-tx { fill: var(--tx); }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">contents · CNT-12 / CNT-13 · ND-119</div>
+    <h1>제보 작성과 제보 기반 AI 뉴스 생성</h1>
+    <p class="lead">참여자가 다른 참여자의 종목에 제보를 쓰면, 제보와 함께 내용이 빈 PENDING 뉴스를 저장합니다. 뉴스 내용은 커밋 뒤 별도 스레드에서 채웁니다. 공시 기반 뉴스와 같은 구조이고, 두 흐름은 <code>ReportSubmitted</code> 이벤트로만 이어지므로 뉴스 생성이 실패해도 제보는 남습니다.</p>
+  </header>
+
+  <section aria-labelledby="cmp">
+    <h2 id="cmp">공시 기반 뉴스와 다른 점</h2>
+    <div class="compare-wrap">
+      <table>
+        <thead><tr><th></th><th>공시 기반 뉴스</th><th>제보 기반 뉴스</th></tr></thead>
+        <tbody>
+          <tr><th>작성자</th><td>상장자가 자기 종목에</td><td>참여자가 <strong>다른</strong> 참여자의 종목에 (자기 종목이면 <code>620</code>). 상장자가 탈퇴한 종목도 가능</td></tr>
+          <tr><th>원문</th><td>제목 1~30자 + 본문 1~300자 + 이미지 최대 4개</td><td>본문 1~300자 + 이미지 최대 4개. 제목 없음</td></tr>
+          <tr><th>AI 입력</th><td>공시 제목·본문·이미지 + 같은 종목의 과거 공시 요약</td><td>종목 이름·제보자 이름·제보 본문·이미지. 과거 요약 없음</td></tr>
+          <tr><th>AI 출력</th><td>제목·본문·호재/악재·공시 요약</td><td>제목·본문·호재/악재. 요약 없음</td></tr>
+          <tr><th>형식 검증</th><td>글자 수만</td><td>글자 수 + 제목 <code>{종목 이름}, </code> 시작 + 본문 <code>제보자 {이름}</code> 끝</td></tr>
+          <tr><th>미생성</th><td>AI가 쓴 사유를 <code>disclosure.ai_skip_reason</code>에 저장</td><td>사유는 항상 <code>제보 내용 부족</code>. 저장하지 않음</td></tr>
+          <tr><th>실패 추가 조건</th><td>이미지 URL 발급 실패</td><td>이미지 URL 발급 실패, 생성 전 제보자 탈퇴</td></tr>
+          <tr><th>수동 재생성</th><td>공시 작성자가 요청 (CNT-07)</td><td>이번 범위 밖</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="f1">
+    <h2 id="f1">1. 제보 작성</h2>
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 940 640" role="img" aria-label="제보 작성 흐름: 본문·리그·입장·자기 종목 여부를 확인한 뒤 트랜잭션 밖에서 이미지를 GCS에 올리고, 한 트랜잭션에서 제보·이미지 메타데이터·PENDING 뉴스를 저장하며 이벤트를 발행한다. 커밋 후 뉴스 생성으로 넘어간다.">
+          <defs>
+            <marker id="f1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fg" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="f1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fail" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="f1c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-tx" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <line class="life" x1="70" y1="66" x2="70" y2="590"/>
+          <line class="life" x1="220" y1="66" x2="220" y2="590"/>
+          <line class="life" x1="380" y1="66" x2="380" y2="590"/>
+          <line class="life" x1="540" y1="66" x2="540" y2="590"/>
+          <line class="life" x1="700" y1="66" x2="700" y2="590"/>
+          <line class="life" x1="860" y1="66" x2="860" y2="590"/>
+
+          <g class="hd"><rect x="10" y="18" width="120" height="48" rx="6"/><text class="name" x="70" y="39" text-anchor="middle">프론트</text><text class="layer" x="70" y="55" text-anchor="middle">client</text></g>
+          <g class="hd"><rect x="150" y="18" width="140" height="48" rx="6"/><text class="name" x="220" y="39" text-anchor="middle">ReportController</text><text class="layer" x="220" y="55" text-anchor="middle">api</text></g>
+          <g class="hd"><rect x="310" y="18" width="140" height="48" rx="6"/><text class="name" x="380" y="39" text-anchor="middle">ReportService</text><text class="layer" x="380" y="55" text-anchor="middle">application</text></g>
+          <g class="hd"><rect x="470" y="18" width="140" height="48" rx="6"/><text class="name" x="540" y="39" text-anchor="middle">리그·종목 조회</text><text class="layer" x="540" y="55" text-anchor="middle">league · market</text></g>
+          <g class="hd"><rect x="640" y="18" width="120" height="48" rx="6"/><text class="name" x="700" y="39" text-anchor="middle">GCS</text><text class="layer" x="700" y="55" text-anchor="middle">ImageStorage</text></g>
+          <g class="hd"><rect x="800" y="18" width="120" height="48" rx="6"/><text class="name" x="860" y="39" text-anchor="middle">DB</text><text class="layer" x="860" y="55" text-anchor="middle">PostgreSQL</text></g>
+
+          <!-- 요청·검증 -->
+          <line class="msg" x1="70" y1="104" x2="220" y2="104" marker-end="url(#f1a)"/>
+          <text class="lbl" x="145" y="97" text-anchor="middle">POST 제보 작성</text>
+          <line class="msg" x1="220" y1="146" x2="380" y2="146" marker-end="url(#f1a)"/>
+          <text class="lbl" x="300" y="139" text-anchor="middle">submit() · 본문 1~300자</text>
+          <line class="msg" x1="380" y1="188" x2="540" y2="188" marker-end="url(#f1a)"/>
+          <text class="lbl" x="460" y="181" text-anchor="middle">진행 중 리그·입장 확인</text>
+          <line class="msg" x1="380" y1="226" x2="540" y2="226" marker-end="url(#f1a)"/>
+          <text class="lbl" x="460" y="219" text-anchor="middle">자기 종목이 아닌지 확인</text>
+          <text class="lbl muted" x="552" y="230">상장자 = 제보자면 620</text>
+
+          <!-- 이미지 업로드 (트랜잭션 밖) -->
+          <line class="msg" x1="380" y1="268" x2="700" y2="268" marker-end="url(#f1a)"/>
+          <text class="lbl" x="540" y="261" text-anchor="middle">이미지 업로드 (트랜잭션 밖)</text>
+
+          <!-- 트랜잭션 -->
+          <rect class="txbox" x="330" y="290" width="590" height="176" rx="6"/>
+          <text class="txlbl" x="340" y="307">트랜잭션</text>
+          <line class="msg" x1="380" y1="332" x2="860" y2="332" marker-end="url(#f1a)"/>
+          <text class="lbl" x="620" y="325" text-anchor="middle">제보 저장 (report, 작성 거래일 기록)</text>
+          <line class="msg" x1="380" y1="368" x2="860" y2="368" marker-end="url(#f1a)"/>
+          <text class="lbl" x="620" y="361" text-anchor="middle">이미지 메타데이터 저장 (report_image)</text>
+          <line class="msg" x1="380" y1="404" x2="860" y2="404" marker-end="url(#f1a)"/>
+          <text class="lbl" x="620" y="397" text-anchor="middle">뉴스 저장 (REPORT · PENDING, 내용 비어 있음)</text>
+          <path class="msg" d="M380,424 h36 v22 h-34" marker-end="url(#f1a)"/>
+          <text class="lbl" x="424" y="440">ReportSubmitted 발행</text>
+          <text class="txlbl" x="910" y="459" text-anchor="end">커밋</text>
+
+          <!-- 실패 보상 -->
+          <line class="bad" x1="380" y1="496" x2="700" y2="496" marker-end="url(#f1b)"/>
+          <text class="lbl bad-t" x="540" y="489" text-anchor="middle">저장 실패 시 올린 이미지 삭제</text>
+
+          <!-- 응답 -->
+          <line class="ret" x1="380" y1="534" x2="220" y2="534" marker-end="url(#f1a)"/>
+          <text class="lbl" x="300" y="527" text-anchor="middle">제보·이미지·뉴스 ID</text>
+          <line class="ret" x1="220" y1="572" x2="70" y2="572" marker-end="url(#f1a)"/>
+          <text class="lbl" x="145" y="565" text-anchor="middle">응답</text>
+
+          <!-- 뉴스 생성으로 넘김 -->
+          <path class="handoff" d="M380,466 V617 H520" marker-end="url(#f1c)"/>
+          <text class="handoff-t" x="530" y="621">커밋 후 이벤트 전달 → 2. AI 뉴스 채우기 (별도 스레드)</text>
+        </svg>
+      </div>
+      <figcaption><code>POST /api/leagues/{leagueId}/stocks/{stockId}/reports</code> (multipart). 거절 코드는 본문 길이 <code>619</code>, 대기실 리그 <code>621</code>, 자기 종목 <code>620</code>, 리그 없음 <code>204</code>, 미입장 <code>004</code>, 종료된 리그 <code>212</code>, 리그에 없는 종목 <code>304</code>입니다. 진행 중인 리그에는 대기자가 없으므로 입장한 플레이어는 모두 상장을 마친 참여자입니다. 제보와 PENDING 뉴스는 한 트랜잭션에서 저장되어 함께 생기거나 함께 롤백됩니다.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="f2">
+    <h2 id="f2">2. AI 뉴스 생성</h2>
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 960 700" role="img" aria-label="AI 뉴스 생성 흐름: 트랜잭션 1에서 PENDING 뉴스와 제보를 조회한다. 트랜잭션 밖에서 제보자 탈퇴 여부를 확인하고, 종목 이름과 제보자 이름, 이미지 서명 URL을 준비한 뒤 OpenRouter를 호출한다. 실패와 출력 검증 실패만 최대 2회 재시도한다. 트랜잭션 2에서 뉴스 상태와 내용을 반영한다.">
+          <defs>
+            <marker id="f2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fg" d="M0,0 L10,5 L0,10 z"/></marker>
+            <marker id="f2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fail" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+
+          <line class="life" x1="70" y1="66" x2="70" y2="680"/>
+          <line class="life" x1="240" y1="66" x2="240" y2="680"/>
+          <line class="life" x1="410" y1="66" x2="410" y2="680"/>
+          <line class="life" x1="570" y1="66" x2="570" y2="680"/>
+          <line class="life" x1="720" y1="66" x2="720" y2="680"/>
+          <line class="life" x1="870" y1="66" x2="870" y2="680"/>
+
+          <g class="hd"><rect x="5" y="18" width="130" height="48" rx="6"/><text class="name" x="70" y="39" text-anchor="middle">이벤트 리스너</text><text class="layer" x="70" y="55" text-anchor="middle">@Async · 커밋 후</text></g>
+          <g class="hd"><rect x="150" y="18" width="180" height="48" rx="6"/><text class="name" x="240" y="39" text-anchor="middle">ReportNewsGeneration</text><text class="layer" x="240" y="55" text-anchor="middle">Service · application</text></g>
+          <g class="hd"><rect x="350" y="18" width="120" height="48" rx="6"/><text class="name" x="410" y="39" text-anchor="middle">DB</text><text class="layer" x="410" y="55" text-anchor="middle">news · report</text></g>
+          <g class="hd"><rect x="490" y="18" width="160" height="48" rx="6"/><text class="name" x="570" y="39" text-anchor="middle">리그·종목 조회</text><text class="layer" x="570" y="55" text-anchor="middle">league · market</text></g>
+          <g class="hd"><rect x="660" y="18" width="120" height="48" rx="6"/><text class="name" x="720" y="39" text-anchor="middle">GCS</text><text class="layer" x="720" y="55" text-anchor="middle">ImageStorage</text></g>
+          <g class="hd"><rect x="795" y="18" width="150" height="48" rx="6"/><text class="name" x="870" y="39" text-anchor="middle">OpenRouter</text><text class="layer" x="870" y="55" text-anchor="middle">ReportNewsGenerator</text></g>
+
+          <line class="msg" x1="70" y1="104" x2="240" y2="104" marker-end="url(#f2a)"/>
+          <text class="lbl" x="155" y="97" text-anchor="middle">generate(제보 ID)</text>
+
+          <!-- 트랜잭션 1 -->
+          <rect class="txbox" x="165" y="124" width="320" height="110" rx="6"/>
+          <text class="txlbl" x="175" y="141">트랜잭션 1</text>
+          <line class="msg" x1="240" y1="172" x2="410" y2="172" marker-end="url(#f2a)"/>
+          <text class="lbl" x="325" y="165" text-anchor="middle">뉴스 조회 (PENDING만)</text>
+          <line class="msg" x1="240" y1="212" x2="410" y2="212" marker-end="url(#f2a)"/>
+          <text class="lbl" x="325" y="205" text-anchor="middle">제보 조회</text>
+          <text class="lbl muted" x="175" y="256">뉴스가 없거나 이미 결과가 있으면 중단</text>
+
+          <!-- 입력 준비 (트랜잭션 밖, 재시도 없음) -->
+          <line class="msg" x1="240" y1="296" x2="570" y2="296" marker-end="url(#f2a)"/>
+          <text class="lbl" x="405" y="289" text-anchor="middle">제보자 탈퇴 여부 확인</text>
+          <line class="bad" x1="570" y1="328" x2="240" y2="328" marker-end="url(#f2b)"/>
+          <text class="lbl bad-t" x="405" y="321" text-anchor="middle">탈퇴했으면 AI 호출 없이 FAILED</text>
+          <line class="msg" x1="240" y1="370" x2="570" y2="370" marker-end="url(#f2a)"/>
+          <text class="lbl" x="405" y="363" text-anchor="middle">종목 이름 · 제보자 이름 조회</text>
+          <line class="msg" x1="240" y1="410" x2="720" y2="410" marker-end="url(#f2a)"/>
+          <text class="lbl" x="480" y="403" text-anchor="middle">이미지 서명 URL 발급 (트랜잭션 밖)</text>
+          <line class="bad" x1="720" y1="442" x2="240" y2="442" marker-end="url(#f2b)"/>
+          <text class="lbl bad-t" x="480" y="435" text-anchor="middle">입력 준비 중 오류면 재시도 없이 FAILED</text>
+
+          <!-- AI 호출 + 자동 재시도 -->
+          <rect class="rtbox" x="165" y="466" width="785" height="120" rx="6"/>
+          <text class="rtlbl" x="175" y="484">최초 포함 최대 3회 · 호출 오류·응답 처리 오류·출력 검증 실패만 재시도 · 미생성은 재시도하지 않음</text>
+          <line class="msg" x1="240" y1="522" x2="870" y2="522" marker-end="url(#f2a)"/>
+          <text class="lbl" x="555" y="515" text-anchor="middle">종목 이름 · 제보자 이름 · 제보 본문 · 이미지 URL (few-shot 예시 3개 앞에 붙임)</text>
+          <line class="ret" x1="870" y1="566" x2="240" y2="566" marker-end="url(#f2a)"/>
+          <text class="lbl" x="555" y="559" text-anchor="middle">발행(제목·본문·호재/악재) / 미생성(제보 내용 부족) / 3회 실패</text>
+
+          <!-- 트랜잭션 2 -->
+          <rect class="txbox" x="165" y="610" width="320" height="76" rx="6"/>
+          <text class="txlbl" x="175" y="627">트랜잭션 2</text>
+          <line class="msg" x1="240" y1="664" x2="410" y2="664" marker-end="url(#f2a)"/>
+          <text class="lbl" x="325" y="657" text-anchor="middle">뉴스 상태·내용 반영</text>
+          <text class="lbl muted" x="500" y="668">요약·미생성 사유는 저장하지 않음</text>
+        </svg>
+      </div>
+      <figcaption>PENDING 뉴스만 채우고, 결과가 반영된 뉴스는 다시 생성하지 않습니다. AI 호출 동안 DB 트랜잭션을 열어 두지 않습니다. 모델 설정은 공시 기반 뉴스와 같은 <code>naspi.ai.openrouter.model</code>을 씁니다.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="f3">
+    <h2 id="f3">3. 출력 검증</h2>
+    <p>AI 응답이 아래 규칙을 하나라도 어기면 출력 검증 실패로 보고 다시 호출합니다. 예시는 종목 <code>박민수</code>, 제보자 <code>최지우</code> 기준입니다.</p>
+    <div class="compare-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>규칙</th><th>통과</th><th>재시도</th></tr></thead>
+        <tbody>
+          <tr><th>제목</th><td>최대 30자, <code>{종목 이름}, </code>(쉼표 뒤 공백 한 칸)로 시작하고 뒤에 내용이 있음</td><td class="pass">박민수, 약속 30분 지연</td><td class="reject">박민수,약속 30분 지연</td></tr>
+          <tr><th>본문</th><td>최대 100자, <code>제보자 {제보자 이름}</code>으로 끝남</td><td class="pass">…이목이 집중된다. 제보자 최지우</td><td class="reject">…제보자 최지우.</td></tr>
+          <tr><th>필수 항목</th><td><code>publishable</code>, 제목, 본문, 호재/악재(<code>POSITIVE</code>·<code>NEGATIVE</code>)</td><td class="pass">sentiment: NEGATIVE</td><td class="reject">sentiment: NEUTRAL</td></tr>
+          <tr><th>입력</th><td>종목 이름·제보자 이름·본문은 비어 있으면 안 되고 이미지는 최대 4개</td><td class="pass">이미지 0~4개</td><td class="reject">입력 단계에서 거절 (AI 호출 안 함)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="sample" aria-label="작성 예시">
+      <div class="k">작성 예시 · 제보 "민수 오늘 약속 시간에 30분 늦게 나옴. 버스 놓쳤다고 함" · 악재</div>
+      <div class="headline">박민수, 약속 30분 지연…신뢰도 흔들</div>
+      <div>박민수가 버스를 놓쳐 약속 시간에 30분 늦게 도착했다. 일정 관리 역량에 대한 우려가 커지며 향후 신뢰 회복 여부에 이목이 집중된다. <span class="src">제보자 최지우</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="f4">
+    <h2 id="f4">4. 뉴스 상태</h2>
+    <figure>
+      <div class="diagram">
+        <svg viewBox="0 0 820 236" role="img" aria-label="제보 뉴스 상태: 제보 저장 때 PENDING으로 생성되어 PUBLISHED, SKIPPED, FAILED 중 하나로 끝난다. 수동 재생성은 이번 범위 밖이다.">
+          <defs>
+            <marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-fg" d="M0,0 L10,5 L0,10 z"/></marker>
+          </defs>
+          <g class="st pending"><rect x="30" y="96" width="140" height="44" rx="6"/><text x="100" y="123" text-anchor="middle">PENDING</text></g>
+          <text class="note sub" x="100" y="162" text-anchor="middle">제보 저장 때 생성</text>
+          <text class="note sub" x="100" y="180" text-anchor="middle">유형 REPORT, 제보와 1:1</text>
+          <g class="st ok"><rect x="320" y="22" width="150" height="44" rx="6"/><text x="395" y="49" text-anchor="middle">PUBLISHED</text></g>
+          <g class="st skip"><rect x="320" y="96" width="150" height="44" rx="6"/><text x="395" y="123" text-anchor="middle">SKIPPED</text></g>
+          <g class="st fail"><rect x="320" y="170" width="150" height="44" rx="6"/><text x="395" y="197" text-anchor="middle">FAILED</text></g>
+
+          <path class="msg" d="M170,112 C240,112 250,44 318,44" marker-end="url(#f4a)"/>
+          <line class="msg" x1="170" y1="118" x2="318" y2="118" marker-end="url(#f4a)"/>
+          <path class="msg" d="M170,124 C240,124 250,192 318,192" marker-end="url(#f4a)"/>
+
+          <text class="note" x="490" y="41">발행: 제목 30자·본문 100자, 호재/악재</text>
+          <text class="note sub" x="490" y="58">뉴스 목록·상세·통합 피드에 노출 (disclosure는 null)</text>
+          <text class="note" x="490" y="115">미생성: 기사 소재를 파악할 수 없음</text>
+          <text class="note sub" x="490" y="132">사유 "제보 내용 부족". 재시도하지 않음</text>
+          <text class="note" x="490" y="189">실패: AI 3회 실패 · 입력 준비 실패 · 제보자 탈퇴</text>
+          <text class="note sub" x="490" y="206">제보 원문은 유지. 수동 재생성은 범위 밖</text>
+        </svg>
+      </div>
+      <figcaption>제보를 저장할 때 PENDING으로 만들어지고, 결과에 따라 셋 중 하나로 끝납니다. 결과가 반영된 뉴스는 바뀌지 않습니다. 커밋 직후 서버가 종료되면 PENDING으로 남을 수 있으며, 복구 방법은 공시 기반 뉴스와 함께 정합니다.</figcaption>
+    </figure>
+  </section>
+</main>

@@ -13,6 +13,8 @@ import kr.ject.naspi.contents.domain.Image;
 import kr.ject.naspi.contents.domain.ImageFormat;
 import kr.ject.naspi.contents.domain.ImageRepository;
 import kr.ject.naspi.contents.domain.ImageStorage;
+import kr.ject.naspi.contents.domain.ReportImage;
+import kr.ject.naspi.contents.domain.ReportImageRepository;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.extern.slf4j.Slf4j;
@@ -22,8 +24,9 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * 공시 이미지 업로드·서명 URL 발급·삭제. 별도 API 없이 공시 작성·조회·삭제에서 호출한다.
- * 권한(공시 작성자, 같은 리그 플레이어 등)은 호출하는 공시 쪽에서 먼저 확인한다.
+ * 공시·제보 이미지 업로드·서명 URL 발급·삭제. 별도 API 없이 공시·제보 작성, 공시 조회·삭제에서 호출한다.
+ * 권한(공시 작성자, 같은 리그 플레이어 등)은 호출하는 공시·제보 쪽에서 먼저 확인한다. 제보 이미지는 별도
+ * 테이블({@link ReportImage})에 두며 검증·업로드·보상 삭제와 객체 키 규칙은 공시와 같다.
  *
  * <p>파일은 {@link ImageStorage}, 메타데이터는 DB에 두며 둘은 한 트랜잭션으로 묶을 수 없다. 그래서 저장소 호출
  * 동안 DB 트랜잭션을 열어 두지 않고, 어긋날 때는 사용자에게 보이는 쪽(DB)을 기준으로 맞춘다.
@@ -44,6 +47,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class ImageService {
 
     private final ImageRepository imageRepository;
+    private final ReportImageRepository reportImageRepository;
     private final ImageStorage imageStorage;
     private final Clock clock;
     private final Duration signedUrlExpiration;
@@ -51,15 +55,19 @@ public class ImageService {
     /**
      * 이미지 서비스를 만든다.
      *
-     * @param imageRepository 메타데이터 저장소
+     * @param imageRepository 공시 이미지 메타데이터 저장소
+     * @param reportImageRepository 제보 이미지 메타데이터 저장소
      * @param imageStorage 파일 저장소
      * @param clock 현재 시각
      * @param signedUrlExpiration 다운로드 URL 유효 시간 ({@code naspi.image.signed-url-expiration})
      */
-    public ImageService(ImageRepository imageRepository, ImageStorage imageStorage, Clock clock,
+    public ImageService(ImageRepository imageRepository,
+                        ReportImageRepository reportImageRepository, ImageStorage imageStorage,
+                        Clock clock,
                         @Value("${naspi.image.signed-url-expiration:5m}")
                         Duration signedUrlExpiration) {
         this.imageRepository = imageRepository;
+        this.reportImageRepository = reportImageRepository;
         this.imageStorage = imageStorage;
         this.clock = clock;
         this.signedUrlExpiration = signedUrlExpiration;
@@ -116,7 +124,25 @@ public class ImageService {
     }
 
     /**
-     * 공시에 첨부하지 못한 파일을 지운다 (공시 저장 실패 시 보상). 삭제 실패는 경고 로그만 남긴다.
+     * 저장소에 올린 파일을 제보에 첨부한다(메타데이터 저장). 제보를 저장하는 트랜잭션 안에서 호출한다.
+     *
+     * @param leagueId 리그 ID
+     * @param reportId 제보 ID
+     * @param stored {@link #store}가 돌려준 파일 (첨부 순서대로)
+     * @return 저장된 이미지 ID (첨부 순서대로)
+     */
+    public List<Long> attachToReport(long leagueId, long reportId, List<StoredImage> stored) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<ReportImage> images = IntStream.range(0, stored.size())
+                .mapToObj(i -> ReportImage.attach(leagueId, reportId, i,
+                        stored.get(i).objectKey(), stored.get(i).originalFilename(),
+                        stored.get(i).format(), stored.get(i).fileSize(), now))
+                .toList();
+        return reportImageRepository.saveAll(images).stream().map(ReportImage::getId).toList();
+    }
+
+    /**
+     * 첨부하지 못한 파일을 지운다 (공시 저장 실패 시 보상). 삭제 실패는 경고 로그만 남긴다.
      *
      * @param stored {@link #store}가 돌려준 파일
      */
@@ -163,6 +189,22 @@ public class ImageService {
                         Collectors.mapping(image -> new ImageUrl(image.getId(),
                                 imageStorage.signedUrl(image.getObjectKey(), signedUrlExpiration),
                                 expiresAt), Collectors.toList())));
+    }
+
+    /**
+     * 제보 이미지의 서명 URL을 첨부 순서대로 발급한다. AI 뉴스 생성기가 이미지를 내려받을 주소로 쓴다.
+     *
+     * @param reportId 제보 ID
+     * @return 서명 URL 목록, 이미지가 없으면 빈 목록
+     */
+    public List<ImageUrl> issueReportUrls(long reportId) {
+        // 서명 전에 계산해 실제 만료보다 늦은 시각을 알려주지 않게 한다.
+        LocalDateTime expiresAt = LocalDateTime.now(clock).plus(signedUrlExpiration);
+        return reportImageRepository.findAllByReportIdOrderBySortOrderAsc(reportId).stream()
+                .map(image -> new ImageUrl(image.getId(),
+                        imageStorage.signedUrl(image.getObjectKey(), signedUrlExpiration),
+                        expiresAt))
+                .toList();
     }
 
     /**
