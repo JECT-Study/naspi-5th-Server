@@ -212,7 +212,7 @@ class DisclosureQueryServiceTest {
     }
 
     @Test
-    @DisplayName("공시 상세에서 제목·본문·전체 첨부 이미지(첨부 순서)·작성 정보·반응을 확인할 수 있다")
+    @DisplayName("공시 상세에서 종목 이름·제목·본문·전체 첨부 이미지(첨부 순서)·작성 정보·반응을 확인할 수 있다")
     void getDetail() {
         long id = publish(STOCK_ID, "상세 공시", 3);
         attachImages(id, 2);
@@ -221,6 +221,7 @@ class DisclosureQueryServiceTest {
         DisclosureDetail detail = queryService.getDetail(AUTHOR_MEMBER_ID, LEAGUE_ID, STOCK_ID,
                 id);
 
+        assertThat(detail.stockName()).isEqualTo("종목A");
         assertThat(detail.title()).isEqualTo("상세 공시");
         assertThat(detail.body()).isEqualTo("본문");
         assertThat(detail.tradingDay()).isEqualTo(3);

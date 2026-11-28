@@ -28,6 +28,7 @@ import kr.ject.naspi.contents.application.NewsRegenerationService;
 import kr.ject.naspi.contents.application.RegeneratedNews;
 import kr.ject.naspi.contents.domain.NewsSentiment;
 import kr.ject.naspi.contents.domain.NewsStatus;
+import kr.ject.naspi.contents.domain.NewsType;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import org.junit.jupiter.api.DisplayName;
@@ -78,6 +79,7 @@ class NewsControllerTest {
                 .andExpect(jsonPath("$.data.items[0].type").value("NEWS"))
                 .andExpect(jsonPath("$.data.items[0].newsId").value(30))
                 .andExpect(jsonPath("$.data.items[0].stockName").value("종목A"))
+                .andExpect(jsonPath("$.data.items[0].newsType").value("DISCLOSURE"))
                 .andExpect(jsonPath("$.data.items[0].sentiment").value("POSITIVE"))
                 .andExpect(jsonPath("$.data.items[0].commentCount").value(3))
                 .andExpect(jsonPath("$.data.items[0].previewComment.content").value("댓글"))
@@ -106,6 +108,7 @@ class NewsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.newsId").value(30))
                 .andExpect(jsonPath("$.data.stockId").value(11))
+                .andExpect(jsonPath("$.data.newsType").value("DISCLOSURE"))
                 .andExpect(jsonPath("$.data.title").value("뉴스 제목"))
                 .andExpect(jsonPath("$.data.body").value("뉴스 본문"))
                 .andExpect(jsonPath("$.data.sentiment").value("POSITIVE"))
@@ -170,12 +173,13 @@ class NewsControllerTest {
     }
 
     private static NewsListItem item() {
-        return new NewsListItem(30L, 11L, "종목A", "뉴스 제목", "뉴스 본문",
+        return new NewsListItem(30L, 11L, "종목A", NewsType.DISCLOSURE, "뉴스 제목", "뉴스 본문",
                 NewsSentiment.POSITIVE, 2, CREATED_AT, PUBLISHED_AT, comments());
     }
 
     private static NewsDetail newsDetail(NewsDisclosure disclosure) {
-        return new NewsDetail(30L, 11L, "뉴스 제목", "뉴스 본문", NewsSentiment.POSITIVE, 2,
+        return new NewsDetail(30L, 11L, NewsType.DISCLOSURE, "뉴스 제목", "뉴스 본문",
+                NewsSentiment.POSITIVE, 2,
                 CREATED_AT, PUBLISHED_AT, List.of(comment()), disclosure);
     }
 

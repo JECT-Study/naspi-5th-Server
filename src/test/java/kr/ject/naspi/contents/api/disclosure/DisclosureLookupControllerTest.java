@@ -129,14 +129,15 @@ class DisclosureLookupControllerTest {
         List<ImageUrl> images = List.of(new ImageUrl(100L, "https://signed/a", EXPIRES_AT),
                 new ImageUrl(101L, "https://signed/b", EXPIRES_AT));
         given(disclosureQueryService.getDetail(MEMBER_ID, 3L, 11L, 30L))
-                .willReturn(new DisclosureDetail(30L, 11L, "제목", "본문", 2, CREATED_AT, 70L,
-                        true, images, new DisclosureReactionSummary(30L, 0, 2, null),
+                .willReturn(new DisclosureDetail(30L, 11L, "종목A", "제목", "본문", 2, CREATED_AT,
+                        70L, true, images, new DisclosureReactionSummary(30L, 0, 2, null),
                         List.of(new CommentItem(9L, "댓글", 71L, "상대", false, CREATED_AT)),
                         new DisclosureNews(40L, NewsStatus.PUBLISHED, "뉴스 제목", "뉴스 본문",
                                 NewsSentiment.NEGATIVE)));
 
         mockMvc.perform(get(URL + "/30").with(loginMember()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stockName").value("종목A"))
                 .andExpect(jsonPath("$.data.mine").value(true))
                 .andExpect(jsonPath("$.data.images[1].imageId").value(101))
                 .andExpect(jsonPath("$.data.images[1].signedUrl").value("https://signed/b"))

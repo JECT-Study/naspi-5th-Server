@@ -26,6 +26,7 @@ import kr.ject.naspi.contents.application.ImageUrl;
 import kr.ject.naspi.contents.application.NewsListItem;
 import kr.ject.naspi.contents.domain.DisclosureReactionType;
 import kr.ject.naspi.contents.domain.NewsSentiment;
+import kr.ject.naspi.contents.domain.NewsType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,6 +72,7 @@ class FeedControllerTest {
                 .andExpect(jsonPath("$.data.items[0].newsId").value(30))
                 .andExpect(jsonPath("$.data.items[0].stockId").value(11))
                 .andExpect(jsonPath("$.data.items[0].stockName").value("종목A"))
+                .andExpect(jsonPath("$.data.items[0].newsType").value("DISCLOSURE"))
                 .andExpect(jsonPath("$.data.items[0].sentiment").value("POSITIVE"))
                 .andExpect(jsonPath("$.data.items[0].commentCount").value(3))
                 .andExpect(jsonPath("$.data.items[0].previewComment.content").value("댓글"))
@@ -121,7 +123,8 @@ class FeedControllerTest {
     }
 
     private static NewsListItem news() {
-        return new NewsListItem(30L, 11L, "종목A", "뉴스 제목", "뉴스 본문", NewsSentiment.POSITIVE, 2,
+        return new NewsListItem(30L, 11L, "종목A", NewsType.DISCLOSURE, "뉴스 제목", "뉴스 본문",
+                NewsSentiment.POSITIVE, 2,
                 CREATED_AT, CREATED_AT.plusMinutes(1), comments());
     }
 

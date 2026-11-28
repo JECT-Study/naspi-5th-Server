@@ -9,6 +9,7 @@ import java.util.List;
  *
  * @param disclosureId 공시 ID
  * @param stockId 종목 ID
+ * @param stockName 종목 이름
  * @param title 제목
  * @param body 본문
  * @param tradingDay 작성한 거래일 번호 (1~7)
@@ -20,7 +21,8 @@ import java.util.List;
  * @param comments 댓글 전체 (오래된 순). 댓글이 없으면 빈 목록
  * @param news 공시로 만든 AI 뉴스. 발행(PUBLISHED)·생성 실패(FAILED)일 때만 있고, 그 외에는 null
  */
-public record DisclosureDetail(long disclosureId, long stockId, String title, String body,
+public record DisclosureDetail(long disclosureId, long stockId, String stockName,
+                               String title, String body,
                                int tradingDay, LocalDateTime createdAt, long authorPlayerId,
                                boolean mine, List<ImageUrl> images,
                                DisclosureReactionSummary reaction, List<CommentItem> comments,
