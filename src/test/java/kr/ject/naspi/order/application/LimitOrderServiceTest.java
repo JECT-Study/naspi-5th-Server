@@ -364,6 +364,23 @@ class LimitOrderServiceTest {
     }
 
     @Test
+    @DisplayName("신규 주문 1건으로 대기 주문이 여러 건 체결되면 체결된 대기 주문마다 대기 주문 주인을 담은 체결 이벤트를 발행한다")
+    void publishTradeExecutedPerRestingOrder() {
+        PlacedOrder first = place(SELLER, OrderSide.SELL, 11_000, 2);
+        PlacedOrder second = place(LISTER, OrderSide.SELL, 11_100, 3);
+        PlacedOrder third = place(SELLER, OrderSide.SELL, 11_200, 1);
+
+        place(BUYER, OrderSide.BUY, 11_200, 6);
+
+        List<TradeExecuted> trades = events.stream(TradeExecuted.class).toList();
+        assertThat(trades).extracting(TradeExecuted::sellOrderId)
+                .containsExactly(first.orderId(), second.orderId(), third.orderId());
+        assertThat(trades).extracting(TradeExecuted::buyResting).containsOnly(false);
+        assertThat(trades).extracting(TradeExecuted::restingPlayerId)
+                .containsExactly(SELLER, LISTER, SELLER);
+    }
+
+    @Test
     @DisplayName("지정가 주문을 접수하면 주문한 플레이어의 접수 이벤트를 발행한다")
     void publishOrderPlaced() {
         PlacedOrder sell = place(SELLER, OrderSide.SELL, 11_000, 10);

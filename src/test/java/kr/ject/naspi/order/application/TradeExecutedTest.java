@@ -34,6 +34,30 @@ class TradeExecutedTest {
         assertThat(event.executedAt()).isEqualTo(NOW);
     }
 
+    @Test
+    @DisplayName("대기 중이던 주문이 매도면 매도자가 대기 주문 주인이다")
+    void restingSell() {
+        Execution execution = new Execution(order(1L, 10L, OrderSide.SELL),
+                order(2L, 20L, OrderSide.BUY), 12_300, 7);
+
+        TradeExecuted event = TradeExecuted.from(execution, NOW);
+
+        assertThat(event.buyResting()).isFalse();
+        assertThat(event.restingPlayerId()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("대기 중이던 주문이 매수면 매수자가 대기 주문 주인이다")
+    void restingBuy() {
+        Execution execution = new Execution(order(2L, 20L, OrderSide.BUY),
+                order(1L, 10L, OrderSide.SELL), 12_300, 7);
+
+        TradeExecuted event = TradeExecuted.from(execution, NOW);
+
+        assertThat(event.buyResting()).isTrue();
+        assertThat(event.restingPlayerId()).isEqualTo(20);
+    }
+
     private static Order order(long id, long playerId, OrderSide side) {
         Order order = Order.limit(1, playerId, 5, side, 12_300, 10, 1, NOW);
         ReflectionTestUtils.setField(order, "id", id);
