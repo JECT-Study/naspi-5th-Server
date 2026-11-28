@@ -2,9 +2,13 @@ package kr.ject.naspi.order.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class MarketOrderProtectionTest {
 
@@ -43,5 +47,38 @@ class MarketOrderProtectionTest {
     void clampedToLimits(OrderSide side, long bestOpposite, long expected) {
         assertThat(MarketOrderProtection.calculate(side, bestOpposite, LOWER, UPPER))
                 .isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("시장가 매수 예약금은 보호 범위 안 매도 호가를 최우선부터 주문 수량까지 합산하고, 부족한 수량은 보호최고가로 계산한다")
+    void buyReservationAmount() {
+        OrderBook book = asks(ask(10_000, 3), ask(10_500, 2), ask(10_600, 5));
+
+        // 10,000 × 3 + 10,500 × 2 + 보호최고가 10,500 × 5 (10,600은 보호 범위 밖)
+        assertThat(MarketOrderProtection.buyReservationAmount(book, 10, 10_500))
+                .isEqualTo(30_000 + 21_000 + 52_500);
+        // 주문 수량까지만 합산한다
+        assertThat(MarketOrderProtection.buyReservationAmount(book, 4, 10_500))
+                .isEqualTo(30_000 + 10_500);
+    }
+
+    @Test
+    @DisplayName("시장가 매수 예약금이 long 범위를 넘으면 최댓값으로 계산해 주문 가능 현금 부족이 된다")
+    void buyReservationAmountOverflow() {
+        assertThat(MarketOrderProtection.buyReservationAmount(asks(), Long.MAX_VALUE, 10_500))
+                .isEqualTo(Long.MAX_VALUE);
+    }
+
+    private long nextId = 1;
+
+    private Order ask(long price, long quantity) {
+        Order order = Order.limit(1L, 1L, 100L, OrderSide.SELL, price, quantity, 1,
+                LocalDateTime.of(2026, 11, 14, 12, 0));
+        ReflectionTestUtils.setField(order, "id", nextId++);
+        return order;
+    }
+
+    private static OrderBook asks(Order... orders) {
+        return OrderBook.of(100L, Arrays.asList(orders));
     }
 }

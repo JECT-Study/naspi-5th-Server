@@ -26,9 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <ol>
  *   <li>리그 거래 락, 거래일 전환 완료 확인과 거래일 번호 확정</li>
  *   <li>호가창 조회 → 최우선 상대 호가로 보호 가격을 한 번 확정 (이후 호가 변동은 반영하지 않는다)</li>
- *   <li>자산 예약 (매수는 보호최고가 × 수량의 현금, 매도는 수량만큼 주식)</li>
+ *   <li>자산 예약. 매수는 보호 범위 안 매도 호가를 최우선부터 주문 수량까지 합산하고 부족한 수량은
+ *       보호최고가로 계산한 현금, 매도는 수량만큼 주식 (docs/policies/v1/domain/asset.md "매수 주문의 현금
+ *       예약"). 주문에 필요한 자산이 부족하면 수량을 줄이지 않고 주문을 거절한다</li>
  *   <li>주문 저장 → 보호 가격 안에서 매칭 → 체결마다 정산, 체결 기록 저장, 종목 현재가·거래량 갱신
- *       → 취소된 잔량의 예약 해제</li>
+ *       → 남은 예약 해제 (매수는 예약금 중 실제 총체결 금액을 제외한 나머지 전액, 매도는 취소된 잔량)</li>
  * </ol>
  * 상대 호가가 없으면 주문을 저장하고 자산을 예약하지 않은 채 전량 취소한다
  * ({@link CancelReason#MARKET_NOT_FILLED}).
@@ -58,8 +60,6 @@ public class MarketOrderService {
 
         LocalDateTime now = leagueTradingService.lockForTrading(command.leagueId());
         int tradingDay = leagueTradingService.requireTradingDayOpened(command.leagueId(), now);
-        final Order order = Order.market(command.leagueId(), command.playerId(),
-                command.stockId(), command.side(), command.quantity(), tradingDay, now);
         stockQueryService.isListedBy(command.leagueId(), command.stockId(), command.playerId());
 
         OrderBook book = OrderBook.of(command.stockId(),
@@ -69,6 +69,8 @@ public class MarketOrderService {
                 ? book.bestAsk() : book.bestBid();
         if (bestOpposite.isEmpty()) {
             // 보호 가격의 기준이 없으므로 체결 가능 수량이 0이다. 자산은 예약하지 않았으므로 해제도 없다.
+            Order order = Order.market(command.leagueId(), command.playerId(),
+                    command.stockId(), command.side(), command.quantity(), tradingDay, now);
             order.cancel(CancelReason.MARKET_NOT_FILLED, now);
             orderRepository.save(order);
             return PlacedOrder.from(order);
@@ -80,11 +82,25 @@ public class MarketOrderService {
                 command.side(), bestOpposite.get(), limit.lowerLimitPrice(),
                 limit.upperLimitPrice());
 
-        support.reserve(order, protection);
+        final Order order = Order.market(command.leagueId(), command.playerId(),
+                command.stockId(), command.side(), command.quantity(), tradingDay, now);
+        boolean buying = command.side() == OrderSide.BUY;
+        long reservedAmount = 0;
+        if (buying) {
+            reservedAmount = MarketOrderProtection.buyReservationAmount(
+                    book, command.quantity(), protection);
+            support.reserveMarketBuy(order, reservedAmount);
+        } else {
+            support.reserve(order, protection);
+        }
         orderRepository.save(order);
         MatchResult result = OrderMatcher.match(book, order, protection);
         support.settleAll(result, now);
-        support.releaseRemaining(order);
+        if (buying) {
+            support.releaseMarketBuy(order, reservedAmount, result);
+        } else {
+            support.releaseRemaining(order);
+        }
         return PlacedOrder.from(order);
     }
 }

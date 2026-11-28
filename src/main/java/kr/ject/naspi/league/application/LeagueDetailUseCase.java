@@ -35,7 +35,23 @@ public class LeagueDetailUseCase {
      * @throws NaspiBizException 리그가 없거나, 조회하는 회원이 리그에 입장하지 않은 경우
      */
     public LeagueDetail getDetail(long memberId, long leagueId) {
-        LeaguePlayers players = leagueQueryService.getPlayers(memberId, leagueId);
+        return toDetail(leagueQueryService.getPlayers(memberId, leagueId));
+    }
+
+    /**
+     * 조회자 없이 리그 상세를 조회한다. 모든 플레이어의 {@code me}는 {@code false}다. 권한 확인은 호출하는 쪽
+     * 책임이다 (웹소켓 구독 시 확인).
+     *
+     * @param leagueId 리그 ID
+     * @return 리그 상세 정보
+     * @throws NaspiBizException 리그가 없는 경우 (만료된 대기실 포함)
+     */
+    public LeagueDetail getDetailInLeague(long leagueId) {
+        return toDetail(leagueQueryService.getPlayersInLeague(leagueId));
+    }
+
+    private LeagueDetail toDetail(LeaguePlayers players) {
+        long leagueId = players.leagueId();
         Map<Long, LeagueStock> stocksByLister = stockQueryService.findAllByLeagueId(leagueId)
                 .stream()
                 .collect(Collectors.toMap(LeagueStock::listerPlayerId, Function.identity()));

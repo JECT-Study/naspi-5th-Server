@@ -42,8 +42,7 @@
   - [x] 주문 가능 현금 = 현금 - 예약 현금, 부족 시 거절
   - [x] 지정가: 지정 가격 × 수량
     - asset은 order가 넘긴 예약 기준 가격 × 수량으로 예약한다 (`AssetReservationService.reserveCashForBuy`)
-  - [ ] 시장가: 보호 범위 안의 상대 호가를 최우선부터 주문 수량까지 순서대로 적용해 합산, 부족한 수량은 보호최고가로 계산 (예약 기준 가격 계산은 ORD-05)
-    - 정책서와 다름: ORD-05는 보호최고가 × 주문 수량으로 예약한다. asset 금액 단위 예약 API 추가는 후속 작업
+  - [x] 시장가: 보호 범위 안의 상대 호가를 최우선부터 주문 수량까지 순서대로 적용해 합산, 부족한 수량은 보호최고가로 계산 (금액 계산은 ORD-05, asset은 `reserveCashAmountForBuy`로 금액 단위 예약) — `./gradlew test --tests "kr.ject.naspi.asset.domain.AccountTest" --tests "kr.ject.naspi.order.*Market*"`
 
 ### AST-04 참여자는 매도 가능한 수량 범위에서만 매도할 수 있고, 자사주는 1,000주를 남겨야 한다
 - Jira: ND-31

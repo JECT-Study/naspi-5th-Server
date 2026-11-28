@@ -32,4 +32,33 @@ public final class MarketOrderProtection {
         long floored = raw / Order.TICK_SIZE * Order.TICK_SIZE;
         return Math.max(lowerLimit, Math.min(upperLimit, floored));
     }
+
+    /**
+     * 시장가 매수에 예약할 현금을 계산한다 (docs/policies/v1/domain/asset.md "매수 주문의 현금 예약").
+     *
+     * <p>보호 범위 안의 매도 호가를 최우선부터 주문 수량까지 순서대로 적용해 금액을 합산하고, 호가가 모자란
+     * 수량은 보호최고가로 계산한다. 접수 직전 호가창으로 계산하므로 매칭 결과와 같은 순서다.
+     *
+     * @param book 접수 직전 호가창
+     * @param quantity 주문 수량. 양수
+     * @param protectionPrice 보호최고가
+     * @return 예약할 금액. {@code long} 범위를 넘으면 {@link Long#MAX_VALUE} (주문 가능 현금 부족으로 거절된다)
+     */
+    public static long buyReservationAmount(OrderBook book, long quantity, long protectionPrice) {
+        long left = quantity;
+        long amount = 0;
+        try {
+            for (Order ask : book.orders(OrderSide.SELL)) {
+                if (left == 0 || ask.getPrice() > protectionPrice) {
+                    break;
+                }
+                long applied = Math.min(left, ask.getRemainingQuantity());
+                amount = Math.addExact(amount, Math.multiplyExact(ask.getPrice(), applied));
+                left -= applied;
+            }
+            return Math.addExact(amount, Math.multiplyExact(protectionPrice, left));
+        } catch (ArithmeticException e) {
+            return Long.MAX_VALUE;
+        }
+    }
 }

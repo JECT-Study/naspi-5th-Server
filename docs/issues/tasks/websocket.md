@@ -153,3 +153,22 @@
   - 10분봉·1시간봉 경계: (a) KST 시계 기준(xx:00, xx:10 …)으로 자르고 첫 봉만 리그 시작 일시부터, (b) 리그 시작 일시 기준으로 자름. 권장: (a). (a)일 때 첫 봉 `startedAt`을 봉 경계로 줄지 리그 시작 일시로 줄지
   - 조회 가능 시점: 시작 전 리그(빈 배열 vs 에러), 종료된 리그(정책 "종료 후 결과 페이지만 접근 가능"에 따라 거절할지)
   - 1일봉 외 봉에서 거래일 경계(09:00)를 넘는 봉은 없다(10분·1시간이 09:00을 나누므로). 다만 (b)를 고르면 09:00을 넘는 봉이 생길 수 있어 자를지 정한다
+
+### WS-07 리그 상세 토픽 추가 (대기실 상장 완료 반영)
+- Jira: (미발급)
+- 목적: 대기실의 사용자가 다른 사용자의 상장 완료(대기자 → 참여자 전환, 리그 시작 가능 여부)를 새로고침 없이 보게 한다
+- 정책: [league.md#대기실](../../policies/v1/domain/league.md#대기실) "대기실 실시간 반영"
+- 작업 내용: `/topic/leagues/{leagueId}/detail` (`LeagueDetailTopic`)을 새로 만든다. 대응 REST: `GET /api/leagues/{leagueId}/detail` (`LeagueDetailController`, `LeagueDetailResponse`). 선행: LEA-04, LEA-05, MKT-01
+  - 메시지는 REST 리그 상세와 같은 구조에서 `players[].me`를 빼고 계산 시각 `asOf`를 붙인다
+  - 값은 `LeagueDetailUseCase`에서 얻는다. 지금 조회는 조회 회원(`memberId`)이 필요하므로 조회자 없이 리그 단위로 조회하는 메서드(`getDetailInLeague`)를 추가하고 REST와 변환 로직을 공유한다
+  - market의 `StockListed`를 커밋 이후에 구독한다. 이 이벤트는 대기자 → 참여자 전환(`LeagueService#completeListing`)보다 먼저 발행되므로 커밋 이후에 조회해야 전환이 반영된다. 리그 생성 중 방장 종목 상장에도 발행되지만 구독자가 없어 조회하지 않는다
+  - `LeagueDetailTopicAuthorizer`가 REST와 같이 해당 리그 입장자(대기자 포함)만 구독을 허용한다
+- 완료 조건 (확인 방법)
+  - [x] 토픽 메시지의 JSON 필드가 `GET /api/leagues/{leagueId}/detail` 응답에서 `players[].me`를 뺀 것과 같고, 메시지에 `asOf`가 있다 — `./gradlew test --tests "kr.ject.naspi.websocket.api.response.TopicResponseSpecTest" --tests "kr.ject.naspi.websocket.application.topic.league.*"`
+  - [x] 상장 커밋 후 그 리그 구독자에게 상장자가 참여자로 바뀐 리그 상세가 발행되고, 롤백되면 발행되지 않는다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.league.*" --tests "kr.ject.naspi.league.application.LeagueDetailUseCaseTest"`
+  - [x] 구독자가 없는 리그는 조회하지 않고, 발행이 실패해도 상장 트랜잭션은 커밋된다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.league.*"`
+  - [x] 리그에 입장하지 않은 회원은 구독할 수 없다 — 같은 테스트
+- 결정 (2026-11-28)
+  - 토픽 경로와 메시지는 REST 리그 상세(`/detail`)에 맞춘다. 대기실 전용 구조를 따로 만들지 않는다
+  - `me`: 구독자마다 다르므로 토픽에서 뺀다. 프론트는 REST로 받은 본인 `playerId`와 비교한다
+  - 범위 밖: 입장·퇴장·추방·리그 이름 수정·종목 수정 반영 (정책상 실시간 대상 아님), 리그 시작 반영

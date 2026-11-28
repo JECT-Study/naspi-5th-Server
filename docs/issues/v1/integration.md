@@ -30,6 +30,7 @@
   - [x] 시장가 매도 잔량 취소 시 예약 주식이 해제된다 — 같은 테스트
   - [x] asset 전제 테스트가 통과한다 — `./gradlew test --tests "kr.ject.naspi.asset.domain.AccountTest"`
   - [x] AST-05 시장가 체크박스를 `[x]`로 바꾼다 — `scripts/find-story.sh ND-32`
+- 비고 (2026-11-28): 시장가 매수 예약이 정책서 5.3 계산식(상대 호가 합산 + 부족분 보호최고가)의 금액 단위 예약으로 바뀌었다 (ORD-05 결정). 잔량 해제는 `releaseCashAmountForBuy(예약금 - 총체결 금액)`로 한다. 위 조건은 그대로 성립한다
 
 ### INT-03 미체결 만료·리그 종료 취소 시 예약 자산을 asset 해제 API로 푼다
 - Jira:

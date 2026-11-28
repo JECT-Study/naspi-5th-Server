@@ -7,9 +7,11 @@ import kr.ject.naspi.asset.application.TradeSettlement;
 import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.order.domain.CancelReason;
 import kr.ject.naspi.order.domain.Execution;
+import kr.ject.naspi.order.domain.MarketOrderProtection;
 import kr.ject.naspi.order.domain.MatchResult;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
+import kr.ject.naspi.order.domain.OrderType;
 import kr.ject.naspi.order.domain.Trade;
 import kr.ject.naspi.order.domain.TradeRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,11 +34,12 @@ class OrderExecutionSupport {
     private final ApplicationEventPublisher eventPublisher;
 
     /**
-     * 주문에 필요한 자산을 예약한다. 매수는 {@code 예약 기준 가격 × 수량}의 현금을 예약하고 주문에
-     * 예약 기준 가격을 남긴다. 매도는 주문 수량만큼 주식을 예약한다.
+     * 주문에 필요한 자산을 예약한다. 매수는 {@code 지정 가격 × 수량}의 현금을 예약하고 주문에
+     * 예약 기준 가격을 남긴다. 매도는 주문 수량만큼 주식을 예약한다. 시장가 매수는
+     * {@link #reserveMarketBuy}로 예약한다.
      *
      * @param order 접수한 주문
-     * @param reservedPrice 매수 예약 기준 가격. 지정가는 주문 가격, 시장가는 보호최고가
+     * @param reservedPrice 매수 예약 기준 가격 (지정 가격). 매도는 쓰지 않는다
      */
     void reserve(Order order, long reservedPrice) {
         if (order.getSide() == OrderSide.BUY) {
@@ -46,6 +49,36 @@ class OrderExecutionSupport {
         } else {
             assetReservationService.reserveStockForSell(order.getLeagueId(), order.getPlayerId(),
                     order.getStockId(), order.getQuantity());
+        }
+    }
+
+    /**
+     * 시장가 매수에 필요한 현금을 금액으로 예약한다. 금액은 보호 범위 안 상대 호가를 최우선부터 주문 수량까지
+     * 합산하고 부족한 수량은 보호최고가로 계산한다 ({@link MarketOrderProtection#buyReservationAmount}).
+     *
+     * @param order 접수한 시장가 매수 주문
+     * @param amount 예약할 금액
+     */
+    void reserveMarketBuy(Order order, long amount) {
+        assetReservationService.reserveCashAmountForBuy(order.getLeagueId(), order.getPlayerId(),
+                amount);
+    }
+
+    /**
+     * 시장가 매수가 체결·취소된 뒤 예약금 중 실제 총체결 금액을 제외한 나머지를 해제한다.
+     *
+     * @param order 시장가 매수 주문
+     * @param reservedAmount 접수 때 예약한 금액
+     * @param result 매칭 결과
+     */
+    void releaseMarketBuy(Order order, long reservedAmount, MatchResult result) {
+        long executedAmount = result.executions().stream()
+                .mapToLong(execution -> execution.price() * execution.quantity())
+                .sum();
+        long remaining = reservedAmount - executedAmount;
+        if (remaining > 0) {
+            assetReservationService.releaseCashAmountForBuy(order.getLeagueId(),
+                    order.getPlayerId(), remaining);
         }
     }
 
@@ -103,8 +136,11 @@ class OrderExecutionSupport {
     private void settle(Execution execution, LocalDateTime executedAt) {
         Order buy = execution.buyOrder();
         Order sell = execution.sellOrder();
+        // 시장가 매수는 금액으로 예약했으므로 체결 금액만큼 예약금을 줄인다 (예약 기준 가격 = 체결 가격).
+        long buyReservedPrice = buy.getType() == OrderType.MARKET
+                ? execution.price() : buy.getReservedPrice();
         assetSettlementService.settle(new TradeSettlement(buy.getLeagueId(), buy.getStockId(),
-                buy.getPlayerId(), sell.getPlayerId(), buy.getReservedPrice(),
+                buy.getPlayerId(), sell.getPlayerId(), buyReservedPrice,
                 execution.price(), execution.quantity()));
         // 체결 기록과 거래량은 정산과 같은 트랜잭션에서 같은 거래일로 남긴다. 거래일은 접수 시점의 거래일이다.
         int tradingDay = execution.incomingOrder().getTradingDay();

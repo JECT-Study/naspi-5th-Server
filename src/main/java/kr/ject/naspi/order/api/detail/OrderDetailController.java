@@ -52,21 +52,25 @@ class OrderDetailController {
                     - `fills`: 체결 내역 (체결 일시 오름차순). 체결 일시와 단가가 모두 같은 체결은 \
                     수량을 합산해 1건으로 제공한다. 각 건은 `executedAt`, `price`, `quantity`, `amount`. \
                     체결이 없으면 빈 배열
-                    - `cancellation`: 취소 내역 `quantity`, `canceledAt`, `reason`. 취소 수량이 없으면 `null`. \
+                    - `cancellation`: 취소 내역 `quantity`, `canceledAt`, `reason`(코드), \
+                    `reasonMessage`(표시 문구). 취소 수량이 없으면 `null`. \
                     거래일 변경으로 만료된 수량도 취소 수량에 포함한다
                     - `pendingQuantity`: 현재 대기 수량 (최초 수량 - 체결 수량 - 취소 수량). 없으면 `null`
 
-                    **취소 사유 `reason`** (표시 문구는 클라이언트가 매핑)
+                    **취소 사유** (화면에는 `reasonMessage`를 그대로 표시한다. 분기는 `reason` 코드로 한다)
 
-                    | 코드 | 표시 문구 |
+                    | `reason` | `reasonMessage` |
                     |---|---|
                     | `USER_REQUESTED` | 직접 취소 |
                     | `MARKET_PARTIALLY_FILLED` | 체결 가능 수량 부족 |
                     | `MARKET_NOT_FILLED` | 체결 가능 수량 없음 |
                     | `SELF_TRADE_PREVENTED` | 내 주문 간 체결 방지 |
                     | `TRADING_DAY_EXPIRED` | 거래일 변경으로 만료 |
-                    | `MEMBER_WITHDRAWN` | 회원 탈퇴 |
-                    | `LEAGUE_ENDED` | 리그 종료 |
+                    | `LEAGUE_ENDED` | 거래일 변경으로 만료 |
+                    | `MEMBER_WITHDRAWN` | `null` (탈퇴한 회원은 조회할 수 없음) |
+
+                    거래일 변경 처리 중(09:00 직후)에 접수한 주문은 취소가 아니라 접수 거절(`"213"`)이라 \
+                    주문 내역에 남지 않는다.
 
                     **실패 응답** (`code`는 3자리 문자열)
 

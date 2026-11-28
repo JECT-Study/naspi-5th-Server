@@ -134,6 +134,7 @@ class MarketOrderServiceTest {
 
     private long leagueId;
     private long stockId;
+    private long extraPlayers;
 
     @BeforeEach
     void setUp() {
@@ -167,7 +168,6 @@ class MarketOrderServiceTest {
         assertThat(placed.remainingQuantity()).isEqualTo(5);
         Order saved = entityManager.find(Order.class, placed.orderId());
         assertThat(saved.getCancelReason()).isEqualTo(CancelReason.MARKET_PARTIALLY_FILLED);
-        assertThat(saved.getReservedPrice()).isEqualTo(10_500);
         assertThat(holding(BUYER).getQuantity()).isEqualTo(5);
     }
 
@@ -193,9 +193,9 @@ class MarketOrderServiceTest {
 
         PlacedOrder placed = market(BUYER, OrderSide.BUY, 3);
 
+        // 10,100 × 1.05 = 10,605 → 10,600. 10,600까지 체결하고 10,700은 남는다
         assertThat(placed.remainingQuantity()).isEqualTo(1);
-        assertThat(entityManager.find(Order.class, placed.orderId()).getReservedPrice())
-                .isEqualTo(10_600);
+        assertThat(holding(BUYER).getQuantity()).isEqualTo(2);
     }
 
     @Test
@@ -237,9 +237,9 @@ class MarketOrderServiceTest {
 
         PlacedOrder buy = market(BUYER, OrderSide.BUY, 3);
 
+        // 12,900 × 1.05 = 13,545 → 상한가 13,000. 두 호가 모두 체결된다
         assertThat(buy.remainingQuantity()).isEqualTo(1);
-        assertThat(entityManager.find(Order.class, buy.orderId()).getReservedPrice())
-                .isEqualTo(13_000);
+        assertThat(holding(BUYER).getQuantity()).isEqualTo(2);
 
         bid(7_100, 1);
         bid(7_000, 1);
@@ -267,10 +267,16 @@ class MarketOrderServiceTest {
         ((SettableClock) clock).set(LocalDateTime.of(2026, 11, 16, 9, 0, 0));
         ask(10_000, 1);
 
-        PlacedOrder buy = market(BUYER, OrderSide.BUY, 1);
+        long poorer = player(20_400, 0);
 
-        assertThat(entityManager.find(Order.class, buy.orderId()).getReservedPrice())
-                .isEqualTo(10_400);
+        // 10,000 × 1.05 = 10,500 → 2일차 상한가 10,400. 예약금 = 10,000 + 10,400 = 20,400이라 접수된다
+        // (상한가를 적용하지 않으면 10,000 + 10,500 = 20,500이라 거절된다)
+        PlacedOrder buy = market(poorer, OrderSide.BUY, 2);
+
+        assertThat(buy.quantity()).isEqualTo(2);
+        assertThat(buy.remainingQuantity()).isEqualTo(1);
+        assertThat(account(poorer).getReservedDeposit()).isZero();
+        assertThat(account(poorer).getDeposit()).isEqualTo(10_400);
     }
 
     @Test
@@ -345,26 +351,115 @@ class MarketOrderServiceTest {
     }
 
     @Test
-    @DisplayName("시장가 매수는 보호최고가 × 주문 수량만큼 현금이 없으면 거절한다")
-    void rejectWhenCashShortForProtectionPrice() {
+    @DisplayName("시장가 매수 예약금은 보호 범위 안 매도 호가를 최우선부터 주문 수량까지 합산하고, 부족한 수량은 보호최고가로 계산한다")
+    void buyReservationSumsQuotesThenProtectionPrice() {
         ask(10_000, 10);
+        long exact = player(100_000, 0);
 
-        assertThatThrownBy(() -> market(POOR, OrderSide.BUY, 10))
-                .isInstanceOf(NaspiBizException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_DEPOSIT);
-        assertThat(marketOrderCount()).isZero();
+        // 10,000 × 10 = 100,000. 보호최고가(10,500) × 10 = 105,000이 아니어도 주문된다
+        PlacedOrder placed = market(exact, OrderSide.BUY, 10);
 
-        entityManager.persist(Account.open(leagueId, POOR + 1, 105_000));
-        entityManager.persist(Holding.allocate(leagueId, POOR + 1, stockId, 0));
-        assertThat(market(POOR + 1, OrderSide.BUY, 10).status()).isEqualTo(OrderStatus.FILLED);
+        assertThat(placed.quantity()).isEqualTo(10);
+        assertThat(placed.status()).isEqualTo(OrderStatus.FILLED);
+        assertThat(account(exact).getDeposit()).isZero();
+        assertThat(account(exact).getReservedDeposit()).isZero();
     }
 
     @Test
-    @DisplayName("매도 가능 수량이 주문 수량보다 적으면 시장가 매도를 거절한다")
-    void rejectWhenSellQuantityShort() {
+    @DisplayName("시장가 매수 예약금이 주문 가능 현금보다 많으면 수량을 줄이지 않고 주문을 거절한다")
+    void rejectWhenCashShort() {
+        ask(10_000, 7);
+        long poorer = player(70_000, 0);
+
+        assertThatThrownBy(() -> market(poorer, OrderSide.BUY, 8))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_DEPOSIT);
+        assertThat(marketOrderCount()).isZero();
+        assertThat(account(poorer).getReservedDeposit()).isZero();
+        assertThat(account(poorer).getDeposit()).isEqualTo(70_000);
+    }
+
+    @Test
+    @DisplayName("호가가 모자란 수량은 보호최고가로 예약하고, 체결하지 못한 수량은 취소한 뒤 남은 예약금을 전액 해제한다")
+    void missingQuotesReservedAtProtectionPrice() {
+        ask(10_000, 3);
+        long buyer = player(51_000, 0);
+
+        // 30,000 + 10,500 × 2 = 51,000
+        PlacedOrder placed = market(buyer, OrderSide.BUY, 5);
+
+        assertThat(placed.quantity()).isEqualTo(5);
+        assertThat(placed.remainingQuantity()).isEqualTo(2);
+        assertThat(entityManager.find(Order.class, placed.orderId()).getCancelReason())
+                .isEqualTo(CancelReason.MARKET_PARTIALLY_FILLED);
+        assertThat(account(buyer).getReservedDeposit()).isZero();
+        assertThat(account(buyer).getDeposit()).isEqualTo(21_000);
+    }
+
+    @Test
+    @DisplayName("호가가 모자란 수량까지 보호최고가로 예약할 현금이 없으면 시장가 매수를 거절한다")
+    void rejectWhenCashShortForMissingQuotes() {
+        ask(10_000, 3);
+        long buyer = player(50_999, 0);
+
+        assertThatThrownBy(() -> market(buyer, OrderSide.BUY, 5))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_DEPOSIT);
+        assertThat(marketOrderCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("주문 가능 현금은 대기 중인 매수 주문의 예약금을 뺀 금액이다")
+    void orderableDepositExcludesReserved() {
+        ask(10_000, 10);
+        long poorer = player(50_000, 0);
+        limit(poorer, OrderSide.BUY, 9_000, 3);
+
+        // 50,000 - 27,000 = 23,000: 2주는 되고 3주는 거절
+        assertThatThrownBy(() -> market(poorer, OrderSide.BUY, 3))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_DEPOSIT);
+        PlacedOrder placed = market(poorer, OrderSide.BUY, 2);
+
+        assertThat(placed.status()).isEqualTo(OrderStatus.FILLED);
+        assertThat(account(poorer).getReservedDeposit()).isEqualTo(27_000);
+        assertThat(account(poorer).getDeposit()).isEqualTo(30_000);
+    }
+
+    @Test
+    @DisplayName("시장가 매도 수량이 매도 가능 수량보다 많으면 수량을 줄이지 않고 주문을 거절한다")
+    void rejectWhenSellQuantityExceedsSellable() {
+        bid(10_000, 10);
+        long few = player(0, 5);
+
+        assertThatThrownBy(() -> market(few, OrderSide.SELL, 8))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_QUANTITY);
+        assertThat(marketOrderCount()).isZero();
+        assertThat(holding(few).getQuantity()).isEqualTo(5);
+        assertThat(holding(few).getReservedQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("상장자의 시장가 매도가 자사주 최소 유지분 1,000주를 남기지 못하면 주문을 거절한다")
+    void rejectListerSellBelowMinimumShares() {
+        bid(10_000, 50);
+        limit(LISTER, OrderSide.SELL, 13_000, 1_990);
+
+        // 3,000 - 1,990(예약) - 1,000(최소 유지분) = 10주까지 가능
+        assertThatThrownBy(() -> market(LISTER, OrderSide.SELL, 11))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.TREASURY_STOCK_MIN_SHARES);
+        assertThat(marketOrderCount()).isZero();
+        assertThat(holding(LISTER).getReservedQuantity()).isEqualTo(1_990);
+    }
+
+    @Test
+    @DisplayName("매도 가능 수량이 없으면 시장가 매도를 거절하고 주문을 남기지 않는다")
+    void rejectWhenNoSellableQuantity() {
         bid(10_000, 1);
 
-        assertThatThrownBy(() -> market(SELLER, OrderSide.SELL, 101))
+        assertThatThrownBy(() -> market(POOR, OrderSide.SELL, 1))
                 .isInstanceOf(NaspiBizException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_QUANTITY);
         assertThat(marketOrderCount()).isZero();
@@ -476,6 +571,15 @@ class MarketOrderServiceTest {
                 leagueId, playerId, stockId, side, price, quantity));
         entityManager.flush();
         entityManager.clear();
+    }
+
+    /** 리그에 계좌와 보유 주식이 있는 플레이어를 추가한다. */
+    private long player(long cash, long quantity) {
+        long playerId = 100 + extraPlayers++;
+        entityManager.persist(Account.open(leagueId, playerId, cash));
+        entityManager.persist(Holding.allocate(leagueId, playerId, stockId, quantity));
+        entityManager.flush();
+        return playerId;
     }
 
     private long marketOrderCount() {

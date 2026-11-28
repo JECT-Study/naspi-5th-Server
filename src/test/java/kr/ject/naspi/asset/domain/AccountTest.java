@@ -283,4 +283,40 @@ class AccountTest {
                 .isInstanceOf(NaspiRuntimeException.class);
         assertThat(account.getDeposit()).isZero();
     }
+
+    @Test
+    @DisplayName("시장가 매수는 계산된 금액을 예약하고, 체결 금액만큼 정산한 뒤 나머지 예약금을 전액 해제한다")
+    void marketBuyReserveSettleRelease() {
+        Account account = Account.open(1L, 10L, 1_000_000);
+
+        account.reserveAmountForBuy(103_500);
+        account.settleBuy(10_000, 10_000, 3);
+        account.settleBuy(10_500, 10_500, 2);
+        account.releaseAmountForBuy(103_500 - 51_000);
+
+        assertThat(account.getReservedDeposit()).isZero();
+        assertThat(account.getDeposit()).isEqualTo(1_000_000 - 51_000);
+    }
+
+    @Test
+    @DisplayName("시장가 매수 예약금이 주문 가능 현금보다 많으면 거절한다")
+    void rejectMarketBuyAmountOverOrderable() {
+        Account account = Account.open(1L, 10L, 100_000);
+        account.reserveForBuy(10_000, 5);
+
+        assertThatThrownBy(() -> account.reserveAmountForBuy(50_001))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INSUFFICIENT_DEPOSIT);
+        assertThat(account.reserveAmountForBuy(50_000)).isEqualTo(50_000);
+    }
+
+    @Test
+    @DisplayName("예약금보다 많이 해제하면 데이터 오류로 거절한다")
+    void rejectReleaseOverReserved() {
+        Account account = Account.open(1L, 10L, 100_000);
+        account.reserveAmountForBuy(10_000);
+
+        assertThatThrownBy(() -> account.releaseAmountForBuy(10_001))
+                .isInstanceOf(NaspiRuntimeException.class);
+    }
 }
