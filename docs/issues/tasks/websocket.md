@@ -97,10 +97,10 @@
   - `AlertTopicAuthorizer`가 `LeagueQueryService.findAccessiblePlayerId`로 본인 플레이어인지 확인하게 바꾼다 (지금은 `playerId`를 회원 ID와 비교)
   - `DISCLOSURE`·`NEWS`·`LEAGUE` 알림은 정책 확정 후 별도 작업으로 한다
 - 완료 조건 (확인 방법)
-  - [ ] 체결 커밋 후 대기 주문 주인에게만 대기 주문 1건당 `TRADE_EXECUTED` 알림이 1회 발행되고, 신규 주문자에게는 발행되지 않는다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.alert.*"`
-  - [ ] 거래일 전환 커밋 후 주문이 만료된 구독자에게 `ORDER_EXPIRED`, 나머지 구독자에게 `TRADING_DAY_CHANGED` 알림이 1회 발행되고, 리그 종료 처리 중 보정에서는 발행되지 않는다 — 같은 테스트
-  - [ ] 경로의 `playerId`가 로그인 회원의 해당 리그 플레이어가 아니면 구독할 수 없다 — 같은 테스트
-  - [ ] 주기 발행(`PeriodicTopic`)이 아니고, `AlertTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO\|PeriodicTopic" src/main/java/kr/ject/naspi/websocket/application/topic/alert`
+  - [x] 체결 커밋 후 대기 주문 주인에게만 대기 주문 1건당 `TRADE_EXECUTED` 알림이 1회 발행되고, 신규 주문자에게는 발행되지 않는다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.alert.*"`
+  - [x] 거래일 전환 커밋 후 주문이 만료된 구독자에게 `ORDER_EXPIRED`, 나머지 구독자에게 `TRADING_DAY_CHANGED` 알림이 1회 발행되고, 리그 종료 처리 중 보정에서는 발행되지 않는다 — 같은 테스트, `./gradlew test --tests "kr.ject.naspi.league.application.TradingDayChangeUseCaseTest"`
+  - [x] 경로의 `playerId`가 로그인 회원의 해당 리그 플레이어가 아니면 구독할 수 없다 — 같은 테스트
+  - [x] 주기 발행(`PeriodicTopic`)이 아니고, `AlertTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO\|PeriodicTopic" src/main/java/kr/ject/naspi/websocket/application/topic/alert`
 - 결정 필요
   - 공시·뉴스 게시, 리그 시작·종료 알림의 대상·문구 (정책서에 먼저 정한다)
 - 결정

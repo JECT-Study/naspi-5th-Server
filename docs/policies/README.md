@@ -44,12 +44,13 @@ Spring 이벤트는 `websocket` 발행과 모듈 내부 비동기 처리에만 �
 
 | 이벤트 | 발행 | 구독 |
 |---|---|---|
-| 체결 (`TradeExecuted`) | order | websocket: 매수자·매도자 자산, 그 종목 호가, 리그 종목 시세 발행 (커밋 이후, [설계](../design/asset-realtime.md)) |
+| 체결 (`TradeExecuted`) | order | websocket: 매수자·매도자 자산, 그 종목 호가, 리그 종목 시세 발행 (커밋 이후, [설계](../design/asset-realtime.md)), 대기 주문 주인에게 체결 알림 |
 | 지정가 주문 접수 (`OrderPlaced`) | order | websocket: 주문자 자산, 그 종목 호가 발행 (커밋 이후) |
 | 주문 취소·만료 (`OrderCanceled`) | order | websocket: 주문자 자산, 그 종목 호가 발행 (커밋 이후. 리그 종료 일괄 취소는 호가 발행 안 함) |
 | 현재가 변경 (`CurrentPricesChanged`) | market | websocket: 그 리그 구독자 전원의 자산, 구독 중인 종목 호가 다시 발행 |
 | 공시 게시 (`DisclosurePublished`) | contents | contents: AI 뉴스 비동기 생성 |
-| 리그 종료 (`LeagueEnded`) | league | websocket: 리그 종료 알림 (WS-04에서 구독) |
+| 거래일 전환 (`TradingDayChanged`) | league | websocket: 그 리그 구독자에게 거래일 갱신 알림 (주문 만료자는 주문 취소 알림, 커밋 이후. 리그 종료 처리 중 보정에서는 발행 안 함) |
+| 리그 종료 (`LeagueEnded`) | league | websocket: 리그 종료 알림 (정책 확정 후 구독) |
 
 ## 작성 규칙
 
