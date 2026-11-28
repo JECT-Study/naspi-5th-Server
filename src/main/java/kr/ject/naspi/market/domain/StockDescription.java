@@ -2,6 +2,7 @@ package kr.ject.naspi.market.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+import kr.ject.naspi.common.text.TextLength;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
@@ -23,8 +24,9 @@ public class StockDescription {
     /** 소개 최대 글자 수. */
     public static final int MAX_LENGTH = 50;
 
-    // 이모지 등 4바이트 문자를 허용하므로 글자 수의 4배로 잡는다
-    @Column(name = "description", nullable = false, length = MAX_LENGTH * 4)
+    // 한 글자가 코드포인트 여러 개일 수 있으므로(조합 이모지 등) 한 글자 최대치로 잡는다
+    @Column(name = "description", nullable = false,
+            length = MAX_LENGTH * TextLength.MAX_CODE_POINTS_PER_CHARACTER)
     private String value;
 
     private StockDescription(String value) {
@@ -41,7 +43,7 @@ public class StockDescription {
     public static StockDescription of(String input) {
         if (input == null
                 || input.isBlank()
-                || input.codePointCount(0, input.length()) > MAX_LENGTH) {
+                || !TextLength.isWithin(input, MAX_LENGTH)) {
             throw new NaspiBizException(ErrorCode.INVALID_STOCK_DESCRIPTION);
         }
         return new StockDescription(input);

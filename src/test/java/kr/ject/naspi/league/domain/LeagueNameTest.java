@@ -44,6 +44,17 @@ class LeagueNameTest {
         assertThat(LeagueName.of(twelveEmoji).getValue()).isEqualTo(twelveEmoji);
     }
 
+    @Test
+    @DisplayName("조합 이모지도 한 글자로 센다 (👨‍👩‍👧 12개 허용, 13개 거부)")
+    void compositeEmojiCountsAsOneCharacter() {
+        String family = "👨‍👩‍👧";
+
+        assertThat(LeagueName.of(family.repeat(12)).getValue()).isEqualTo(family.repeat(12));
+        assertThatThrownBy(() -> LeagueName.of(family.repeat(13)))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_LEAGUE_NAME);
+    }
+
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"   "})
