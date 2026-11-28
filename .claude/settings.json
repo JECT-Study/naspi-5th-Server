@@ -9,6 +9,12 @@
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-commit-check.sh",
             "timeout": 300,
             "statusMessage": "커밋 전 이슈 문서·checkstyle 검사 중..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-push-check.sh",
+            "timeout": 300,
+            "statusMessage": "push 전 웹소켓·REST 스펙 일치 검사 중..."
           }
         ]
       }
