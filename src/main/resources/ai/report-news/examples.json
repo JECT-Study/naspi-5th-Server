@@ -1,0 +1,44 @@
+[
+  {
+    "input": {
+      "stockName": "김철수",
+      "reporterName": "이영희",
+      "body": "철수가 오늘 점심에 구내식당 안 가고 새로 생긴 샐러드 가게 갔음",
+      "imageUrls": []
+    },
+    "output": {
+      "publishable": true,
+      "title": "김철수, 점심 장소 전환…구내식당 이탈",
+      "body": "김철수가 점심 장소를 구내식당에서 신규 샐러드 전문점으로 옮겼다. 식비 구조 변화와 건강 관리 효과에 시장의 관심이 쏠린다. 제보자 이영희",
+      "sentiment": "POSITIVE"
+    }
+  },
+  {
+    "input": {
+      "stockName": "박민수",
+      "reporterName": "최지우",
+      "body": "민수 오늘 약속 시간에 30분 늦게 나옴. 버스 놓쳤다고 함",
+      "imageUrls": []
+    },
+    "output": {
+      "publishable": true,
+      "title": "박민수, 약속 30분 지연…신뢰도 흔들",
+      "body": "박민수가 버스를 놓쳐 약속 시간에 30분 늦게 도착했다. 일정 관리 역량에 대한 우려가 커지며 향후 신뢰 회복 여부에 이목이 집중된다. 제보자 최지우",
+      "sentiment": "NEGATIVE"
+    }
+  },
+  {
+    "input": {
+      "stockName": "김철수",
+      "reporterName": "이영희",
+      "body": "ㅋㅋㅋㅋㅋㅋㅋ",
+      "imageUrls": []
+    },
+    "output": {
+      "publishable": false,
+      "title": "",
+      "body": "",
+      "sentiment": "POSITIVE"
+    }
+  }
+]
