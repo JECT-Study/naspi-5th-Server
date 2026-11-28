@@ -21,6 +21,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import kr.ject.naspi.common.security.LoginMember;
+import kr.ject.naspi.contents.application.NewsGenerationCompleted;
+import kr.ject.naspi.contents.application.NewsGenerationOutcome;
+import kr.ject.naspi.contents.application.NewsGenerationType;
 import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.league.application.TradingDayChanged;
 import kr.ject.naspi.market.application.LeagueStock;
@@ -36,6 +39,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 class AlertTopicTest {
 
@@ -62,7 +67,7 @@ class AlertTopicTest {
         topic.onTradeExecuted(trade(false));
 
         verify(publisher).publish(message(SELLER, new AlertResponse(AlertType.TRADE_EXECUTED,
-                "진영전자 매도 주문이 체결됐어요.", "/leagues/1/stocks/100")));
+                "진영전자 매도 주문이 체결됐어요.", "/leagues/1/stocks/100", null, null)));
         verify(publisher, times(1)).publish(any());
     }
 
@@ -75,7 +80,7 @@ class AlertTopicTest {
         topic.onTradeExecuted(trade(true));
 
         verify(publisher).publish(message(BUYER, new AlertResponse(AlertType.TRADE_EXECUTED,
-                "진영전자 매수 주문이 체결됐어요.", "/leagues/1/stocks/100")));
+                "진영전자 매수 주문이 체결됐어요.", "/leagues/1/stocks/100", null, null)));
         verify(publisher, never()).publish(argThat(
                 m -> m.destination().equals(AlertTopic.destination(LEAGUE, SELLER))));
     }
@@ -98,11 +103,11 @@ class AlertTopicTest {
         topic.onTradingDayChanged(new TradingDayChanged(LEAGUE, 2, Set.of(BUYER)));
 
         verify(publisher).publish(message(BUYER, new AlertResponse(AlertType.ORDER_EXPIRED,
-                "새 거래일이 시작돼 대기 중인 주문이 취소됐어요.", null)));
+                "새 거래일이 시작돼 대기 중인 주문이 취소됐어요.", null, null, null)));
         verify(publisher).publish(message(SELLER, new AlertResponse(
-                AlertType.TRADING_DAY_CHANGED, "새 거래일이 시작됐어요.", null)));
+                AlertType.TRADING_DAY_CHANGED, "새 거래일이 시작됐어요.", null, null, null)));
         verify(publisher).publish(message(9L, new AlertResponse(
-                AlertType.TRADING_DAY_CHANGED, "새 거래일이 시작됐어요.", null)));
+                AlertType.TRADING_DAY_CHANGED, "새 거래일이 시작됐어요.", null, null, null)));
         verify(publisher, times(3)).publish(any());
     }
 
@@ -115,7 +120,7 @@ class AlertTopicTest {
         topic.onTradingDayChanged(new TradingDayChanged(LEAGUE, 2, Set.of()));
 
         verify(publisher).publish(message(BUYER, new AlertResponse(
-                AlertType.TRADING_DAY_CHANGED, "새 거래일이 시작됐어요.", null)));
+                AlertType.TRADING_DAY_CHANGED, "새 거래일이 시작됐어요.", null, null, null)));
         verify(publisher, times(1)).publish(any());
     }
 
@@ -137,11 +142,40 @@ class AlertTopicTest {
     void eventDrivenAndAsync() throws NoSuchMethodException {
         List<Method> listeners = List.of(
                 AlertTopic.class.getMethod("onTradeExecuted", TradeExecuted.class),
-                AlertTopic.class.getMethod("onTradingDayChanged", TradingDayChanged.class));
+                AlertTopic.class.getMethod("onTradingDayChanged", TradingDayChanged.class),
+                AlertTopic.class.getMethod("onNewsGenerationCompleted",
+                        NewsGenerationCompleted.class));
 
         assertThat(PeriodicTopic.class.isAssignableFrom(AlertTopic.class)).isFalse();
         assertThat(listeners).allSatisfy(method -> assertThat(
                 method.getAnnotation(Async.class).value()).isEqualTo(AlertTopic.PUBLISH_EXECUTOR));
+        assertThat(listeners).allSatisfy(method -> assertThat(
+                method.getAnnotation(TransactionalEventListener.class).phase())
+                .isEqualTo(TransactionPhase.AFTER_COMMIT));
+    }
+
+    @Test
+    @DisplayName("뉴스 생성 결과는 원문 작성자 본인에게만 알리고, 다른 구독자에게는 보내지 않는다")
+    void newsGenerationToAuthorOnly() {
+        subscribe(LEAGUE, BUYER, SELLER);
+
+        topic.onNewsGenerationCompleted(new NewsGenerationCompleted(LEAGUE, 5L, SELLER,
+                NewsGenerationType.REPORT, NewsGenerationOutcome.PUBLISHED));
+
+        verify(publisher).publish(message(SELLER, new AlertResponse(AlertType.NEWS_PUBLISHED,
+                "제보를 바탕으로 뉴스가 게시되었어요.", null, "REPORT", 5L)));
+        verify(publisher, times(1)).publish(any());
+    }
+
+    @Test
+    @DisplayName("원문 작성자가 구독 중이 아니면 뉴스 생성 알림을 발행하지 않고 보관하지 않는다")
+    void newsGenerationNotPublishedWhenAuthorNotSubscribed() {
+        subscribe(LEAGUE, BUYER);
+
+        topic.onNewsGenerationCompleted(new NewsGenerationCompleted(LEAGUE, 5L, SELLER,
+                NewsGenerationType.DISCLOSURE, NewsGenerationOutcome.FAILED));
+
+        verifyNoInteractions(publisher);
     }
 
     @Test

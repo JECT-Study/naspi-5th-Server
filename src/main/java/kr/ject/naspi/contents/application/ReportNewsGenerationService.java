@@ -15,6 +15,7 @@ import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.market.application.LeagueStock;
 import kr.ject.naspi.market.application.StockQueryService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -43,6 +44,7 @@ public class ReportNewsGenerationService {
     private final StockQueryService stockQueryService;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 제보 뉴스 생성 서비스를 만든다.
@@ -55,6 +57,7 @@ public class ReportNewsGenerationService {
      * @param stockQueryService 종목 이름 조회
      * @param transactionManager 뉴스 저장 트랜잭션
      * @param clock 발행 일시 기준 시계
+     * @param eventPublisher 생성 결과 이벤트 발행
      */
     public ReportNewsGenerationService(NewsRepository newsRepository,
                                        ReportRepository reportRepository,
@@ -63,7 +66,8 @@ public class ReportNewsGenerationService {
                                        LeagueQueryService leagueQueryService,
                                        StockQueryService stockQueryService,
                                        PlatformTransactionManager transactionManager,
-                                       Clock clock) {
+                                       Clock clock, ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
         this.newsRepository = newsRepository;
         this.reportRepository = reportRepository;
         this.imageService = imageService;
@@ -148,16 +152,26 @@ public class ReportNewsGenerationService {
     private void complete(long reportId, ReportNewsGenerationResult result) {
         News news = newsRepository.findByReportId(reportId).orElseThrow();
         news.complete(result, LocalDateTime.now(clock));
-        switch (result) {
-            case ReportNewsGenerationResult.Generated generated ->
-                    log.info("제보 AI 뉴스 발행: reportId={}, newsId={}, sentiment={}", reportId,
-                            news.getId(), generated.sentiment());
-            case ReportNewsGenerationResult.Skipped skipped ->
-                    log.info("제보 AI 뉴스 미생성: reportId={}, reason={}", reportId,
-                            skipped.reason());
-            case ReportNewsGenerationResult.Failed failed ->
-                    log.warn("제보 AI 뉴스 생성 실패: reportId={}, reason={}", reportId,
-                            failed.reason());
-        }
+        NewsGenerationOutcome outcome = switch (result) {
+            case ReportNewsGenerationResult.Generated generated -> {
+                log.info("제보 AI 뉴스 발행: reportId={}, newsId={}, sentiment={}", reportId,
+                        news.getId(), generated.sentiment());
+                yield NewsGenerationOutcome.PUBLISHED;
+            }
+            case ReportNewsGenerationResult.Skipped skipped -> {
+                log.info("제보 AI 뉴스 미생성: reportId={}, reason={}", reportId,
+                        skipped.reason());
+                yield NewsGenerationOutcome.SKIPPED;
+            }
+            case ReportNewsGenerationResult.Failed failed -> {
+                log.warn("제보 AI 뉴스 생성 실패: reportId={}, reason={}", reportId,
+                        failed.reason());
+                yield NewsGenerationOutcome.FAILED;
+            }
+        };
+        // 커밋 후 제보자에게 결과를 알린다
+        Report report = reportRepository.findById(reportId).orElseThrow();
+        eventPublisher.publishEvent(new NewsGenerationCompleted(report.getLeagueId(),
+                news.getId(), report.getReporterPlayerId(), NewsGenerationType.REPORT, outcome));
     }
 }

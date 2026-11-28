@@ -36,7 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class AlertTopicTransactionTest {
 
     private static final AlertResponse TRADE_ALERT = new AlertResponse(
-            AlertType.TRADE_EXECUTED, "진영전자 매도 주문이 체결됐어요.", "/leagues/1/stocks/100");
+            AlertType.TRADE_EXECUTED, "진영전자 매도 주문이 체결됐어요.", "/leagues/1/stocks/100", null, null);
 
     @Configuration
     @EnableTransactionManagement

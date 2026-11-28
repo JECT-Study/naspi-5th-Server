@@ -39,9 +39,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 @ActiveProfiles("test")
 @DataJpaTest
+@RecordApplicationEvents
 @Import({ReportNewsGenerationService.class, ImageService.class,
         ReportNewsGenerationServiceTest.Config.class})
 class ReportNewsGenerationServiceTest {
@@ -58,6 +61,9 @@ class ReportNewsGenerationServiceTest {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @Autowired
+    private ApplicationEvents events;
 
     @MockitoBean
     private ReportNewsGenerator reportNewsGenerator;
@@ -135,6 +141,48 @@ class ReportNewsGenerationServiceTest {
         assertThat(news.getStatus()).isEqualTo(NewsStatus.SKIPPED);
         assertThat(news.getStatus()).isNotEqualTo(NewsStatus.FAILED);
         assertThat(news.getTitle()).isNull();
+    }
+
+    @Test
+    @DisplayName("결과가 반영되면 제보자를 대상으로 결과(게시·미생성·실패)별 뉴스 생성 이벤트를 발행한다")
+    void publishesCompletedEvent() {
+        Report published = report("본문1");
+        Report skipped = report("본문2");
+        given(reportNewsGenerator.generate(any()))
+                .willReturn(new ReportNewsGenerationResult.Generated("제목", "본문",
+                        NewsSentiment.POSITIVE))
+                .willReturn(new ReportNewsGenerationResult.Skipped())
+                .willReturn(new ReportNewsGenerationResult.Failed("ai down"));
+        Report failed = report("본문3");
+
+        service.generate(published.getId());
+        service.generate(skipped.getId());
+        service.generate(failed.getId());
+
+        assertThat(events.stream(NewsGenerationCompleted.class).toList()).containsExactly(
+                new NewsGenerationCompleted(LEAGUE_ID, news(published.getId()).getId(),
+                        REPORTER_PLAYER_ID, NewsGenerationType.REPORT,
+                        NewsGenerationOutcome.PUBLISHED),
+                new NewsGenerationCompleted(LEAGUE_ID, news(skipped.getId()).getId(),
+                        REPORTER_PLAYER_ID, NewsGenerationType.REPORT,
+                        NewsGenerationOutcome.SKIPPED),
+                new NewsGenerationCompleted(LEAGUE_ID, news(failed.getId()).getId(),
+                        REPORTER_PLAYER_ID, NewsGenerationType.REPORT,
+                        NewsGenerationOutcome.FAILED));
+    }
+
+    @Test
+    @DisplayName("제보자 탈퇴로 생성 실패 처리해도 제보자에게 실패 이벤트를 발행한다")
+    void failedEventWhenReporterWithdrawn() {
+        Report report = report("본문");
+        given(leagueQueryService.isPlayerWithdrawn(LEAGUE_ID, REPORTER_PLAYER_ID))
+                .willReturn(true);
+
+        service.generate(report.getId());
+
+        assertThat(events.stream(NewsGenerationCompleted.class).map(
+                NewsGenerationCompleted::outcome).toList())
+                .containsExactly(NewsGenerationOutcome.FAILED);
     }
 
     @Test

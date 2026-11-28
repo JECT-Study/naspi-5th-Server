@@ -38,11 +38,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 @ActiveProfiles("test")
 @DataJpaTest
+@RecordApplicationEvents
 @Import({NewsGenerationService.class, ImageService.class, NewsGenerationServiceTest.Config.class})
 class NewsGenerationServiceTest {
 
@@ -59,6 +62,9 @@ class NewsGenerationServiceTest {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @Autowired
+    private ApplicationEvents events;
 
     @MockitoBean
     private NewsGenerator newsGenerator;
@@ -87,6 +93,46 @@ class NewsGenerationServiceTest {
         assertThat(news.getCreatedAt()).isEqualTo(NOW);
         assertThat(entityManager.find(Disclosure.class, disclosure.getId()).getAiSummary())
                 .isEqualTo("헬스장 3개월 등록");
+    }
+
+    @Test
+    @DisplayName("결과가 반영되면 공시 작성자를 대상으로 결과(게시·미생성·실패)별 뉴스 생성 이벤트를 발행한다")
+    void publishesCompletedEvent() {
+        Disclosure published = disclosure(STOCK_ID, "공시1", "본문1", 2);
+        Disclosure skipped = disclosure(STOCK_ID, "공시2", "본문2", 2);
+        given(newsGenerator.generate(any()))
+                .willReturn(generated("제목", "본문", NewsSentiment.POSITIVE, "요약"))
+                .willReturn(new NewsGenerationResult.Skipped("사실 없음"))
+                .willReturn(new NewsGenerationResult.Failed("timeout"));
+        Disclosure failed = disclosure(STOCK_ID, "공시3", "본문3", 2);
+
+        newsGenerationService.generate(published.getId());
+        newsGenerationService.generate(skipped.getId());
+        newsGenerationService.generate(failed.getId());
+
+        assertThat(events.stream(NewsGenerationCompleted.class).toList()).containsExactly(
+                new NewsGenerationCompleted(LEAGUE_ID, news(published.getId()).getId(),
+                        AUTHOR_PLAYER_ID, NewsGenerationType.DISCLOSURE,
+                        NewsGenerationOutcome.PUBLISHED),
+                new NewsGenerationCompleted(LEAGUE_ID, news(skipped.getId()).getId(),
+                        AUTHOR_PLAYER_ID, NewsGenerationType.DISCLOSURE,
+                        NewsGenerationOutcome.SKIPPED),
+                new NewsGenerationCompleted(LEAGUE_ID, news(failed.getId()).getId(),
+                        AUTHOR_PLAYER_ID, NewsGenerationType.DISCLOSURE,
+                        NewsGenerationOutcome.FAILED));
+    }
+
+    @Test
+    @DisplayName("이미 결과가 반영된 뉴스는 다시 요청해도 생성 이벤트를 발행하지 않는다")
+    void noEventWhenAlreadyCompleted() {
+        Disclosure disclosure = disclosure(STOCK_ID, "공시", "본문", 2);
+        given(newsGenerator.generate(any())).willReturn(
+                generated("제목", "본문", NewsSentiment.POSITIVE, "요약"));
+
+        newsGenerationService.generate(disclosure.getId());
+        newsGenerationService.generate(disclosure.getId());
+
+        assertThat(events.stream(NewsGenerationCompleted.class).count()).isEqualTo(1);
     }
 
     @Test
@@ -225,7 +271,7 @@ class NewsGenerationServiceTest {
     }
 
     @Test
-    @DisplayName("수동 재생성 요청도 커밋 후 비동기로 생성하고, 같은 자동 재시도 흐름을 탄다")
+    @DisplayName("수동 재생성 요청도 커밋 후 비동기로 생성하고, 같은 자동 재시도 흐름을 타며, 수동 재생성 결과도 알림 이벤트를 발행한다")
     void regenerate() throws NoSuchMethodException {
         Method method = DisclosurePublishedListener.class.getMethod(
                 "onNewsRegenerationRequested", NewsRegenerationRequested.class);
@@ -248,6 +294,12 @@ class NewsGenerationServiceTest {
 
         assertThat(news(disclosure.getId()).getStatus()).isEqualTo(NewsStatus.PUBLISHED);
         then(newsGenerator).should(times(2)).generate(any());
+        List<NewsGenerationCompleted> completed =
+                events.stream(NewsGenerationCompleted.class).toList();
+        assertThat(completed).hasSize(2);
+        assertThat(completed.get(1)).isEqualTo(new NewsGenerationCompleted(LEAGUE_ID,
+                news(disclosure.getId()).getId(), AUTHOR_PLAYER_ID, NewsGenerationType.DISCLOSURE,
+                NewsGenerationOutcome.PUBLISHED));
     }
 
     /** 공시 작성과 같이 공시와 생성 중(PENDING) 뉴스를 함께 저장한다. */
