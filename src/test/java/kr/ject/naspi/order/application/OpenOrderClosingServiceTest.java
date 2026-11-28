@@ -106,7 +106,7 @@ class OpenOrderClosingServiceTest {
         Order buy = reservedBuy(BUYER, 1, 10);
         Order sell = reservedSell(SELLER, 1, 10);
 
-        int count = service.expireTradingDay(leagueId, 1, EXPIRED_AT);
+        int count = service.expireTradingDay(leagueId, 1, EXPIRED_AT).count();
 
         assertThat(count).isEqualTo(2);
         for (Order order : new Order[] {buy, sell}) {
@@ -114,6 +114,28 @@ class OpenOrderClosingServiceTest {
             assertThat(order.getCancelReason()).isEqualTo(CancelReason.TRADING_DAY_EXPIRED);
             assertThat(order.getCanceledAt()).isEqualTo(EXPIRED_AT);
         }
+    }
+
+    @Test
+    @DisplayName("만료 결과에 주문이 만료된 플레이어를 중복 없이 담는다")
+    void returnsExpiredPlayers() {
+        reservedBuy(BUYER, 1, 10);
+        reservedBuy(BUYER, 1, 5);
+        reservedSell(SELLER, 1, 10);
+
+        ExpiredOrders expired = service.expireTradingDay(leagueId, 1, EXPIRED_AT);
+
+        assertThat(expired.count()).isEqualTo(3);
+        assertThat(expired.playerIds()).containsExactlyInAnyOrder(BUYER, SELLER);
+    }
+
+    @Test
+    @DisplayName("만료할 주문이 없으면 만료된 플레이어도 없다")
+    void noExpiredPlayers() {
+        ExpiredOrders expired = service.expireTradingDay(leagueId, 1, EXPIRED_AT);
+
+        assertThat(expired.count()).isZero();
+        assertThat(expired.playerIds()).isEmpty();
     }
 
     @Test
@@ -172,7 +194,7 @@ class OpenOrderClosingServiceTest {
         Order other = entityManager.persistAndFlush(Order.limit(otherLeagueId, BUYER, stockId,
                 OrderSide.BUY, 9_000, 10, 1, ORDERED_AT));
 
-        int count = service.expireTradingDay(leagueId, 1, EXPIRED_AT);
+        int count = service.expireTradingDay(leagueId, 1, EXPIRED_AT).count();
 
         assertThat(count).isEqualTo(1);
         assertThat(target.getStatus()).isEqualTo(OrderStatus.EXPIRED);
@@ -188,7 +210,7 @@ class OpenOrderClosingServiceTest {
         Order day1 = reservedBuy(BUYER, 1, 10);
         Order day2 = reservedBuy(BUYER, 2, 10);
 
-        int count = service.expireTradingDay(leagueId, 1, EXPIRED_AT);
+        int count = service.expireTradingDay(leagueId, 1, EXPIRED_AT).count();
 
         assertThat(count).isEqualTo(1);
         assertThat(day1.getStatus()).isEqualTo(OrderStatus.EXPIRED);
