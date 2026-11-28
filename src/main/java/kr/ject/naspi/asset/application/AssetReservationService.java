@@ -21,7 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>예약 기준 가격은 order가 정한다 (docs/policies/v1/domain/asset.md "매수 주문의 현금 예약").
  * <ul>
  *   <li>지정가: 지정 가격</li>
- *   <li>시장가: 보호 조건 내 최고 체결 가능 가격</li>
+ *   <li>시장가: 예약 기준 가격 대신 금액으로 예약한다 ({@link #reserveCashAmountForBuy}). 보호 범위 안 상대
+ *       호가를 최우선부터 주문 수량까지 합산하고, 부족한 수량은 보호최고가로 계산한 금액이다</li>
  * </ul>
  * 주문별 예약 기준 가격은 체결 시 차액 해제(AST-05)와 취소·만료 시 해제(AST-06)에 필요하므로 order가 주문에
  * 남겨 둔다. asset은 참여자별 예약 합계만 관리한다.
@@ -86,6 +87,43 @@ public class AssetReservationService {
         holdingRepository.findWithLockByLeagueIdAndPlayerIdAndStockId(leagueId, playerId, stockId)
                 .orElseThrow(() -> new NaspiBizException(ErrorCode.INSUFFICIENT_QUANTITY))
                 .reserveForSell(quantity, treasuryStock);
+    }
+
+    /**
+     * 시장가 매수 주문에 필요한 현금을 금액으로 예약한다. 주문 가능 현금보다 많으면 거절한다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 주문한 플레이어 ID
+     * @param amount 예약할 금액. order가 상대 호가 합산과 보호최고가로 계산한다. 양수
+     * @return 예약한 금액
+     * @throws IllegalArgumentException 금액이 0 이하인 경우
+     * @throws NaspiBizException 참여자의 자산이 없는 경우 ({@link ErrorCode#ASSET_NOT_FOUND}),
+     *     주문 가능 현금이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_DEPOSIT}),
+     *     탈퇴한 참여자인 경우 ({@link ErrorCode#WITHDRAWN_PLAYER})
+     */
+    @Transactional
+    public long reserveCashAmountForBuy(long leagueId, long playerId, long amount) {
+        return accountRepository.findWithLockByLeagueIdAndPlayerId(leagueId, playerId)
+                .orElseThrow(() -> new NaspiBizException(ErrorCode.ASSET_NOT_FOUND))
+                .reserveAmountForBuy(amount);
+    }
+
+    /**
+     * 시장가 매수가 체결·취소된 뒤 예약금 중 실제 총체결 금액을 제외한 나머지를 해제한다.
+     *
+     * @param leagueId 리그 ID
+     * @param playerId 주문한 플레이어 ID
+     * @param amount 해제할 금액. 양수
+     * @return 해제한 금액
+     * @throws IllegalArgumentException 금액이 0 이하인 경우
+     * @throws NaspiRuntimeException 계좌가 없거나 해제할 금액이 예약금보다 많은 경우 (데이터 오류)
+     */
+    @Transactional
+    public long releaseCashAmountForBuy(long leagueId, long playerId, long amount) {
+        return accountRepository.findWithLockByLeagueIdAndPlayerId(leagueId, playerId)
+                .orElseThrow(() -> new NaspiRuntimeException(
+                        "예약을 해제할 계좌가 없습니다: leagueId=" + leagueId + ", playerId=" + playerId))
+                .releaseAmountForBuy(amount);
     }
 
     /**

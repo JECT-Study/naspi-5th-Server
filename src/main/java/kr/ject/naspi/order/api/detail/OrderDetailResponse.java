@@ -59,24 +59,35 @@ public record OrderDetailResponse(
      * @param quantity 취소 수량
      * @param canceledAt 취소 일시
      * @param reason 취소 사유 코드
+     * @param reasonMessage 취소 사유 표시 문구
      */
     public record Cancellation(
             @Schema(description = "취소 수량 (주). 거래일 변경으로 만료된 수량 포함", example = "7")
             long quantity,
             @Schema(description = "취소 일시 (KST)") LocalDateTime canceledAt,
             @Schema(description = """
-                    취소 사유 코드. 표시 문구는 클라이언트가 매핑한다.
-                    - `USER_REQUESTED`: 직접 취소
-                    - `MARKET_PARTIALLY_FILLED`: 체결 가능 수량 부족
-                    - `MARKET_NOT_FILLED`: 체결 가능 수량 없음
-                    - `SELF_TRADE_PREVENTED`: 내 주문 간 체결 방지
-                    - `TRADING_DAY_EXPIRED`: 거래일 변경으로 만료
+                    취소 사유 코드. 분기에 쓴다. 표시 문구는 `reasonMessage`.
+                    - `USER_REQUESTED`: 사용자 직접 취소
+                    - `MARKET_PARTIALLY_FILLED`: 시장가 일부 체결 후 잔량 취소
+                    - `MARKET_NOT_FILLED`: 시장가 체결 없이 전량 취소
+                    - `SELF_TRADE_PREVENTED`: 자전거래 방지
+                    - `TRADING_DAY_EXPIRED`: 거래일 변경 만료
                     - `MEMBER_WITHDRAWN`: 회원 탈퇴
                     - `LEAGUE_ENDED`: 리그 종료""",
                     allowableValues = {"USER_REQUESTED", "MARKET_PARTIALLY_FILLED",
                             "MARKET_NOT_FILLED", "SELF_TRADE_PREVENTED", "TRADING_DAY_EXPIRED",
                             "MEMBER_WITHDRAWN", "LEAGUE_ENDED"})
-            String reason) {
+            String reason,
+            @Schema(description = """
+                    취소 사유 표시 문구. 화면에 그대로 표시한다.
+                    - `직접 취소`: USER_REQUESTED
+                    - `체결 가능 수량 부족`: MARKET_PARTIALLY_FILLED
+                    - `체결 가능 수량 없음`: MARKET_NOT_FILLED
+                    - `내 주문 간 체결 방지`: SELF_TRADE_PREVENTED
+                    - `거래일 변경으로 만료`: TRADING_DAY_EXPIRED, LEAGUE_ENDED
+                    - 회원 탈퇴(MEMBER_WITHDRAWN)는 본인이 조회할 수 없어 `null`""",
+                    example = "체결 가능 수량 부족", nullable = true)
+            String reasonMessage) {
     }
 
     /**
@@ -96,7 +107,7 @@ public record OrderDetailResponse(
                         .toList(),
                 cancellation == null ? null
                         : new Cancellation(cancellation.quantity(), cancellation.canceledAt(),
-                                cancellation.reason().name()),
+                                cancellation.reason().name(), cancellation.reason().message()),
                 detail.pendingQuantity());
     }
 }

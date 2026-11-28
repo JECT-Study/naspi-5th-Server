@@ -129,6 +129,49 @@ public class Account {
     }
 
     /**
+     * 시장가 매수 주문에 필요한 현금을 금액으로 예약한다. 금액은 order가 상대 호가 합산과 보호최고가로 계산한다
+     * (docs/policies/v1/domain/asset.md "매수 주문의 현금 예약"). 주문 가능 현금보다 많으면 거절한다.
+     *
+     * @param amount 예약할 금액. 양수
+     * @return 예약한 금액
+     * @throws IllegalArgumentException 금액이 0 이하인 경우
+     * @throws NaspiBizException 탈퇴한 참여자인 경우 ({@link ErrorCode#WITHDRAWN_PLAYER}), 주문 가능
+     *     현금이 부족한 경우 ({@link ErrorCode#INSUFFICIENT_DEPOSIT})
+     */
+    public long reserveAmountForBuy(long amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("예약 금액은 양수여야 합니다: " + amount);
+        }
+        ensureTradable();
+        if (amount > orderableDeposit()) {
+            throw new NaspiBizException(ErrorCode.INSUFFICIENT_DEPOSIT);
+        }
+        reservedDeposit += amount;
+        return amount;
+    }
+
+    /**
+     * 시장가 매수가 체결·취소된 뒤 예약금 중 실제 총체결 금액을 제외한 나머지를 해제한다
+     * (docs/policies/v1/domain/asset.md "체결 시 실제 체결 금액과 수량으로 즉시 정산").
+     *
+     * @param amount 해제할 금액. 양수
+     * @return 해제한 금액
+     * @throws IllegalArgumentException 금액이 0 이하인 경우
+     * @throws NaspiRuntimeException 해제할 금액이 예약금보다 많은 경우 (예약·해제 기록이 어긋난 데이터 오류)
+     */
+    public long releaseAmountForBuy(long amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("해제 금액은 양수여야 합니다: " + amount);
+        }
+        if (amount > reservedDeposit) {
+            throw new NaspiRuntimeException("해제할 금액이 예약금보다 많습니다: playerId=" + playerId
+                    + ", reservedDeposit=" + reservedDeposit + ", amount=" + amount);
+        }
+        reservedDeposit -= amount;
+        return amount;
+    }
+
+    /**
      * 매수 체결을 정산한다. 체결 수량에 묶여 있던 예약 현금 {@code 예약 기준 가격 × 체결 수량}을 풀고, 실제 체결 금액
      * {@code 체결가 × 체결 수량}만큼 현금을 줄인다 (docs/policies/v1/domain/asset.md "주문 가능 자산 및 정산").
      * 체결가가 예약 기준 가격보다 낮으면 그 차액만큼 주문 가능 현금이 늘어난다.

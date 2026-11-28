@@ -82,7 +82,7 @@ class OrderDetailControllerTest {
     }
 
     @Test
-    @DisplayName("시장가 주문은 주문 가격이 null이고 취소 사유를 코드로, 대기 수량은 null로 응답한다")
+    @DisplayName("시장가 주문은 주문 가격이 null이고 취소 사유를 코드와 표시 문구로, 대기 수량은 null로 응답한다")
     void marketOrder() throws Exception {
         given(orderQueryService.getOrderDetail(MEMBER_ID, LEAGUE_ID, ORDER_ID))
                 .willReturn(new OrderDetail(ORDER_ID, 5L, "종목", OrderSide.BUY, OrderType.MARKET,
@@ -97,6 +97,7 @@ class OrderDetailControllerTest {
                 .andExpect(jsonPath("$.data.fills").isEmpty())
                 .andExpect(jsonPath("$.data.cancellation.quantity").value(10))
                 .andExpect(jsonPath("$.data.cancellation.reason").value("MARKET_NOT_FILLED"))
+                .andExpect(jsonPath("$.data.cancellation.reasonMessage").value("체결 가능 수량 없음"))
                 .andExpect(jsonPath("$.data.cancellation.canceledAt").exists())
                 .andExpect(jsonPath("$.data.pendingQuantity").value((Object) null));
     }

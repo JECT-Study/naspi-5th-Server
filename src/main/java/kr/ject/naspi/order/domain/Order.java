@@ -73,7 +73,7 @@ public class Order {
      * 매수 주문의 예약 기준 가격(원). 접수 때 현금을 예약한 가격이며, 매도 주문은 {@code null}이다.
      *
      * <p>asset이 예약 기준 가격 × 수량 단위로 예약·해제·정산하므로 주문마다 가격을 남겨 둔다.
-     * 지정가는 주문 가격, 시장가는 보호최고가이다.
+     * 지정가는 주문 가격이다. 시장가 매수는 금액으로 예약하므로 남기지 않는다.
      */
     @Column(name = "reserved_price")
     private Long reservedPrice;
