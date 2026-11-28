@@ -3,22 +3,33 @@ package kr.ject.naspi.league.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.LongStream;
+import kr.ject.naspi.asset.application.AssetQueryService;
 import kr.ject.naspi.asset.application.AssetReservationService;
 import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
+import kr.ject.naspi.global.exception.NaspiRuntimeException;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
+import kr.ject.naspi.league.domain.LeagueResultPlayer;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
+import kr.ject.naspi.market.application.FinalEvaluationPriceUseCase;
 import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockTradingDayService;
 import kr.ject.naspi.market.domain.Stock;
@@ -27,10 +38,12 @@ import kr.ject.naspi.market.domain.StockDescription;
 import kr.ject.naspi.market.domain.StockName;
 import kr.ject.naspi.member.application.MemberService;
 import kr.ject.naspi.order.application.OrderClosingTestConfig;
+import kr.ject.naspi.order.application.TradeQueryService;
 import kr.ject.naspi.order.domain.CancelReason;
 import kr.ject.naspi.order.domain.Order;
 import kr.ject.naspi.order.domain.OrderSide;
 import kr.ject.naspi.order.domain.OrderStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +52,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -47,7 +61,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 @DataJpaTest
 @RecordApplicationEvents
 @Import({LeagueEndUseCase.class, TradingDayChangeUseCase.class, StockTradingDayService.class,
-        OrderClosingTestConfig.class, LeagueJoinLimit.class, MutableClock.Config.class})
+        OrderClosingTestConfig.class, LeagueJoinLimit.class, MutableClock.Config.class,
+        LeagueResultUseCase.class, FinalEvaluationPriceUseCase.class, TradeQueryService.class,
+        AssetQueryService.class})
 class LeagueEndUseCaseTest {
 
     /** 2026-11-15 10:00 시작: 종료 시각은 11-22 09:00. */
@@ -55,12 +71,18 @@ class LeagueEndUseCaseTest {
     private static final LocalDateTime ENDS_AT = LocalDateTime.of(2026, 11, 22, 9, 0);
 
     private static final long HOST_MEMBER = 1L;
-    private static final long LISTER = 10L;
-    private static final long SELLER = 20L;
-    private static final long BUYER = 30L;
+    /** 결과 대상 참여자(플레이어 행)와 겹치지 않는 플레이어 ID. 계좌만 있고 결과 대상은 아니다. */
+    private static final long LISTER = 10_000L;
+    private static final long SELLER = 20_000L;
+    private static final long BUYER = 30_000L;
+
+    private static final long INITIAL_CASH = 100_000_000L;
 
     @MockitoBean
     private MemberService memberService;
+
+    @MockitoSpyBean
+    private AssetQueryService assetQueryService;
 
     @Autowired
     private LeagueEndUseCase useCase;
@@ -85,6 +107,14 @@ class LeagueEndUseCaseTest {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @BeforeEach
+    void stubNames() {
+        given(memberService.getNames(any())).willAnswer(invocation -> {
+            Collection<Long> ids = invocation.getArgument(0);
+            return ids.stream().collect(Collectors.toMap(Function.identity(), id -> "회원" + id));
+        });
+    }
 
     @Test
     @DisplayName("종료 시각에 리그가 종료되고 7일차 종가가 확정된다")
@@ -126,6 +156,49 @@ class LeagueEndUseCaseTest {
 
         assertThat(tradingDay(league, 7).getClosedAt()).isEqualTo(ENDS_AT);
         assertThat(events.stream(LeagueEnded.class)).hasSize(1);
+        assertThat(resultCount(league)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("리그가 종료되면 미체결 주문 취소 뒤 최종 결과가 한 번 저장된다")
+    void endCreatesResult() {
+        League league = startedLeague("AAAAAAA");
+        long stockId = stockWithFirstDay(league);
+        tradingDayChangeUseCase.change(league.getId(), ENDS_AT.minusDays(1));
+        List<Player> players = players(league);
+        Order buy = reservedOrder(league, stockId, players.get(0).getId(), OrderSide.BUY, 7);
+        assertThat(account(league, players.get(0).getId()).getReservedDeposit()).isPositive();
+
+        useCase.end(league.getId(), ENDS_AT.plusMinutes(1));
+
+        assertThat(buy.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(resultCount(league)).isEqualTo(1);
+        List<LeagueResultPlayer> results = entityManager.getEntityManager().createQuery(
+                        "select p from LeagueResultPlayer p where p.leagueId = :l order by p.id",
+                        LeagueResultPlayer.class)
+                .setParameter("l", league.getId()).getResultList();
+        assertThat(results).extracting(LeagueResultPlayer::getPlayerId)
+                .containsExactlyInAnyOrderElementsOf(players.stream().map(Player::getId).toList());
+        // 예약이 해제된 전체 현금이 최종 현금이다
+        assertThat(results).allSatisfy(result -> {
+            assertThat(result.getFinalCash()).isEqualTo(INITIAL_CASH);
+            assertThat(result.getFinalRank()).isEqualTo(1);
+        });
+    }
+
+    @Test
+    @DisplayName("결과 산정 중 오류가 나면 리그는 종료되지 않고 결과도 저장되지 않는다")
+    void rollbackOnResultFailure() {
+        League league = startedLeague("AAAAAAA");
+        willThrow(new NaspiRuntimeException("집계 실패")).given(assetQueryService)
+                .aggregateTotalAssets(anyLong(), any());
+
+        assertThatThrownBy(() -> useCase.end(league.getId(), ENDS_AT))
+                .isInstanceOf(NaspiRuntimeException.class);
+
+        assertThat(league.getStatus()).isEqualTo(LeagueStatus.STARTED);
+        assertThat(events.stream(LeagueEnded.class)).isEmpty();
+        assertThat(resultCount(league)).isZero();
     }
 
     @Test
@@ -250,6 +323,18 @@ class LeagueEndUseCaseTest {
         return entityManager.persistAndFlush(order);
     }
 
+    private long resultCount(League league) {
+        return entityManager.getEntityManager().createQuery(
+                        "select count(r) from LeagueResult r where r.leagueId = :l", Long.class)
+                .setParameter("l", league.getId()).getSingleResult();
+    }
+
+    private List<Player> players(League league) {
+        return entityManager.getEntityManager().createQuery(
+                        "select p from Player p where p.leagueId = :l order by p.id", Player.class)
+                .setParameter("l", league.getId()).getResultList();
+    }
+
     private Account account(League league, long playerId) {
         return entityManager.getEntityManager().createQuery(
                         "select a from Account a where a.leagueId = :l and a.playerId = :p",
@@ -294,7 +379,7 @@ class LeagueEndUseCaseTest {
                 .toList();
     }
 
-    /** 참여자 3명(방장 회원 포함)이 저장된 진행 중인 리그. */
+    /** 참여자 3명(방장 회원 포함)이 저장되고 초기 현금 1억 원 계좌가 있는 진행 중인 리그. */
     private League startedLeague(String code) {
         League league = entityManager.persistAndFlush(League.create(
                 LeagueName.of("리그"), InviteCode.of(code), STARTED_AT.minusDays(1)));
@@ -306,6 +391,8 @@ class LeagueEndUseCaseTest {
                     return entityManager.persist(player);
                 })
                 .toList();
+        players.forEach(player -> entityManager.persist(
+                Account.open(league.getId(), player.getId(), INITIAL_CASH)));
         league.start(players, STARTED_AT);
         tradingDayRepository.saveAll(TradingDay.of(league.getId(), league.tradingSchedule()));
         return entityManager.persistAndFlush(league);
