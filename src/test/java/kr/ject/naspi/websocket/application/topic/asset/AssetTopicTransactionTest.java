@@ -138,6 +138,6 @@ class AssetTopicTransactionTest {
     }
 
     private static TradeExecuted trade() {
-        return new TradeExecuted(1L, 100L, 11L, 12L, 7L, 8L, 10_500, 3, NOW);
+        return new TradeExecuted(1L, 100L, 11L, 12L, 7L, 8L, 10_500, 3, NOW, false);
     }
 }

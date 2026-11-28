@@ -127,7 +127,8 @@ class StockTopicTest {
         subscribe(1L, "/topic/leagues/1/stocks");
         given(query.getStocks(1L)).willReturn(response());
 
-        topic.onTradeExecuted(new TradeExecuted(1L, 100L, 11L, 12L, 7L, 8L, 10_500, 3, AS_OF));
+        topic.onTradeExecuted(
+                new TradeExecuted(1L, 100L, 11L, 12L, 7L, 8L, 10_500, 3, AS_OF, false));
 
         verify(publisher).publish(message(1L));
     }

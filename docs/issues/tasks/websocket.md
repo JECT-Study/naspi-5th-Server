@@ -87,24 +87,26 @@
 
 ### WS-04 알림 토픽 실데이터 전환
 - Jira: ND-108
-- 목적: 내 주문 체결, 공시·뉴스 게시, 리그 진행을 해당 플레이어에게 알린다
-- 작업 내용: `/topic/leagues/{leagueId}/players/{playerId}/alerts` (`AlertTopic`)의 주기 더미 발행을 도메인 이벤트 구독(커밋 이후)으로 바꾼다. 대응 REST 없음 (알림 목록 API가 생기면 같은 구조로 맞춘다). 선행: ORD-03, CNT(공시 게시·AI 뉴스), LEA-09·LEA-11·LEA-12
-  - `TRADE_EXECUTED`: `TradeExecuted` → 매수자·매도자
-  - `DISCLOSURE`: `DisclosurePublished` → 리그 구독자
-  - `NEWS`: 뉴스 생성 완료 이벤트 → 리그 구독자
-  - `LEAGUE`: 리그 시작·거래일 전환·종료 이벤트 → 리그 구독자
-  - `message`, `url`은 이벤트 값으로 만들고, 종목명 등 표시 정보는 각 모듈 application 조회로 얻는다
+- 목적: 사용자가 요청하지 않았는데 바뀐 주문 상태(대기 주문 체결, 거래일 갱신에 따른 만료)를 해당 플레이어에게 알린다
+- 정책: [order.md#주문-알림](../../policies/v1/domain/order.md#주문-알림)
+- 작업 내용: `/topic/leagues/{leagueId}/players/{playerId}/alerts` (`AlertTopic`)의 주기 더미 발행을 도메인 이벤트 구독(커밋 이후)으로 바꾼다. 구조는 내 자산 토픽(`AssetTopic`)과 같게 하고 payload(`AlertResponse`)만 다르다. 대응 REST 없음. 선행: ORD-03, ORD-09
+  - `TRADE_EXECUTED`: `TradeExecuted` → 대기 주문 주인 (체결된 대기 주문 1건당 1회, 신규 주문자 제외). 문구 `{종목 이름} {매수|매도} 주문이 체결됐어요.`, `url` `/leagues/{leagueId}/stocks/{stockId}`
+  - `ORDER_EXPIRED`: 거래일 전환 이벤트 → 주문이 만료된 구독자. 문구 `새 거래일이 시작돼 대기 중인 주문이 취소됐어요.`, `url` 없음
+  - `TRADING_DAY_CHANGED`: 거래일 전환 이벤트 → 만료된 주문이 없는 구독자. 문구 `새 거래일이 시작됐어요.`, `url` 없음
+  - 종목명 등 표시 정보는 각 모듈 application 조회로 얻는다
   - `AlertTopicAuthorizer`가 `LeagueQueryService.findAccessiblePlayerId`로 본인 플레이어인지 확인하게 바꾼다 (지금은 `playerId`를 회원 ID와 비교)
+  - `DISCLOSURE`·`NEWS`·`LEAGUE` 알림은 정책 확정 후 별도 작업으로 한다
 - 완료 조건 (확인 방법)
-  - [ ] 체결 커밋 후 매수자·매도자에게 `TRADE_EXECUTED` 알림이 발행된다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.alert.*"`
-  - [ ] 공시·뉴스 게시 후 해당 리그 구독자에게 알림이 발행된다 — 같은 테스트
-  - [ ] 경로의 `playerId`가 로그인 회원의 해당 리그 플레이어가 아니면 구독할 수 없다 — 같은 테스트
-  - [ ] 주기 발행(`PeriodicTopic`)이 아니고, `AlertTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO\|PeriodicTopic" src/main/java/kr/ject/naspi/websocket/application/topic/alert`
+  - [x] 체결 커밋 후 대기 주문 주인에게만 대기 주문 1건당 `TRADE_EXECUTED` 알림이 1회 발행되고, 신규 주문자에게는 발행되지 않는다 — `./gradlew test --tests "kr.ject.naspi.websocket.application.topic.alert.*"`
+  - [x] 거래일 전환 커밋 후 주문이 만료된 구독자에게 `ORDER_EXPIRED`, 나머지 구독자에게 `TRADING_DAY_CHANGED` 알림이 1회 발행되고, 리그 종료 처리 중 보정에서는 발행되지 않는다 — 같은 테스트, `./gradlew test --tests "kr.ject.naspi.league.application.TradingDayChangeUseCaseTest"`
+  - [x] 경로의 `playerId`가 로그인 회원의 해당 리그 플레이어가 아니면 구독할 수 없다 — 같은 테스트
+  - [x] 주기 발행(`PeriodicTopic`)이 아니고, `AlertTopic.DUMMY`와 `TODO` 주석이 없다 — `grep -rn "DUMMY\|TODO\|PeriodicTopic" src/main/java/kr/ject/naspi/websocket/application/topic/alert`
 - 결정 필요
-  - v1 정책서에 알림 정책이 없다. 알림 대상 이벤트, 문구, 이동 경로(`url`)를 정책서에 먼저 정한다 (정책 없으면 구현하지 않는다)
-  - 접속하지 않은 동안의 알림 보관·목록 조회 여부 (보관하면 REST 알림 목록 API를 함께 만들고 구조를 맞춘다)
-  - 뉴스 생성 완료·리그 시작·거래일 전환 이벤트 이름과 발행 위치
-- 결정: 리그 종료 이벤트는 `league/application/LeagueEnded(leagueId, endedAt)`이며 `LeagueEndUseCase`가 종료 트랜잭션 안에서 발행한다(ND-85, 발행만). 커밋 이후 리스너로 구독한다
+  - 공시·뉴스 게시, 리그 시작·종료 알림의 대상·문구 (정책서에 먼저 정한다)
+- 결정
+  - 알림은 접속(구독) 중인 플레이어에게만 보내고 보관하지 않는다. 알림 목록 REST API는 만들지 않는다
+  - 거래일 전환 이벤트는 `league/application/TradingDayChanged`이며 `TradingDayChangeUseCase`가 전환 트랜잭션 안에서 리그당 1회 발행한다
+  - 리그 종료 이벤트는 `league/application/LeagueEnded(leagueId, endedAt)`이며 `LeagueEndUseCase`가 종료 트랜잭션 안에서 발행한다(ND-85, 발행만). 커밋 이후 리스너로 구독한다
 
 ### WS-05 캔들 차트 토픽 실데이터 전환
 - Jira: ND-110

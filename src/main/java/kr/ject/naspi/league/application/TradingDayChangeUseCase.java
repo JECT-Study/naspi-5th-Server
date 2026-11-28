@@ -1,15 +1,19 @@
 package kr.ject.naspi.league.application;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
 import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
 import kr.ject.naspi.market.application.StockTradingDayService;
+import kr.ject.naspi.order.application.ExpiredOrders;
 import kr.ject.naspi.order.application.OpenOrderClosingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>후속 처리는 하위 모듈 application을 {@link #changeTo}에서 직접 호출한다 (README "거래일 전환"):
  * market 종가 확정·기준가 적용(MKT-06)을 호출하고, 이어서 order 미체결 지정가 주문 만료·예약
  * 해제(ORD-09)를 호출한다. 해제 중 오류가 나면 그 리그의 전환 전체가 롤백되어 다음 실행에서 보정된다.
+ *
+ * <p>전환을 처리하면 리그당 한 번 {@link TradingDayChanged}를 발행한다. 종료 시각이 지난 리그(리그 종료 처리 중
+ * 보정, 종료 후 기동 시 보정)는 발행하지 않는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -36,6 +43,7 @@ public class TradingDayChangeUseCase {
     private final TradingDayRepository tradingDayRepository;
     private final StockTradingDayService stockTradingDayService;
     private final OpenOrderClosingService openOrderClosingService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 진행 중인 리그의 밀린 거래일 전환을 처리한다.
@@ -52,9 +60,16 @@ public class TradingDayChangeUseCase {
         }
         List<TradingDay> closures = TradingDay.pendingClosures(
                 tradingDayRepository.findAllByLeagueIdOrderByDayNumber(leagueId), changedAt);
+        Set<Long> expiredPlayerIds = new HashSet<>();
         for (TradingDay closingDay : closures) {
-            changeTo(closingDay);
+            expiredPlayerIds.addAll(changeTo(closingDay).playerIds());
             closingDay.close(changedAt);
+        }
+        // 리그 종료 처리 중 밀린 전환 보정에서는 거래일 갱신 알림을 보내지 않는다 (정책 "주문 알림")
+        if (!closures.isEmpty() && !league.isEndDue(changedAt)) {
+            int newDayNumber = closures.get(closures.size() - 1).getDayNumber() + 1;
+            eventPublisher.publishEvent(new TradingDayChanged(leagueId, newDayNumber,
+                    Set.copyOf(expiredPlayerIds)));
         }
         return closures.size();
     }
@@ -63,10 +78,10 @@ public class TradingDayChangeUseCase {
      * 마감하는 거래일의 다음 거래일로 전환한다. 하위 모듈 호출 시각은 실행 시각이 아니라 새 거래일의 시작 시각
      * (마감하는 거래일의 종료 시각, 09:00:00)이다.
      */
-    private void changeTo(TradingDay closingDay) {
+    private ExpiredOrders changeTo(TradingDay closingDay) {
         stockTradingDayService.changeTradingDay(
                 closingDay.getLeagueId(), closingDay.getDayNumber());
-        openOrderClosingService.expireTradingDay(
+        return openOrderClosingService.expireTradingDay(
                 closingDay.getLeagueId(), closingDay.getDayNumber(), closingDay.getEndsAt());
     }
 }
