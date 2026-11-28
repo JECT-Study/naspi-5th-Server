@@ -300,6 +300,27 @@ class LeagueQueryServiceTest {
     }
 
     @Test
+    @DisplayName("플레이어의 탈퇴 여부를 확인한다 (탈퇴하면 true, 아니면 false, 그 리그의 플레이어가 아니면 false)")
+    void isPlayerWithdrawn() {
+        CreatedLeague league = leagueWithParticipants(3);
+        long host = memberOf(league);
+        long guestMember = member("손님");
+        final JoinedLeague guest = leagueService.join(guestMember, league.inviteCode());
+        stockListingService.list(league.leagueId(), guestMember, "손님종목", "소개");
+        leagueStartUseCase.start(host, league.leagueId());
+        leagueService.recordWithdrawal(guestMember);
+        entityManager.flush();
+        CreatedLeague otherLeague = useCase.create(member("남"), "다른 리그", "남종목", "소개");
+
+        assertThat(queryService.isPlayerWithdrawn(league.leagueId(), guest.playerId())).isTrue();
+        assertThat(queryService.isPlayerWithdrawn(league.leagueId(), league.hostPlayerId()))
+                .isFalse();
+        assertThat(queryService.isPlayerWithdrawn(league.leagueId(), otherLeague.hostPlayerId()))
+                .isFalse();
+        assertThat(queryService.isPlayerWithdrawn(league.leagueId(), 999_999L)).isFalse();
+    }
+
+    @Test
     @DisplayName("리그에 입장한 회원은 본인의 플레이어 ID를 찾을 수 있고, 입장하지 않은 회원은 찾을 수 없다")
     void findPlayerId() {
         long host = member("방장");
