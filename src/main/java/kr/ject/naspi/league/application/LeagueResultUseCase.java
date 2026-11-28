@@ -47,6 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
  *       거래되므로 종목 평가는 저장한다.</li>
  * </ul>
  *
+ * <p>최종 집계는 7일차 거래일별 자산 집계(LEA-18)로도 저장한다. 종료 전 탈퇴자를 포함한 집계 전체를
+ * 저장하고, 조회하는 쪽이 거른다 ({@link DailyAssetSnapshotUseCase}).
+ *
  * <p>하위 모듈 market(종료 평가 가격)·asset(총자산 집계)을 호출하므로 UseCase다. 리그 종료
  * ({@link LeagueEndUseCase})가 리그 락을 잡은 트랜잭션에서 미체결 취소 뒤, 종료 상태 전환 전에 호출한다.
  */
@@ -62,6 +65,7 @@ public class LeagueResultUseCase {
     private final FinalEvaluationPriceUseCase finalEvaluationPriceUseCase;
     private final AssetQueryService assetQueryService;
     private final MemberService memberService;
+    private final DailyAssetSnapshotUseCase dailyAssetSnapshotUseCase;
 
     /**
      * 종료 처리 중인 리그의 최종 결과를 산정해 저장한다. 리그 락을 잡은 리그 종료 트랜잭션 안에서만 호출한다
@@ -72,7 +76,7 @@ public class LeagueResultUseCase {
      * @param leagueId 리그 ID
      * @param endsAt 리그 종료 시각. 이 시각 전에 탈퇴한 참여자를 제외한다
      * @param finalizedAt 결과 확정 일시 (종료 처리 실행 시각)
-     * @throws IllegalStateException 리그 결과가 이미 있는 경우
+     * @throws IllegalStateException 리그 결과나 7일차 거래일 자산 집계가 이미 있는 경우
      * @throws NaspiRuntimeException 결과 대상 참여자의 자산이 없거나 집계할 수 없는 경우
      */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -82,8 +86,10 @@ public class LeagueResultUseCase {
         }
         Map<Long, Long> prices = finalEvaluationPriceUseCase.getFinalEvaluationPrices(leagueId,
                 TradingSchedule.TRADING_DAYS);
-        Map<Long, PlayerTotalAsset> totals = assetQueryService
-                .aggregateTotalAssets(leagueId, prices).stream()
+        List<PlayerTotalAsset> allTotals = assetQueryService.aggregateTotalAssets(leagueId, prices);
+        // 7일차 거래일별 자산 집계는 종료 전 탈퇴자를 거르기 전 집계 전체로 저장한다
+        dailyAssetSnapshotUseCase.save(leagueId, TradingSchedule.TRADING_DAYS, allTotals);
+        Map<Long, PlayerTotalAsset> totals = allTotals.stream()
                 .collect(Collectors.toMap(PlayerTotalAsset::playerId, Function.identity()));
 
         Map<Long, Player> targets = playerRepository.findAllByLeagueId(leagueId).stream()

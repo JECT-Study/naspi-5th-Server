@@ -29,7 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>order 미체결 지정가 주문 전체 취소·예약 해제(ORD-10). 취소 시각은 리그 종료 시각이다.</li>
  *   <li>market 종료 평가 가격(MKT-07)으로 asset 총자산 집계(AST-08) 후 순위·결과 스냅샷 저장(LEA-13,
  *       {@link LeagueResultUseCase}). 취소가 끝나 예약 자산이 0인 상태에서 산정해야 하므로 미체결 취소 뒤,
- *       종료 상태 전환 전에 같은 트랜잭션에서 호출한다.</li>
+ *       종료 상태 전환 전에 같은 트랜잭션에서 호출한다. 결과 산정이 같은 집계로 7일차 거래일별 자산 집계(LEA-18)도
+ *       저장한다.</li>
  *   <li>리그 종료 상태 전환과 초대 코드 폐기, 종료 이벤트 발행.</li>
  * </ol>
  *

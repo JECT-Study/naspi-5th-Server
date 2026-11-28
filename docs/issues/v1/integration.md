@@ -68,11 +68,11 @@
 ### INT-06 거래일 종료 시 종가로 asset 총자산 집계를 호출한다
 - Jira: ND-90
 - 목적: AST-08의 집계 API를 LEA-18 거래일별 자산 집계에 연결한다
-- 내용: 거래일 전환 UseCase(LEA-11) 처리 중 league UseCase가 market 종가(MKT-06)를 받아 `aggregateTotalAssets`에 넘긴다
+- 내용: 거래일 전환 UseCase(LEA-11) 처리 중 league UseCase가 market 종가(MKT-06)를 받아 `aggregateTotalAssets`에 넘긴다. 7일차는 리그 종료 결과 산정(INT-05)의 집계를 재사용한다
 - 선행: AST-08, MKT-06, LEA-11, LEA-18
 - 완료 조건 (확인 방법)
-  - [ ] `grep -rn "aggregateTotalAssets" src/main/java/kr/ject/naspi/league` 결과 있음
-  - [ ] 거래일 집계가 종가 기준이다 — `./gradlew test --tests "kr.ject.naspi.league.*TradingDay*"`
+  - [x] `grep -rn "aggregateTotalAssets" src/main/java/kr/ject/naspi/league` 결과 있음
+  - [x] 거래일 집계가 종가 기준이다 — `./gradlew test --tests "kr.ject.naspi.league.*TradingDay*"`
 
 ### INT-07 league가 asset의 domain을 직접 참조하지 않는다
 - Jira: ND-81

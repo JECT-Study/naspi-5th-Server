@@ -56,7 +56,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DataJpaTest
 @Import({LeagueEndUseCase.class, TradingDayChangeUseCase.class, StockTradingDayService.class,
         OrderClosingTestConfig.class, MutableClock.Config.class, LeagueResultUseCase.class,
-        FinalEvaluationPriceUseCase.class, TradeQueryService.class, AssetQueryService.class})
+        FinalEvaluationPriceUseCase.class, TradeQueryService.class, AssetQueryService.class,
+        DailyAssetSnapshotUseCase.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class LeagueEndConcurrencyTest {
 
@@ -94,6 +95,7 @@ class LeagueEndConcurrencyTest {
     @AfterEach
     void tearDown() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createQuery("delete from DailyAssetSnapshot").executeUpdate();
             entityManager.createQuery("delete from LeagueResultHolding").executeUpdate();
             entityManager.createQuery("delete from LeagueResultPlayer").executeUpdate();
             entityManager.createQuery("delete from LeagueResultStock").executeUpdate();

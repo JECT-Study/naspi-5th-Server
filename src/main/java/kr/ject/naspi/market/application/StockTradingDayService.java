@@ -41,17 +41,19 @@ public class StockTradingDayService {
      *
      * @param leagueId 리그 ID
      * @param closingDay 마감하는 거래일 번호 (1~6)
+     * @return 리그 전 종목의 확정 종가 (종목 ID별 종가). 거래일별 자산 집계(LEA-18)의 평가 가격으로 쓴다
      * @throws IllegalStateException 종목의 마감 거래일 시세 행이 없거나 현재가가 없는 경우
      * @throws IllegalArgumentException 다음 거래일 번호가 7을 넘는 경우
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void changeTradingDay(long leagueId, int closingDay) {
+    public Map<Long, Long> changeTradingDay(long leagueId, int closingDay) {
         Map<Long, Long> closes = closeAll(leagueId, closingDay);
         List<StockDailyPrice> nextPrices = closes.entrySet().stream()
                 .map(close -> StockDailyPrice.open(leagueId, close.getKey(), closingDay + 1,
                         close.getValue()))
                 .toList();
         dailyPriceRepository.saveAll(nextPrices);
+        return Map.copyOf(closes);
     }
 
     /**

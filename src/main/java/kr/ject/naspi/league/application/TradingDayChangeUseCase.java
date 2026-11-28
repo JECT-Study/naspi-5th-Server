@@ -3,6 +3,7 @@ package kr.ject.naspi.league.application;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueRepository;
@@ -29,8 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 처리하고, 놓친 전환은 다음 실행에서 일차 순서대로 보정한다. 마지막 거래일의 마감은 리그 종료 처리(LEA-12)가 맡는다.
  *
  * <p>후속 처리는 하위 모듈 application을 {@link #changeTo}에서 직접 호출한다 (README "거래일 전환"):
- * market 종가 확정·기준가 적용(MKT-06)을 호출하고, 이어서 order 미체결 지정가 주문 만료·예약
- * 해제(ORD-09)를 호출한다. 해제 중 오류가 나면 그 리그의 전환 전체가 롤백되어 다음 실행에서 보정된다.
+ * market 종가 확정·기준가 적용(MKT-06)을 호출하고, 확정 종가로 league 거래일별 자산 집계(LEA-18, asset
+ * AST-08)를 저장한 뒤 order 미체결 지정가 주문 만료·예약 해제(ORD-09)를 호출한다. 집계·해제 중 오류가 나면 그
+ * 리그의 전환 전체가 롤백되어 다음 실행에서 보정된다.
  *
  * <p>전환을 처리하면 리그당 한 번 {@link TradingDayChanged}를 발행한다. 종료 시각이 지난 리그(리그 종료 처리 중
  * 보정, 종료 후 기동 시 보정)는 발행하지 않는다.
@@ -43,6 +45,7 @@ public class TradingDayChangeUseCase {
     private final TradingDayRepository tradingDayRepository;
     private final StockTradingDayService stockTradingDayService;
     private final OpenOrderClosingService openOrderClosingService;
+    private final DailyAssetSnapshotUseCase dailyAssetSnapshotUseCase;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -77,11 +80,16 @@ public class TradingDayChangeUseCase {
     /**
      * 마감하는 거래일의 다음 거래일로 전환한다. 하위 모듈 호출 시각은 실행 시각이 아니라 새 거래일의 시작 시각
      * (마감하는 거래일의 종료 시각, 09:00:00)이다.
+     *
+     * <p>거래일별 자산 집계는 종가 확정 직후, 미체결 만료 전에 저장한다. 만료는 예약만 해제하고 예수금·보유 수량은
+     * 예약분을 포함한 전체 값이라 바뀌지 않으므로 총자산은 같다.
      */
     private ExpiredOrders changeTo(TradingDay closingDay) {
-        stockTradingDayService.changeTradingDay(
-                closingDay.getLeagueId(), closingDay.getDayNumber());
+        long leagueId = closingDay.getLeagueId();
+        int dayNumber = closingDay.getDayNumber();
+        Map<Long, Long> closes = stockTradingDayService.changeTradingDay(leagueId, dayNumber);
+        dailyAssetSnapshotUseCase.record(leagueId, dayNumber, closes);
         return openOrderClosingService.expireTradingDay(
-                closingDay.getLeagueId(), closingDay.getDayNumber(), closingDay.getEndsAt());
+                leagueId, dayNumber, closingDay.getEndsAt());
     }
 }

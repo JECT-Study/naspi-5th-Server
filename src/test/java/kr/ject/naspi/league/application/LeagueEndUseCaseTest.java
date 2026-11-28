@@ -29,6 +29,7 @@ import kr.ject.naspi.league.domain.LeagueStatus;
 import kr.ject.naspi.league.domain.Player;
 import kr.ject.naspi.league.domain.TradingDay;
 import kr.ject.naspi.league.domain.TradingDayRepository;
+import kr.ject.naspi.league.domain.TradingSchedule;
 import kr.ject.naspi.market.application.FinalEvaluationPriceUseCase;
 import kr.ject.naspi.market.application.StockExecutionService;
 import kr.ject.naspi.market.application.StockTradingDayService;
@@ -63,7 +64,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @Import({LeagueEndUseCase.class, TradingDayChangeUseCase.class, StockTradingDayService.class,
         OrderClosingTestConfig.class, LeagueJoinLimit.class, MutableClock.Config.class,
         LeagueResultUseCase.class, FinalEvaluationPriceUseCase.class, TradeQueryService.class,
-        AssetQueryService.class})
+        AssetQueryService.class, DailyAssetSnapshotUseCase.class})
 class LeagueEndUseCaseTest {
 
     /** 2026-11-15 10:00 시작: 종료 시각은 11-22 09:00. */
@@ -190,6 +191,11 @@ class LeagueEndUseCaseTest {
     @DisplayName("결과 산정 중 오류가 나면 리그는 종료되지 않고 결과도 저장되지 않는다")
     void rollbackOnResultFailure() {
         League league = startedLeague("AAAAAAA");
+        // 1~6일차는 마감된 상태로 두어 결과 산정의 집계에서 실패하게 한다
+        tradingDayRepository.findAllByLeagueIdOrderByDayNumber(league.getId()).stream()
+                .filter(day -> !day.isLast())
+                .forEach(day -> day.close(day.getEndsAt()));
+        entityManager.flush();
         willThrow(new NaspiRuntimeException("집계 실패")).given(assetQueryService)
                 .aggregateTotalAssets(anyLong(), any());
 
@@ -199,6 +205,22 @@ class LeagueEndUseCaseTest {
         assertThat(league.getStatus()).isEqualTo(LeagueStatus.STARTED);
         assertThat(events.stream(LeagueEnded.class)).isEmpty();
         assertThat(resultCount(league)).isZero();
+        assertThat(snapshotCount(league, 7)).isZero();
+    }
+
+    @Test
+    @DisplayName("리그가 종료되면 1~7일차 거래일별 자산 집계가 모두 저장된다")
+    void recordsAllDaysOnEnd() {
+        League league = startedLeague("AAAAAAA");
+        stockWithFirstDay(league);
+        // 4일차까지 마감된 상태에서 종료하면 5~6일차는 종료 처리가 보정한다
+        tradingDayChangeUseCase.change(league.getId(), ENDS_AT.minusDays(3));
+
+        assertThat(useCase.end(league.getId(), ENDS_AT.plusDays(1))).isTrue();
+
+        for (int day = 1; day <= TradingSchedule.TRADING_DAYS; day++) {
+            assertThat(snapshotCount(league, day)).as("거래일 %d", day).isEqualTo(3);
+        }
     }
 
     @Test
@@ -321,6 +343,14 @@ class LeagueEndUseCaseTest {
             reservationService.reserveStockForSell(league.getId(), playerId, stockId, 10);
         }
         return entityManager.persistAndFlush(order);
+    }
+
+    private long snapshotCount(League league, int tradingDay) {
+        return entityManager.getEntityManager().createQuery(
+                        "select count(d) from DailyAssetSnapshot d where d.leagueId = :l "
+                                + "and d.tradingDay = :t", Long.class)
+                .setParameter("l", league.getId()).setParameter("t", tradingDay)
+                .getSingleResult();
     }
 
     private long resultCount(League league) {

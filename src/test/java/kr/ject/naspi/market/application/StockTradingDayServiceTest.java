@@ -3,6 +3,7 @@ package kr.ject.naspi.market.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Map;
 import kr.ject.naspi.market.domain.Stock;
 import kr.ject.naspi.market.domain.StockDailyPrice;
 import kr.ject.naspi.market.domain.StockDescription;
@@ -61,6 +62,20 @@ class StockTradingDayServiceTest {
 
         assertThat(day(stockId, 1).getClosePrice()).isEqualTo(10_000);
         assertThat(day(stockId, 2).getBasePrice()).isEqualTo(10_000);
+    }
+
+    @Test
+    @DisplayName("거래일 전환 시 확정한 종목별 종가를 돌려주며, 거래량 0인 종목은 기준가다")
+    void changeTradingDayReturnsCloses() {
+        long traded = openedStock(1, 10L, "가나다");
+        long untraded = openedStock(1, 11L, "라마바");
+        executionService.applyExecution(LEAGUE_ID, traded, 1, 12_300, 2);
+
+        Map<Long, Long> closes = service.changeTradingDay(LEAGUE_ID, 1);
+
+        assertThat(closes).containsExactlyInAnyOrderEntriesOf(Map.of(
+                traded, 12_300L,
+                untraded, 10_000L));
     }
 
     @Test
@@ -145,7 +160,12 @@ class StockTradingDayServiceTest {
     }
 
     private long openedStock(int tradingDay) {
-        Stock stock = Stock.list(LEAGUE_ID, 10L, StockName.of("가나다"), StockDescription.of("소개"));
+        return openedStock(tradingDay, 10L, "가나다");
+    }
+
+    private long openedStock(int tradingDay, long listerPlayerId, String name) {
+        Stock stock = Stock.list(LEAGUE_ID, listerPlayerId, StockName.of(name),
+                StockDescription.of("소개"));
         stock.open();
         long stockId = entityManager.persistAndGetId(stock, Long.class);
         entityManager.persist(StockDailyPrice.open(LEAGUE_ID, stockId, tradingDay, 10_000));

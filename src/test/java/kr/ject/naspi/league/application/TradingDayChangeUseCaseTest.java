@@ -2,15 +2,21 @@ package kr.ject.naspi.league.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.willThrow;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.LongStream;
+import kr.ject.naspi.asset.application.AssetQueryService;
 import kr.ject.naspi.asset.application.AssetReservationService;
 import kr.ject.naspi.asset.domain.Account;
 import kr.ject.naspi.asset.domain.Holding;
 import kr.ject.naspi.global.exception.NaspiRuntimeException;
+import kr.ject.naspi.league.domain.DailyAssetSnapshot;
 import kr.ject.naspi.league.domain.InviteCode;
 import kr.ject.naspi.league.domain.League;
 import kr.ject.naspi.league.domain.LeagueName;
@@ -37,15 +43,21 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @ActiveProfiles("test")
 @DataJpaTest
 @RecordApplicationEvents
 @Import({TradingDayChangeUseCase.class, StockTradingDayService.class,
-        OrderClosingTestConfig.class, MutableClock.Config.class})
+        OrderClosingTestConfig.class, MutableClock.Config.class, DailyAssetSnapshotUseCase.class,
+        AssetQueryService.class})
 class TradingDayChangeUseCaseTest {
 
     /** 시작 후 1일차: 2026-11-15 10:00 시작, 2일차는 11-16 09:00. */
@@ -58,6 +70,12 @@ class TradingDayChangeUseCaseTest {
 
     @MockitoBean
     private MemberService memberService;
+
+    @MockitoSpyBean
+    private AssetQueryService assetQueryService;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private TradingDayChangeUseCase useCase;
@@ -280,6 +298,140 @@ class TradingDayChangeUseCaseTest {
         assertThat(useCase.change(league.getId(), league.getEndsAt())).isEqualTo(6);
 
         assertThat(events.stream(TradingDayChanged.class)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("09:00 거래일 전환에서 직전 거래일 종가 기준으로 참여자별 현금·주식 평가금액·총자산이 집계된다")
+    void recordsDailyAssetAtClose() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        asset(league, LISTER, 50_000_000, stockId, 3_000);
+        asset(league, BUYER, 100_000_000, stockId, 0);
+        executionService.applyExecution(league.getId(), stockId, 1, 11_000, 3);
+
+        useCase.change(league.getId(), DAY2);
+
+        assertThat(snapshots(league, 1)).extracting(DailyAssetSnapshot::getPlayerId,
+                        DailyAssetSnapshot::getCash, DailyAssetSnapshot::getStockValuation,
+                        DailyAssetSnapshot::getTotalAsset)
+                .containsExactly(
+                        tuple(LISTER, 50_000_000L, 33_000_000L, 83_000_000L),
+                        tuple(BUYER, 100_000_000L, 0L, 100_000_000L));
+        assertThat(snapshots(league, 2)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("같은 거래일 전환을 두 번 실행해도 거래일별 자산 집계는 한 번만 저장된다")
+    void recordsOnceWhenRunTwice() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        asset(league, LISTER, 50_000_000, stockId, 3_000);
+        asset(league, BUYER, 100_000_000, stockId, 0);
+
+        useCase.change(league.getId(), DAY2);
+        useCase.change(league.getId(), DAY2.plusSeconds(5));
+
+        assertThat(snapshots(league, 1)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("놓친 거래일 전환을 보정하면 거래일마다 자산 집계가 저장되고 체결이 없던 거래일은 직전 종가로 평가된다")
+    void catchUpRecordsEachDay() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        asset(league, LISTER, 50_000_000, stockId, 3_000);
+        executionService.applyExecution(league.getId(), stockId, 1, 11_000, 3);
+
+        useCase.change(league.getId(), DAY2.plusDays(2).plusSeconds(1));
+
+        for (int day = 1; day <= 3; day++) {
+            assertThat(snapshots(league, day)).extracting(DailyAssetSnapshot::getStockValuation,
+                            DailyAssetSnapshot::getTotalAsset)
+                    .containsExactly(tuple(33_000_000L, 83_000_000L));
+        }
+        assertThat(snapshots(league, 4)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("미체결 주문 만료 전 거래일 종료 시점 자산으로 집계해도 총자산은 예약 해제와 무관하다")
+    void recordsBeforeExpiration() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        reservedOrder(league, stockId, BUYER, OrderSide.BUY, 1);
+        reservedOrder(league, stockId, SELLER, OrderSide.SELL, 1);
+
+        useCase.change(league.getId(), DAY2);
+
+        assertThat(account(league, BUYER).getReservedDeposit()).isZero();
+        assertThat(holding(league, SELLER).getReservedQuantity()).isZero();
+        // 예약 해제 전후 모두 예수금·보유 수량은 예약분을 포함한 전체 값이다
+        assertThat(snapshots(league, 1)).extracting(DailyAssetSnapshot::getPlayerId,
+                        DailyAssetSnapshot::getCash, DailyAssetSnapshot::getStockValuation,
+                        DailyAssetSnapshot::getTotalAsset)
+                .containsExactly(
+                        tuple(SELLER, 1_000_000L, 1_000_000L, 2_000_000L),
+                        tuple(BUYER, 1_000_000L, 0L, 1_000_000L));
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("자산 집계가 실패하면 종가 확정과 거래일 마감도 롤백된다")
+    void rollbackOnAggregationFailure() {
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        try {
+            long[] ids = tx.execute(status -> {
+                League league = startedLeague();
+                long stockId = stockWithFirstDay(league);
+                asset(league, LISTER, 50_000_000, stockId, 3_000);
+                executionService.applyExecution(league.getId(), stockId, 1, 11_000, 3);
+                return new long[] {league.getId(), stockId};
+            });
+            willThrow(new NaspiRuntimeException("집계 실패"))
+                    .given(assetQueryService).aggregateTotalAssets(anyLong(), any());
+
+            assertThatThrownBy(() -> useCase.change(ids[0], DAY2))
+                    .isInstanceOf(NaspiRuntimeException.class);
+
+            tx.executeWithoutResult(status -> {
+                League league = entityManager.find(League.class, ids[0]);
+                assertThat(closedDayNumbers(league)).isEmpty();
+                assertThat(dayPrice(ids[1], 1).getClosePrice()).isNull();
+                assertThat(dailyPriceCount(ids[1])).isEqualTo(1);
+                assertThat(snapshots(league, 1)).isEmpty();
+            });
+        } finally {
+            tx.executeWithoutResult(status -> {
+                for (String entity : List.of("DailyAssetSnapshot", "StockDailyPrice", "Stock",
+                        "Holding", "Account", "TradingDay", "Player", "League")) {
+                    entityManager.getEntityManager().createQuery("delete from " + entity)
+                            .executeUpdate();
+                }
+            });
+        }
+    }
+
+    private void asset(League league, long playerId, long cash, long stockId, long quantity) {
+        entityManager.persist(Account.open(league.getId(), playerId, cash));
+        if (quantity > 0) {
+            entityManager.persist(Holding.allocate(league.getId(), playerId, stockId, quantity));
+        }
+        entityManager.flush();
+    }
+
+    private List<DailyAssetSnapshot> snapshots(League league, int tradingDay) {
+        entityManager.flush();
+        return entityManager.getEntityManager().createQuery(
+                        "select d from DailyAssetSnapshot d where d.leagueId = :l "
+                                + "and d.tradingDay = :t order by d.playerId",
+                        DailyAssetSnapshot.class)
+                .setParameter("l", league.getId()).setParameter("t", tradingDay)
+                .getResultList();
+    }
+
+    private long dailyPriceCount(long stockId) {
+        return entityManager.getEntityManager().createQuery(
+                        "select count(d) from StockDailyPrice d where d.stockId = :s", Long.class)
+                .setParameter("s", stockId).getSingleResult();
     }
 
     private Order reservedOrder(League league, long stockId, long playerId, OrderSide side,
