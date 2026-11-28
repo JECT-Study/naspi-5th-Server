@@ -3,11 +3,15 @@ package kr.ject.naspi.market.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import kr.ject.naspi.league.application.LeaguePlayers;
@@ -245,6 +249,64 @@ class LeagueStockLookupServiceTest {
         assertThatThrownBy(() -> service.findOne(MEMBER_ID, 1L, 1L))
                 .isInstanceOfSatisfying(NaspiBizException.class, e -> assertThat(e.getErrorCode())
                         .isEqualTo(ErrorCode.LEAGUE_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("리그 단위 조회는 조회자 없이 리그의 종목 이름·소개·상장자 이름·시세를 종목 ID 순으로 준다")
+    void findAllInLeagueWithoutViewer() {
+        given(leagueQueryService.getPlayerNames(eq(1L), anyCollection()))
+                .willReturn(Map.of(PLAYER_ID, "나", 11L, "친구"));
+        long first = list(1L, PLAYER_ID, "내종목", "내 소개");
+        long second = list(1L, 11L, "남종목", "남 소개");
+        list(2L, 20L, "다른리그", "소개");
+
+        assertThat(service.findAllInLeague(1L)).containsExactly(
+                new LeagueStockView(first, "내종목", "내 소개", "나", null),
+                new LeagueStockView(second, "남종목", "남 소개", "친구", null));
+    }
+
+    @Test
+    @DisplayName("리그 단위 조회 결과는 회원 조회 결과에서 본인 종목 여부만 뺀 것과 같다")
+    void findAllInLeagueSameAsMemberView() {
+        joined();
+        given(leagueQueryService.getPlayerNames(eq(1L), anyCollection()))
+                .willReturn(Map.of(PLAYER_ID, "나", 11L, "친구"));
+        long mine = openedStock(1L, PLAYER_ID);
+        long other = list(1L, 11L, "남종목", "남 소개");
+        entityManager.find(Stock.class, other).open();
+        StockDailyPrice day1 = entityManager.persist(StockDailyPrice.open(1L, mine, 1, 10_000));
+        entityManager.persist(StockDailyPrice.open(1L, other, 1, 10_000));
+        entityManager.find(Stock.class, mine).applyTrade(12_500);
+        day1.addVolume(5);
+        entityManager.flush();
+
+        List<MemberStock> member = service.findAll(MEMBER_ID, 1L);
+        List<LeagueStockView> view = service.findAllInLeague(1L);
+
+        assertThat(view.get(0).quote()).isNotNull();
+        assertThat(view).containsExactlyElementsOf(member.stream()
+                .map(s -> new LeagueStockView(s.stockId(), s.name(), s.description(),
+                        s.listerName(), s.quote()))
+                .toList());
+    }
+
+    @Test
+    @DisplayName("시작된 리그에서 탈퇴한 상장자의 종목은 상장자 이름이 '탈퇴한 사용자'다")
+    void findAllInLeagueWithdrawnLister() {
+        given(leagueQueryService.getPlayerNames(eq(1L), anyCollection()))
+                .willReturn(Map.of(11L, "탈퇴한 사용자"));
+        list(1L, 11L, "남종목", "남 소개");
+
+        assertThat(service.findAllInLeague(1L))
+                .extracting(LeagueStockView::listerName)
+                .containsExactly("탈퇴한 사용자");
+    }
+
+    @Test
+    @DisplayName("상장된 종목이 없거나 없는 리그면 빈 목록이다")
+    void findAllInLeagueNoStocks() {
+        assertThat(service.findAllInLeague(1L)).isEmpty();
+        assertThat(service.findAllInLeague(999L)).isEmpty();
     }
 
     private long openedStock(long leagueId, long listerPlayerId) {

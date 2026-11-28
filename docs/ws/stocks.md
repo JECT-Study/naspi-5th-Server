@@ -2,20 +2,16 @@
 
 리그에 상장된 전체 종목의 현재가와 등락을 실시간으로 받습니다. 종목 목록 화면에서 씁니다.
 
-> **⚠️ 더미 응답입니다.**
-> 지금은 실제 데이터 대신 더미 값을 1초마다 보냅니다. 구독 경로와 메시지 형식은 실제 구현에서도 유지할 예정이지만, 구현하면서 바뀔 수 있습니다.
-> 서버 코드: `websocket.application.topic.stock.StockTopic`
-
 | **항목** | **값** |
 | --- | --- |
 | 연결 엔드포인트 | `/ws` ([1. 연결 엔드포인트](#1-연결-엔드포인트)) |
 | 프로토콜 | STOMP 1.2 over WebSocket (SockJS 미사용) |
 | 인증 | 로그인 세션 쿠키 `SESSION` ([2. 연결 인증](#2-연결-인증)) |
 | 구독 | `/topic/leagues/{leagueId}/stocks` |
-| 구독 권한 | 로그인 회원 누구나 |
+| 구독 권한 | 그 리그에 입장한 회원 (상장 전 대기자 포함). 종료 시각이 지난 리그는 불가 |
 | 메시지 종류 (`type`) | `STOCK` |
-| 전달 시점 | 1초마다 (더미). 구독자가 없으면 보내지 않습니다 |
-| 대응 REST | 없음 (TODO: 추가 예정) |
+| 전달 시점 | 현재가가 바뀌거나 체결될 때 ([전달 시점](#전달-시점)). 구독자가 없으면 보내지 않습니다 |
+| 대응 REST | `GET /api/leagues/{leagueId}/stocks` |
 | 발행 (클라이언트 → 서버) | 없음 |
 
 ---
@@ -59,9 +55,7 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 
 ### 구독 권한
 
-로그인 회원이면 누구나 구독할 수 있습니다.
-
-> TODO: 리그 모듈이 생기면 해당 리그 참여자만 구독할 수 있게 바뀝니다.
+그 리그에 입장한 회원만 구독할 수 있습니다. 상장 전인 대기자도 입장한 상태이므로 구독할 수 있습니다. 리그가 없거나(만료·삭제된 대기실 포함) 종료 시각이 지난 리그는 구독할 수 없습니다. REST `GET /api/leagues/{leagueId}/stocks`의 조회 조건과 같습니다.
 
 권한이 없으면 `ERROR` 프레임을 받고 **연결 전체가 끊깁니다**([5. 에러](#5-에러)).
 
@@ -80,6 +74,13 @@ destination:/topic/leagues/1/stocks
 ^@
 ```
 
+### 전달 시점
+
+| **원인** | **전달 시점** | **받는 사람** |
+| --- | --- | --- |
+| 현재가 변경 | 최대 약 1초 안 | 그 리그의 구독자 전원 |
+| 체결 | 커밋 직후 (같은 가격 체결의 거래량 반영) | 그 리그의 구독자 전원 |
+
 ### 받는 메시지
 
 모든 토픽 메시지는 같은 형식(`TopicEnvelope`)으로 옵니다. REST API의 `Result`(`code`, `message`, `data`)와 다른 형식이니 주의합니다.
@@ -92,14 +93,23 @@ destination:/topic/leagues/1/stocks
 
 #### payload
 
+REST `GET /api/leagues/{leagueId}/stocks`의 `data` 각 항목에서 `mine`만 빼고, `asOf`를 더해 객체로 감싸 보냅니다. 금액은 원 단위입니다. 시세 필드는 리그 시작 전이면 `null`입니다. 이름·소개·상장자 이름도 매번 함께 보냅니다.
+
 | **필드** | **타입** | **설명** | **비고** |
 | --- | --- | --- | --- |
-| stock | Array | 종목 목록 | 필드 이름이 단수형(`stock`)입니다 |
-| stock[].stockId | Long | 종목 ID | |
-| stock[].stockName | String | 종목명 | |
-| stock[].currentPrice | Long | 현재가 (원) | |
-| stock[].changeAmount | Long | 등락액 (원) | 기준가 대비. 하락이면 음수 |
-| stock[].changeRate | Number | 등락률 (%) | `(현재가 - 기준가) / 기준가 × 100`. 하락이면 음수 |
+| stocks | Array | 종목 목록 | 리그 전체 종목, 종목 ID 오름차순 |
+| stocks[].stockId | Long | 종목 ID | |
+| stocks[].name | String | 종목 이름 | |
+| stocks[].description | String | 종목 소개 | |
+| stocks[].listerName | String | 상장자 이름 | 시작된 리그에서 탈퇴한 상장자면 '탈퇴한 사용자' |
+| stocks[].currentPrice | Long | 현재가 (원) | |
+| stocks[].basePrice | Long | 기준가 (원) | 직전 거래일 종가, 첫 거래일은 시초가 |
+| stocks[].upperLimitPrice | Long | 상한가 (원) | |
+| stocks[].lowerLimitPrice | Long | 하한가 (원) | |
+| stocks[].changeAmount | Long | 등락액 (원) | 기준가 대비. 하락이면 음수 |
+| stocks[].changeRate | Number | 등락률 (%) | `(현재가 - 기준가) / 기준가 × 100`. 소수점 첫째 자리. 하락이면 음수 |
+| stocks[].volume | Long | 현재 거래일 거래량 (주) | |
+| asOf | String | 값을 계산한 시각 (KST) | REST와 같은 일시 형식 |
 
 ```
 MESSAGE
@@ -111,12 +121,21 @@ message-id:a1b2c3-0
 {
   "type": "STOCK",
   "payload": {
-    "stock": [
-      { "stockId": 1, "stockName": "진영전자", "currentPrice": 12500, "changeAmount": 200, "changeRate": 3.2 },
-      { "stockId": 2, "stockName": "민영건설", "currentPrice": 12500, "changeAmount": -10, "changeRate": -1.5 }
-    ]
+    "stocks": [
+      {
+        "stockId": 1, "name": "수빈전자", "description": "성실함이 주력 사업입니다.", "listerName": "수빈",
+        "currentPrice": 12500, "basePrice": 10000, "upperLimitPrice": 13000, "lowerLimitPrice": 7000,
+        "changeAmount": 2500, "changeRate": 25.0, "volume": 5
+      },
+      {
+        "stockId": 2, "name": "민준건설", "description": "튼튼하게 짓습니다.", "listerName": "민준",
+        "currentPrice": 9800, "basePrice": 10000, "upperLimitPrice": 13000, "lowerLimitPrice": 7000,
+        "changeAmount": -200, "changeRate": -2.0, "volume": 12
+      }
+    ],
+    "asOf": "2026-11-27T21:30:01.123456"
   },
-  "publishedAt": "2026-11-09T14:32:05.123"
+  "publishedAt": "2026-11-27T21:30:01.125"
 }^@
 ```
 
@@ -126,7 +145,8 @@ message-id:a1b2c3-0
 - 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
 - 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
 - 받은 값으로 화면 상태를 통째로 덮어씁니다.
-- `stock`은 리그의 **전체 종목** 목록입니다. 목록을 통째로 바꿉니다.
+- **`asOf`가 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.** REST 응답에는 `asOf`가 없으므로 REST 값 다음에 오는 첫 메시지는 그대로 반영합니다.
+- `stocks`는 리그의 **전체 종목** 목록입니다. 목록을 통째로 바꿉니다. 단, `mine`(내 종목 여부)은 메시지에 없으므로 REST로 받은 값을 `stockId`로 맞춰 유지합니다.
 
 ---
 
@@ -166,9 +186,11 @@ content-length:0
 
 ### 예외
 
-1. **없는 리그 ID로 구독한 경우:** 지금은 리그 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
-2. **더미 응답:** 리그와 관계없이 항상 위 예시와 같은 2개 종목을 보냅니다. 값도 바뀌지 않습니다.
-3. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 REST API로 현재 시세를 받습니다. (TODO: 종목 목록 조회 REST API 추가 예정)
+1. **없는 리그 ID, 입장하지 않은 리그, 종료 시각이 지난 리그로 구독한 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다.
+2. **리그 시작 전:** 구독은 되지만 시세가 바뀌지 않아 메시지가 오지 않습니다. 시작되면 REST로 다시 조회합니다.
+3. **거래일 전환(09:00):** 기준가·상하한가·등락률·거래량이 초기화되지만 체결 전까지는 메시지가 오지 않습니다. 09:00를 넘기면 REST로 다시 조회합니다.
+4. **종목 소개 수정:** 진행 중인 리그에서 소개를 고쳐도 다음 시세 변경 전까지는 메시지가 오지 않습니다.
+5. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. 다시 연결한 직후 `GET /api/leagues/{leagueId}/stocks`로 현재 상태를 받습니다.
 
 ---
 
@@ -263,47 +285,72 @@ export function subscribeTopic<T>(
 import { useEffect, useState } from 'react';
 import { subscribeTopic } from './stompClient';
 
+/** 토픽 메시지의 종목 항목. REST 종목 항목에서 mine을 뺀 것. 시세 필드는 리그 시작 전이면 null. */
 export type Stock = {
   stockId: number;
-  stockName: string;
-  currentPrice: number;
-  changeAmount: number;
-  changeRate: number;
+  name: string;
+  description: string;
+  listerName: string;
+  currentPrice: number | null;
+  basePrice: number | null;
+  upperLimitPrice: number | null;
+  lowerLimitPrice: number | null;
+  changeAmount: number | null;
+  changeRate: number | null;
+  volume: number | null;
 };
 
-type StockPayload = { stock: Stock[] };
+/** REST GET /api/leagues/{leagueId}/stocks 응답(data)의 항목. */
+export type MemberStock = Stock & { mine: boolean };
+
+type StockPayload = { stocks: Stock[]; asOf: string };
 ```
 
 ```tsx
-/** 리그 전체 종목 시세를 실시간으로 받는다. */
-export function useStocks(leagueId: number) {
-  const [stocks, setStocks] = useState<Stock[]>([]);
+/**
+ * 리그 전체 종목을 실시간으로 받는다. initial은 처음 접속할 때 REST로 받은 값이다.
+ * asOf가 마지막으로 반영한 메시지보다 이른 메시지는 버리고, mine은 REST 값을 stockId로 맞춰 유지한다.
+ */
+export function useStocks(leagueId: number, initial: MemberStock[]) {
+  const [state, setState] = useState<{ stocks: MemberStock[]; asOf?: string }>({
+    stocks: initial,
+  });
 
-  useEffect(
-    () =>
-      subscribeTopic<StockPayload>(`/topic/leagues/${leagueId}/stocks`, (payload) =>
-        setStocks(payload.stock),
+  useEffect(() => {
+    setState({ stocks: initial });
+    const mine = new Map(initial.map((s) => [s.stockId, s.mine]));
+    return subscribeTopic<StockPayload>(`/topic/leagues/${leagueId}/stocks`, (payload) =>
+      setState((prev) =>
+        prev.asOf && Date.parse(payload.asOf) < Date.parse(prev.asOf)
+          ? prev
+          : {
+              stocks: payload.stocks.map((s) => ({ ...s, mine: mine.get(s.stockId) ?? false })),
+              asOf: payload.asOf,
+            },
       ),
-    [leagueId],
-  );
+    );
+  }, [leagueId, initial]);
 
-  return stocks;
+  return state.stocks;
 }
 ```
 
+> `initial`은 렌더링마다 새 객체를 만들지 않도록 `useMemo`나 상태로 넘깁니다. 매번 새 객체면 구독을 계속 다시 합니다.
+
 ```tsx
-function StockList({ leagueId }: { leagueId: number }) {
-  const stocks = useStocks(leagueId);
+function StockList({ leagueId, initial }: { leagueId: number; initial: MemberStock[] }) {
+  const stocks = useStocks(leagueId, initial);
   return (
     <ul>
       {stocks.map((s) => (
         <li key={s.stockId}>
-          {s.stockName} {s.currentPrice.toLocaleString()}원 ({s.changeRate > 0 ? '+' : ''}
-          {s.changeRate}%)
+          {s.name}
+          {s.mine && ' (내 종목)'} {s.currentPrice?.toLocaleString() ?? '-'}원 (
+          {(s.changeRate ?? 0) > 0 ? '+' : ''}
+          {s.changeRate ?? 0}%)
         </li>
       ))}
     </ul>
   );
 }
 ```
-

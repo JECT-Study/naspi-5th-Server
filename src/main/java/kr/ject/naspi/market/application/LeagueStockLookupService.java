@@ -50,6 +50,28 @@ public class LeagueStockLookupService {
     }
 
     /**
+     * 조회자 없이 리그의 전체 종목을 종목 ID 순으로 조회한다. 권한 확인은 호출하는 쪽 책임이다 (웹소켓 구독 시 확인).
+     *
+     * @param leagueId 리그 ID
+     * @return 종목 목록. 리그가 없거나 상장된 종목이 없으면 빈 목록
+     */
+    public List<LeagueStockView> findAllInLeague(long leagueId) {
+        List<Stock> stocks = stockRepository.findAllByLeagueId(leagueId).stream()
+                .sorted(Comparator.comparing(Stock::getId))
+                .toList();
+        if (stocks.isEmpty()) {
+            return List.of();
+        }
+        List<Long> listerPlayerIds = stocks.stream().map(Stock::getListerPlayerId).toList();
+        Map<Long, String> namesByPlayerId =
+                leagueQueryService.getPlayerNames(leagueId, listerPlayerIds);
+        Map<Long, StockDailyPrice> prices = latestPrices(leagueId);
+        return stocks.stream()
+                .map(stock -> toView(stock, namesByPlayerId, prices))
+                .toList();
+    }
+
+    /**
      * 리그의 종목 하나의 이름과 소개를 조회한다.
      *
      * @param memberId 조회하는 회원 ID
@@ -96,17 +118,23 @@ public class LeagueStockLookupService {
         return latest;
     }
 
+    private static LeagueStockView toView(Stock stock, Map<Long, String> namesByPlayerId,
+            Map<Long, StockDailyPrice> pricesByStockId) {
+        StockDailyPrice price = pricesByStockId.get(stock.getId());
+        StockQuote quote = price == null || stock.getCurrentPrice() == null
+                ? null : StockQuote.of(stock, price);
+        return new LeagueStockView(stock.getId(), stock.getName().getValue(),
+                stock.getDescription().getValue(),
+                namesByPlayerId.get(stock.getListerPlayerId()), quote);
+    }
+
     private record Viewer(long playerId, Map<Long, String> namesByPlayerId,
             Map<Long, StockDailyPrice> pricesByStockId) {
 
         MemberStock toMemberStock(Stock stock) {
-            StockDailyPrice price = pricesByStockId.get(stock.getId());
-            StockQuote quote = price == null || stock.getCurrentPrice() == null
-                    ? null : StockQuote.of(stock, price);
-            return new MemberStock(stock.getId(), stock.getName().getValue(),
-                    stock.getDescription().getValue(),
-                    namesByPlayerId.get(stock.getListerPlayerId()),
-                    stock.isListedBy(playerId), quote);
+            LeagueStockView view = toView(stock, namesByPlayerId, pricesByStockId);
+            return new MemberStock(view.stockId(), view.name(), view.description(),
+                    view.listerName(), stock.isListedBy(playerId), view.quote());
         }
     }
 }
