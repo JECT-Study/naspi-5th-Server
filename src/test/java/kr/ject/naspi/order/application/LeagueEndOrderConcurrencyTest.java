@@ -212,7 +212,7 @@ class LeagueEndOrderConcurrencyTest {
     private int expire(long leagueId) {
         return new TransactionTemplate(transactionManager).execute(status -> {
             leagueTradingService.lockForClosing(leagueId);
-            return closingService.expireTradingDay(leagueId, 1, NOW);
+            return closingService.expireTradingDay(leagueId, 1, NOW).count();
         });
     }
 

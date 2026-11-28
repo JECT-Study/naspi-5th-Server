@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.LongStream;
 import kr.ject.naspi.asset.application.AssetReservationService;
 import kr.ject.naspi.asset.domain.Account;
@@ -36,10 +37,13 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ActiveProfiles("test")
 @DataJpaTest
+@RecordApplicationEvents
 @Import({TradingDayChangeUseCase.class, StockTradingDayService.class,
         OrderClosingTestConfig.class, MutableClock.Config.class})
 class TradingDayChangeUseCaseTest {
@@ -69,6 +73,9 @@ class TradingDayChangeUseCaseTest {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @Autowired
+    private ApplicationEvents events;
 
     @Test
     @DisplayName("09:00 KST에 진행 중인 리그가 다음 거래일로 전환되어 직전 거래일이 마감된다")
@@ -225,6 +232,54 @@ class TradingDayChangeUseCaseTest {
 
         // 서비스 트랜잭션이 테스트 트랜잭션에 참여하므로 마감 기록 전 상태를 메모리로 확인한다
         assertThat(closedDayNumbers(league)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("거래일이 전환되면 새 거래일 일차와 주문이 만료된 플레이어를 담은 거래일 전환 이벤트를 한 번 발행한다")
+    void publishTradingDayChanged() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        reservedOrder(league, stockId, BUYER, OrderSide.BUY, 1);
+        reservedOrder(league, stockId, BUYER, OrderSide.BUY, 1);
+
+        useCase.change(league.getId(), DAY2);
+
+        assertThat(events.stream(TradingDayChanged.class))
+                .containsExactly(new TradingDayChanged(league.getId(), 2, Set.of(BUYER)));
+    }
+
+    @Test
+    @DisplayName("놓친 전환을 여러 거래일 보정해도 거래일 전환 이벤트는 리그당 한 번이고 만료된 플레이어를 모두 담는다")
+    void publishOnceOnCatchUp() {
+        League league = startedLeague();
+        long stockId = stockWithFirstDay(league);
+        reservedOrder(league, stockId, BUYER, OrderSide.BUY, 1);
+        reservedOrder(league, stockId, SELLER, OrderSide.SELL, 2);
+
+        useCase.change(league.getId(), DAY2.plusDays(2).plusSeconds(1));
+
+        assertThat(events.stream(TradingDayChanged.class))
+                .containsExactly(new TradingDayChanged(league.getId(), 4, Set.of(BUYER, SELLER)));
+    }
+
+    @Test
+    @DisplayName("처리할 전환이 없으면 거래일 전환 이벤트를 발행하지 않는다")
+    void noEventWithoutChange() {
+        League league = startedLeague();
+
+        useCase.change(league.getId(), DAY2.minusSeconds(1));
+
+        assertThat(events.stream(TradingDayChanged.class)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("리그 종료 시각이 지나 밀린 전환을 보정할 때는 거래일 갱신 알림 이벤트를 발행하지 않는다")
+    void noEventAfterEnd() {
+        League league = startedLeague();
+
+        assertThat(useCase.change(league.getId(), league.getEndsAt())).isEqualTo(6);
+
+        assertThat(events.stream(TradingDayChanged.class)).isEmpty();
     }
 
     private Order reservedOrder(League league, long stockId, long playerId, OrderSide side,

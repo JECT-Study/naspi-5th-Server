@@ -3,6 +3,7 @@ package kr.ject.naspi.order.application;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 import kr.ject.naspi.league.application.LeagueQueryService;
 import kr.ject.naspi.league.application.LeagueTradingService;
 import kr.ject.naspi.league.application.MemberPlayer;
@@ -45,14 +46,17 @@ public class OpenOrderClosingService {
      * @param leagueId 리그 ID
      * @param dayNumber 마감하는 거래일 일차 (이 일차 이하의 주문이 대상)
      * @param expiredAt 만료 시각 (새 거래일 시작 시각, 09:00:00)
-     * @return 만료 처리한 주문 수
+     * @return 만료 처리한 주문 수와 주문이 만료된 플레이어
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public int expireTradingDay(long leagueId, int dayNumber, LocalDateTime expiredAt) {
+    public ExpiredOrders expireTradingDay(long leagueId, int dayNumber, LocalDateTime expiredAt) {
         List<Order> orders = orderRepository
                 .findAllByLeagueIdAndTypeAndStatusInAndTradingDayLessThanEqualOrderByIdAsc(
                         leagueId, OrderType.LIMIT, OrderStatus.openStatuses(), dayNumber);
-        return closeAll(orders, CancelReason.TRADING_DAY_EXPIRED, expiredAt);
+        int count = closeAll(orders, CancelReason.TRADING_DAY_EXPIRED, expiredAt);
+        return new ExpiredOrders(count, orders.stream()
+                .map(Order::getPlayerId)
+                .collect(Collectors.toUnmodifiableSet()));
     }
 
     /**

@@ -254,7 +254,7 @@ class OrderBookTopicTest {
     }
 
     private static TradeExecuted trade(long leagueId, long stockId) {
-        return new TradeExecuted(leagueId, stockId, 11L, 12L, 7L, 8L, 10_500, 3, NOW);
+        return new TradeExecuted(leagueId, stockId, 11L, 12L, 7L, 8L, 10_500, 3, NOW, false);
     }
 
     private static OrderBookView view() {

@@ -1,10 +1,8 @@
 # 알림 토픽
 
-리그에서 나에게 오는 알림(주문 체결, 공시, 뉴스, 리그 진행)을 실시간으로 받습니다. 토스트·알림 배지에서 씁니다.
+내가 요청하지 않았는데 내 주문 상태가 바뀐 경우(대기 주문 체결, 거래일 갱신에 따른 주문 만료)를 실시간으로 받습니다. 토스트에서 씁니다.
 
-> **⚠️ 더미 응답입니다.**
-> 지금은 실제 데이터 대신 더미 값을 10초마다 보냅니다. 구독 경로와 메시지 형식은 실제 구현에서도 유지할 예정이지만, 구현하면서 바뀔 수 있습니다.
-> 서버 코드: `websocket.application.topic.alert.AlertTopic`
+내가 넣은 주문의 접수·체결·취소 결과는 이 토픽으로 오지 않습니다. 주문·취소 API 응답으로 토스트를 띄웁니다.
 
 | **항목** | **값** |
 | --- | --- |
@@ -14,9 +12,10 @@
 | 구독 | `/topic/leagues/{leagueId}/players/{playerId}/alerts` |
 | 구독 권한 | 본인만 |
 | 메시지 종류 (`type`) | `ALERT` |
-| 전달 시점 | 10초마다 (더미). 구독자가 없으면 보내지 않습니다 |
+| 전달 시점 | 알림이 생길 때 ([전달 시점](#전달-시점)). 구독 중일 때만 받으며 보관하지 않습니다 |
 | 대응 REST | 없음 |
 | 발행 (클라이언트 → 서버) | 없음 |
+| 정책 | [order.md#주문-알림](../policies/v1/domain/order.md#주문-알림) |
 
 ---
 
@@ -56,13 +55,11 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 | **변수** | **타입** | **설명** |
 | --- | --- | --- |
 | leagueId | Long | 리그 ID |
-| playerId | Long | 리그 참여자 ID. **지금은 로그인 회원 ID를 넣습니다** |
+| playerId | Long | **내 플레이어 ID**. 회원 ID가 아닙니다. `GET /api/leagues/{leagueId}/assets/me` 응답의 `playerId`를 씁니다 |
 
 ### 구독 권한
 
 로그인한 회원 **본인의 알림**만 구독할 수 있습니다.
-
-> TODO: `playerId`에 회원 ID 대신 그 리그의 내 플레이어 ID를 넣도록 바뀝니다.
 
 권한이 없으면 `ERROR` 프레임을 받고 **연결 전체가 끊깁니다**([5. 에러](#5-에러)).
 
@@ -76,10 +73,21 @@ STOMP CONNECT 프레임에는 토큰이나 인증 헤더를 넣지 않습니다.
 ```
 SUBSCRIBE
 id:sub-0
-destination:/topic/leagues/1/players/1/alerts
+destination:/topic/leagues/1/players/12/alerts
 
 ^@
 ```
+
+### 전달 시점
+
+| **원인** | **받는 사람** | **alertType** | **횟수** |
+| --- | --- | --- | --- |
+| 대기 중이던 내 주문이 다른 사용자의 주문으로 일부 또는 전량 체결 | 대기 주문의 주인 | `TRADE_EXECUTED` | 체결된 대기 주문 1건당 1회. 다른 사용자의 주문 1건으로 내 대기 주문 3건이 체결되면 3회 |
+| 거래일 갱신(09:00)으로 대기 중이던 내 주문이 만료 | 그 리그의 구독자 중 주문이 만료된 사람 | `ORDER_EXPIRED` | 거래일 갱신 1회당 1회 (여러 건이 만료되어도 1회) |
+| 거래일 갱신(09:00), 만료된 내 주문 없음 | 그 리그의 나머지 구독자 | `TRADING_DAY_CHANGED` | 거래일 갱신 1회당 1회 |
+
+- 주문을 넣은 사람에게는 체결 알림을 보내지 않습니다. 주문 API 응답으로 체결 결과를 받기 때문입니다.
+- 리그 종료, 회원 탈퇴로 주문이 취소될 때는 알림을 보내지 않습니다. 리그가 종료되는 시각에는 거래일 갱신 알림도 보내지 않습니다.
 
 ### 받는 메시지
 
@@ -97,18 +105,19 @@ destination:/topic/leagues/1/players/1/alerts
 | --- | --- | --- | --- |
 | alertType | String | 알림 종류 | 아래 표 참고 |
 | message | String | 알림 내용 | 화면에 그대로 보여 줍니다 |
-| url | String | 알림을 눌렀을 때 이동할 프론트 경로 | 예: `/leagues/1/stocks/1` |
+| url | String \| null | 알림을 눌렀을 때 이동할 프론트 경로 | `null`이면 이동할 곳이 없습니다 ('확인하기' 버튼 없음) |
 
-| **alertType** | **설명** |
-| --- | --- |
-| TRADE_EXECUTED | 내 주문 체결 |
-| DISCLOSURE | 공시 게시 |
-| NEWS | 뉴스 게시 |
-| LEAGUE | 리그 진행 (시작, 거래일 전환, 종료 등) |
+| **alertType** | **설명** | **message** | **url** |
+| --- | --- | --- | --- |
+| TRADE_EXECUTED | 대기 중이던 내 주문이 체결됨 | `{종목 이름} {매수\|매도} 주문이 체결됐어요.` | `/leagues/{leagueId}/stocks/{stockId}` |
+| ORDER_EXPIRED | 새 거래일이 시작되어 대기 중이던 내 주문이 만료됨 | `새 거래일이 시작돼 대기 중인 주문이 취소됐어요.` | `null` |
+| TRADING_DAY_CHANGED | 새 거래일이 시작됨 (만료된 내 주문 없음) | `새 거래일이 시작됐어요.` | `null` |
+
+> `DISCLOSURE`(공시 게시), `NEWS`(뉴스 게시), `LEAGUE`(리그 진행)는 예약된 값으로 지금은 보내지 않습니다.
 
 ```
 MESSAGE
-destination:/topic/leagues/1/players/1/alerts
+destination:/topic/leagues/1/players/12/alerts
 content-type:application/json
 subscription:sub-0
 message-id:a1b2c3-0
@@ -117,19 +126,37 @@ message-id:a1b2c3-0
   "type": "ALERT",
   "payload": {
     "alertType": "TRADE_EXECUTED",
-    "message": "진영전자 10주가 12,500원에 체결되었습니다.",
-    "url": "/leagues/1/stocks/1"
+    "message": "진영전자 매도 주문이 체결됐어요.",
+    "url": "/leagues/1/stocks/3"
   },
   "publishedAt": "2026-11-09T14:32:05.123"
 }^@
 ```
 
+```
+MESSAGE
+destination:/topic/leagues/1/players/12/alerts
+content-type:application/json
+subscription:sub-0
+message-id:a1b2c3-1
+
+{
+  "type": "ALERT",
+  "payload": {
+    "alertType": "ORDER_EXPIRED",
+    "message": "새 거래일이 시작돼 대기 중인 주문이 취소됐어요.",
+    "url": null
+  },
+  "publishedAt": "2026-11-10T09:00:00.412"
+}^@
+```
+
 ### 메시지 처리 방법
 
-- 메시지는 바뀐 부분이 아니라 **그 시점의 상태**를 담습니다. 이전 메시지와 비교해 변경분을 계산하지 않습니다.
-- 네트워크 상황에 따라 순서가 뒤바뀔 수 있으므로, `publishedAt`이 마지막으로 반영한 메시지보다 이른 메시지는 버립니다.
-- 연결이 끊긴 동안의 메시지는 다시 받을 수 없습니다. (재)연결 직후에는 REST API로 현재 상태를 받고, 이후 메시지를 반영합니다.
-- 메시지 하나가 알림 하나입니다. 받을 때마다 목록에 추가하거나 토스트로 띄웁니다.
+- 다른 토픽과 달리 메시지는 상태가 아니라 **사건 하나**입니다. 메시지 하나가 토스트 하나입니다.
+- 순서가 뒤바뀌어 도착할 수 있지만, 다른 토픽처럼 `publishedAt`이 이른 메시지를 **버리지 않습니다**. 버리면 알림이 사라집니다.
+- 연결이 끊긴 동안의 알림은 다시 받을 수 없고, 서버도 보관하지 않습니다. 필요한 화면 값(자산, 주문 내역)은 (재)연결 직후 REST API로 다시 받습니다.
+- 알림을 받았을 때 화면의 자산·호가·주문 내역 값은 각 토픽이나 REST 응답으로 갱신합니다. 알림 메시지에는 수량·가격이 없습니다.
 - 알 수 없는 `alertType`이 오면 기본 모양으로 보여 줍니다.
 
 ---
@@ -151,7 +178,7 @@ STOMP 단계의 오류는 `ERROR` 프레임으로 옵니다. **`ERROR` 프레임
 
 ```
 ERROR
-message:토픽 구독 권한이 없습니다\c /topic/leagues/1/players/1/alerts
+message:토픽 구독 권한이 없습니다\c /topic/leagues/1/players/12/alerts
 content-length:0
 
 ^@
@@ -170,10 +197,10 @@ content-length:0
 
 ### 예외
 
-1. **다른 사람의 `playerId`로 구독한 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 `playerId`를 꼭 확인합니다.
-2. **없는 리그 ID로 구독한 경우:** 지금은 리그 존재 여부를 확인하지 않아 구독이 되고, 더미 응답을 받습니다.
-3. **더미 응답:** 실제 이벤트와 관계없이 **10초마다 같은 체결 알림**을 보냅니다. (TODO: 이벤트가 생길 때 바로 보내도록 교체 예정)
-4. **연결이 끊긴 동안의 변화:** 다시 받을 수 없습니다. (TODO: 놓친 알림을 조회하는 REST API가 필요한지 결정 필요)
+1. **구독 권한이 없는 경우:** `ERROR` 프레임(`토픽 구독 권한이 없습니다: ...`)을 받고 연결 전체가 끊깁니다. 다른 토픽 구독도 함께 끊기므로 `playerId`에 **회원 ID가 아니라 그 리그의 내 플레이어 ID**를 넣었는지 꼭 확인합니다.
+2. **없는 리그 ID, 입장하지 않은 리그로 구독한 경우:** 1과 같이 `ERROR` 후 연결이 끊깁니다.
+3. **리그 종료 후:** 구독할 수 없고 알림도 오지 않습니다.
+4. **연결이 끊긴 동안의 알림:** 다시 받을 수 없습니다. 알림 목록 조회 API는 없습니다.
 
 ---
 
@@ -187,7 +214,7 @@ npm install @stomp/stompjs
 
 ### 6-1. 공통 연결 (`stompClient.ts`)
 
-모든 토픽이 연결 하나를 같이 씁니다. 다른 토픽 문서에서 이미 만들었다면 그대로 재사용합니다.
+모든 토픽이 연결 하나를 같이 씁니다. 다른 토픽 문서에서 이미 만들었다면 그대로 재사용하되, 알림은 늦게 도착한 메시지도 버리면 안 되므로 `subscribeTopic`에 `dropStale` 옵션을 추가합니다.
 
 ```tsx
 import { Client, IMessage } from '@stomp/stompjs';
@@ -228,17 +255,19 @@ stompClient.onWebSocketClose = (event) => {
 /**
  * 토픽을 구독한다. 반환된 함수를 호출하면 구독을 해지한다.
  * 같은 경로는 한 곳에서만 구독한다고 가정한다.
+ * dropStale: 상태 토픽(자산·호가 등)은 true(기본), 사건 토픽(알림)은 false.
  */
 export function subscribeTopic<T>(
   destination: string,
   onMessage: (payload: T, envelope: TopicEnvelope<T>) => void,
+  { dropStale = true }: { dropStale?: boolean } = {},
 ): () => void {
   let lastPublishedAt = 0;
   const handler = (frame: IMessage) => {
     const envelope: TopicEnvelope<T> = JSON.parse(frame.body);
     const publishedAt = Date.parse(envelope.publishedAt); // 오프셋이 없어 브라우저 시간대로 해석되지만 비교에는 문제없다
-    if (publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 메시지는 버린다
-    lastPublishedAt = publishedAt;
+    if (dropStale && publishedAt < lastPublishedAt) return; // 늦게 도착한 이전 상태는 버린다
+    lastPublishedAt = Math.max(lastPublishedAt, publishedAt);
     onMessage(envelope.payload, envelope);
   };
 
@@ -268,53 +297,48 @@ export function subscribeTopic<T>(
 import { useEffect, useState } from 'react';
 import { subscribeTopic } from './stompClient';
 
-export type AlertType = 'TRADE_EXECUTED' | 'DISCLOSURE' | 'NEWS' | 'LEAGUE';
+export type AlertType = 'TRADE_EXECUTED' | 'ORDER_EXPIRED' | 'TRADING_DAY_CHANGED';
 
 export type Alert = {
-  alertType: AlertType;
+  alertType: AlertType | string; // 알 수 없는 값은 기본 모양으로 보여 준다
   message: string;
-  url: string;
-  publishedAt: string; // KST 일시. 메시지 공통 필드에서 가져온다
+  url: string | null; // null이면 '확인하기' 버튼 없음
 };
 ```
 
 ```tsx
-/** 리그에서 나에게 오는 알림을 받는다. 최신 알림이 앞에 온다. playerId는 지금은 로그인 회원 ID다. */
-export function useAlerts(leagueId: number, playerId: number, max = 50) {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-
+/** 리그에서 나에게 오는 알림을 받을 때마다 onAlert를 호출한다. playerId는 그 리그의 내 플레이어 ID다. */
+export function useAlerts(leagueId: number, playerId: number, onAlert: (alert: Alert) => void) {
   useEffect(
     () =>
-      subscribeTopic<Omit<Alert, 'publishedAt'>>(
+      subscribeTopic<Alert>(
         `/topic/leagues/${leagueId}/players/${playerId}/alerts`,
-        (payload, envelope) =>
-          setAlerts((prev) =>
-            [{ ...payload, publishedAt: envelope.publishedAt }, ...prev].slice(0, max),
-          ),
+        (payload) => onAlert(payload),
+        { dropStale: false }, // 알림은 늦게 도착해도 버리지 않는다
       ),
-    [leagueId, playerId, max],
+    [leagueId, playerId, onAlert],
   );
-
-  return alerts;
 }
 ```
 
 ```tsx
+import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+// toast는 프로젝트에서 쓰는 토스트 라이브러리의 함수로 바꾼다
 
-function AlertList({ leagueId, playerId }: { leagueId: number; playerId: number }) {
-  const alerts = useAlerts(leagueId, playerId);
+function AlertToasts({ leagueId, playerId }: { leagueId: number; playerId: number }) {
   const navigate = useNavigate();
-
-  return (
-    <ul>
-      {alerts.map((a, i) => (
-        <li key={`${a.publishedAt}-${i}`} onClick={() => navigate(a.url)}>
-          [{a.alertType}] {a.message}
-        </li>
-      ))}
-    </ul>
+  const showAlert = useCallback(
+    (alert: Alert) =>
+      toast(alert.message, {
+        // 체결 알림만 '확인하기'로 종목 화면에 이동한다
+        action: alert.url ? { label: '확인하기', onClick: () => navigate(alert.url!) } : undefined,
+      }),
+    [navigate],
   );
+
+  useAlerts(leagueId, playerId, showAlert);
+  return null;
 }
 ```
 
