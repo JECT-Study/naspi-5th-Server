@@ -35,6 +35,16 @@ class StockNameTest {
         assertInvalid("열세글자이름입니다열세글자");
     }
 
+    @Test
+    @DisplayName("조합 이모지도 한 글자로 센다 (나스피 + 🇰🇷 9개 = 12자 허용, 10개면 거부)")
+    void compositeEmojiCountsAsOneCharacter() {
+        String flag = "🇰🇷";
+
+        assertThat(StockName.of("나스피" + flag.repeat(9)).getValue())
+                .isEqualTo("나스피" + flag.repeat(9));
+        assertInvalid("나스피" + flag.repeat(10));
+    }
+
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"   ", "!", "!!!", "😀", "😀 !", "-_ ."})

@@ -20,6 +20,16 @@ class CommentContentTest {
     }
 
     @Test
+    @DisplayName("조합 이모지도 한 글자로 센다 (👍🏽 100개 허용, 101개 거부)")
+    void compositeEmojiCountsAsOneCharacter() {
+        String thumbsUp = "👍🏽";
+
+        assertThat(CommentContent.of(thumbsUp.repeat(100)).getValue())
+                .isEqualTo(thumbsUp.repeat(100));
+        assertInvalid(thumbsUp.repeat(101));
+    }
+
+    @Test
     @DisplayName("빈 댓글은 작성할 수 없다")
     void blank() {
         assertInvalid(null);

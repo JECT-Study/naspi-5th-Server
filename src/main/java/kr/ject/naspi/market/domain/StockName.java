@@ -3,6 +3,7 @@ package kr.ject.naspi.market.domain;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import java.util.regex.Pattern;
+import kr.ject.naspi.common.text.TextLength;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
@@ -29,7 +30,8 @@ public class StockName {
     /** 글자 또는 숫자가 하나 이상 있는지 확인하는 패턴. 특수문자·이모지·공백만으로 된 이름을 거른다. */
     private static final Pattern HAS_LETTER_OR_DIGIT = Pattern.compile("[\\p{L}\\p{N}]");
 
-    @Column(name = "name", nullable = false, length = MAX_LENGTH * 4)
+    @Column(name = "name", nullable = false,
+            length = MAX_LENGTH * TextLength.MAX_CODE_POINTS_PER_CHARACTER)
     private String value;
 
     private StockName(String value) {
@@ -49,7 +51,7 @@ public class StockName {
         }
         String trimmed = input.strip();
         if (trimmed.isEmpty()
-                || trimmed.codePointCount(0, trimmed.length()) > MAX_LENGTH
+                || !TextLength.isWithin(trimmed, MAX_LENGTH)
                 || !HAS_LETTER_OR_DIGIT.matcher(trimmed).find()) {
             throw new NaspiBizException(ErrorCode.INVALID_STOCK_NAME);
         }

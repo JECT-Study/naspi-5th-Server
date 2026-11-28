@@ -13,6 +13,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import kr.ject.naspi.common.text.TextLength;
 import kr.ject.naspi.global.exception.ErrorCode;
 import kr.ject.naspi.global.exception.NaspiBizException;
 import lombok.AccessLevel;
@@ -62,11 +63,13 @@ public class News {
     private NewsSentiment sentiment;
 
     /** 제목. 발행된 뉴스에만 있다. */
-    @Column(name = "title", length = NewsGenerationResult.Generated.TITLE_MAX_LENGTH)
+    @Column(name = "title", length = NewsGenerationResult.Generated.TITLE_MAX_LENGTH
+            * TextLength.MAX_CODE_POINTS_PER_CHARACTER)
     private String title;
 
     /** 본문. 발행된 뉴스에만 있다. */
-    @Column(name = "body", length = NewsGenerationResult.Generated.BODY_MAX_LENGTH)
+    @Column(name = "body", length = NewsGenerationResult.Generated.BODY_MAX_LENGTH
+            * TextLength.MAX_CODE_POINTS_PER_CHARACTER)
     private String body;
 
     @Enumerated(EnumType.STRING)

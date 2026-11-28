@@ -1,5 +1,7 @@
 package kr.ject.naspi.contents.domain;
 
+import kr.ject.naspi.common.text.TextLength;
+
 /**
  * 뉴스 생성 결과.
  *
@@ -47,10 +49,9 @@ public sealed interface NewsGenerationResult {
             if (value == null || value.isBlank()) {
                 throw new IllegalArgumentException(name + "이 비어 있습니다");
             }
-            int length = value.codePointCount(0, value.length());
-            if (length > max) {
+            if (!TextLength.isWithin(value, max)) {
                 throw new IllegalArgumentException(
-                        "%s이 %d자를 넘습니다: %d자".formatted(name, max, length));
+                        "%s이 %d자를 넘습니다: %d자".formatted(name, max, TextLength.count(value)));
             }
         }
     }
