@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import kr.ject.naspi.websocket.api.response.alert.AlertResponse;
 import kr.ject.naspi.websocket.api.response.asset.AssetResponse;
 import kr.ject.naspi.websocket.api.response.chart.CandleChartResponse;
+import kr.ject.naspi.websocket.api.response.league.LeagueDetailResponse;
 import kr.ject.naspi.websocket.api.response.orderbook.OrderBookResponse;
 import kr.ject.naspi.websocket.api.response.stock.StockResponse;
 import org.junit.jupiter.api.DisplayName;
@@ -39,7 +40,10 @@ class TopicResponseSpecTest {
                     Set.of()),
             new Pair(StockResponse.class, StockResponse.Stock.class,
                     "kr.ject.naspi.market.api.stock.MemberStockResponse", Set.of(),
-                    Set.of("mine")));
+                    Set.of("mine")),
+            new Pair(LeagueDetailResponse.class, LeagueDetailResponse.class,
+                    "kr.ject.naspi.league.api.lobby.LeagueDetailResponse", Set.of("asOf"),
+                    Set.of("players[].me")));
 
     private static final Set<Class<?>> WITHOUT_REST =
             Set.of(CandleChartResponse.class, AlertResponse.class);
@@ -77,12 +81,12 @@ class TopicResponseSpecTest {
     }
 
     @Test
-    @DisplayName("비교기는 이름·타입·nullable·중첩 record·목록 원소 차이를 찾는다")
+    @DisplayName("비교기는 이름·타입·nullable·중첩 record·목록 원소 차이를 찾고, 제외한 경로는 중첩 안에서도 건너뛴다")
     void comparatorDetectsDifferences() {
         List<String> errors = new ArrayList<>();
 
-        compareRecords(TopicSample.class, RestSample.class, Set.of("asOf"), Set.of(), "sample",
-                errors);
+        compareRecords(TopicSample.class, RestSample.class, Set.of("asOf"),
+                Set.of("items[].viewerOnly"), "sample", errors);
 
         assertThat(errors).containsExactlyInAnyOrder(
                 "sample.price: 타입이 다르다 (토픽 java.lang.Long, REST long)",
@@ -92,29 +96,38 @@ class TopicResponseSpecTest {
     }
 
     private static void compareRecords(Class<?> topic, Class<?> rest, Set<String> topicOnly,
-            Set<String> restOnly, String path, List<String> errors) {
-        Map<String, Type> topicFields = components(topic, topicOnly);
-        Map<String, Type> restFields = components(rest, restOnly);
-        restFields.forEach((name, restType) -> {
-            Type topicType = topicFields.get(name);
+            Set<String> restOnly, String label, List<String> errors) {
+        compareRecords(topic, rest, new Context(label, topicOnly, restOnly, errors), "");
+    }
+
+    /**
+     * record 필드를 비교한다.
+     *
+     * @param path 최상위 record 기준 경로. 최상위는 빈 문자열, 목록 원소는 {@code players[]}처럼 쓴다
+     */
+    private static void compareRecords(Class<?> topic, Class<?> rest, Context context,
+            String path) {
+        Map<String, Type> topicFields = components(topic, context.topicOnly(), path);
+        Map<String, Type> restFields = components(rest, context.restOnly(), path);
+        restFields.forEach((field, restType) -> {
+            Type topicType = topicFields.get(field);
             if (topicType == null) {
-                errors.add(path + "." + name + ": 토픽에 없다 (REST " + restType.getTypeName() + ")");
+                context.error(field, "토픽에 없다 (REST " + restType.getTypeName() + ")");
             } else {
-                compareTypes(topicType, restType, path + "." + name, errors);
+                compareTypes(topicType, restType, context, field);
             }
         });
-        topicFields.forEach((name, topicType) -> {
-            if (!restFields.containsKey(name)) {
-                errors.add(path + "." + name + ": REST에 없다 (토픽 " + topicType.getTypeName()
-                        + ")");
+        topicFields.forEach((field, topicType) -> {
+            if (!restFields.containsKey(field)) {
+                context.error(field, "REST에 없다 (토픽 " + topicType.getTypeName() + ")");
             }
         });
     }
 
-    private static void compareTypes(Type topic, Type rest, String path, List<String> errors) {
+    private static void compareTypes(Type topic, Type rest, Context context, String path) {
         if (topic instanceof Class<?> topicClass && rest instanceof Class<?> restClass
                 && topicClass.isRecord() && restClass.isRecord()) {
-            compareRecords(topicClass, restClass, Set.of(), Set.of(), path, errors);
+            compareRecords(topicClass, restClass, context, path);
             return;
         }
         if (topic instanceof ParameterizedType topicParam
@@ -123,21 +136,26 @@ class TopicResponseSpecTest {
             Type[] topicArgs = topicParam.getActualTypeArguments();
             Type[] restArgs = restParam.getActualTypeArguments();
             for (int i = 0; i < topicArgs.length; i++) {
-                compareTypes(topicArgs[i], restArgs[i], path + "[]", errors);
+                compareTypes(topicArgs[i], restArgs[i], context, path + "[]");
             }
             return;
         }
         if (!topic.equals(rest)) {
-            errors.add(path + ": 타입이 다르다 (토픽 " + topic.getTypeName() + ", REST "
+            context.error(path, "타입이 다르다 (토픽 " + topic.getTypeName() + ", REST "
                     + rest.getTypeName() + ")");
         }
     }
 
-    private static Map<String, Type> components(Class<?> type, Set<String> excluded) {
+    /**
+     * record 필드를 경로를 키로 모은다. 제외 목록에 있는 경로는 뺀다.
+     */
+    private static Map<String, Type> components(Class<?> type, Set<String> excluded,
+            String path) {
         Map<String, Type> fields = new LinkedHashMap<>();
         for (RecordComponent component : type.getRecordComponents()) {
-            if (!excluded.contains(component.getName())) {
-                fields.put(component.getName(), component.getGenericType());
+            String field = path.isEmpty() ? component.getName() : path + "." + component.getName();
+            if (!excluded.contains(field)) {
+                fields.put(field, component.getGenericType());
             }
         }
         return fields;
@@ -171,13 +189,30 @@ class TopicResponseSpecTest {
     }
 
     /**
+     * 비교 중인 쌍의 정보와 오류 목록.
+     *
+     * @param label 오류 메시지 앞에 붙일 이름
+     * @param topicOnly 토픽에만 있는 필드 경로
+     * @param restOnly REST에만 있는 필드 경로
+     * @param errors 오류 목록
+     */
+    private record Context(String label, Set<String> topicOnly, Set<String> restOnly,
+            List<String> errors) {
+
+        void error(String path, String message) {
+            errors.add(label + "." + path + ": " + message);
+        }
+    }
+
+    /**
      * 토픽 메시지와 비교할 REST 응답.
      *
      * @param message 토픽 메시지 ({@code TYPE} 상수를 가진 클래스)
      * @param topic 비교할 토픽 쪽 record. 메시지가 목록을 감싸면 그 원소
      * @param rest REST 응답 클래스 이름 (package-private 이라 이름으로 참조)
-     * @param topicOnly 토픽에만 있는 필드 (예: {@code asOf})
-     * @param restOnly REST에만 있는 필드 (예: 조회한 회원 기준 값인 {@code mine})
+     * @param topicOnly 토픽에만 있는 필드 경로 (예: {@code asOf})
+     * @param restOnly REST에만 있는 필드 경로 (예: 조회한 회원 기준 값인 {@code mine}, 목록 원소 안이면
+     *     {@code players[].me})
      */
     private record Pair(Class<?> message, Class<?> topic, String rest, Set<String> topicOnly,
             Set<String> restOnly) {
@@ -191,7 +226,7 @@ class TopicResponseSpecTest {
 
     private record RestSample(long id, long price, long renamed, List<Item> items) {
 
-        private record Item(long qty) {
+        private record Item(long qty, boolean viewerOnly) {
         }
     }
 }

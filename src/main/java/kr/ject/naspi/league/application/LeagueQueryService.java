@@ -82,7 +82,29 @@ public class LeagueQueryService {
         if (!joined) {
             throw new NaspiBizException(ErrorCode.FORBIDDEN);
         }
+        return toLeaguePlayers(league, players, memberId);
+    }
 
+    /**
+     * 조회자 없이 리그 플레이어 목록과 리그 시작 가능 여부, 시작된 리그면 현재 거래일을 조회한다. 모든 플레이어의
+     * {@code me}는 {@code false}다. 권한 확인은 호출하는 쪽 책임이다 (웹소켓 구독 시 확인).
+     *
+     * @param leagueId 리그 ID
+     * @return 참여일시 순 플레이어 목록, 시작 가능 여부, 현재 거래일 (대기실이면 {@code null})
+     * @throws NaspiBizException 리그가 없는 경우 (만료된 대기실 포함)
+     */
+    public LeaguePlayers getPlayersInLeague(long leagueId) {
+        League league = getLeague(leagueId);
+        return toLeaguePlayers(league, playerRepository.findAllByLeagueId(leagueId), null);
+    }
+
+    /**
+     * 플레이어 목록을 응답 형태로 바꾼다.
+     *
+     * @param viewerMemberId 조회하는 회원 ID. {@code null}이면 모든 플레이어의 {@code me}가 {@code false}
+     */
+    private LeaguePlayers toLeaguePlayers(League league, List<Player> players,
+            Long viewerMemberId) {
         // 리그 상세 정보 조회
         Map<Long, String> names = memberService.getNames(players.stream()
                 .filter(player -> !player.isWithdrawn())
@@ -93,7 +115,8 @@ public class LeagueQueryService {
         List<LeaguePlayer> result = players.stream()
                 .sorted(Comparator.comparing(Player::getJoinedAt).thenComparing(Player::getId))
                 .map(player -> new LeaguePlayer(player.getId(), displayNameOf(player, names),
-                        Objects.equals(player.getMemberId(), memberId),
+                        viewerMemberId != null
+                                && Objects.equals(player.getMemberId(), viewerMemberId),
                         player.getId().equals(league.getHostPlayerId()), player.isListed(),
                         player.getJoinedAt(), player.getListedAt()))
                 .toList();

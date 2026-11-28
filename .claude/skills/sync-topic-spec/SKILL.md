@@ -10,7 +10,7 @@ allowed-tools: Read, Grep, Glob, Edit, Bash(./gradlew test:*), Bash(./gradlew ch
 
 검사는 `src/test/java/kr/ject/naspi/websocket/api/response/TopicResponseSpecTest.java`가 한다.
 
-- `PAIRS`: 토픽 메시지와 대응하는 REST 응답 쌍. `topicOnly`는 토픽에만 있는 필드(예: `asOf`), `restOnly`는 REST에만 있는 필드(예: 조회한 회원 기준 값 `mine`)다.
+- `PAIRS`: 토픽 메시지와 대응하는 REST 응답 쌍. `topicOnly`는 토픽에만 있는 필드(예: `asOf`), `restOnly`는 REST에만 있는 필드(예: 조회한 회원 기준 값 `mine`)의 경로다. 목록 원소 안의 필드는 `players[].me`처럼 쓴다.
 - `WITHOUT_REST`: REST 대응이 없는 토픽 (캔들 차트, 알림).
 - 비교 대상은 record 필드 이름과 타입이다. 중첩 record와 `List` 원소까지 비교하고, `long`과 `Long`(nullable 여부)도 다르게 본다.
 

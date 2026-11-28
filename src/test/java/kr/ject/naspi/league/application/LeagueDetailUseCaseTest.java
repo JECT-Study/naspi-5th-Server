@@ -108,6 +108,57 @@ class LeagueDetailUseCaseTest {
     }
 
     @Test
+    @DisplayName("조회자 없는 리그 상세는 상장을 마친 사용자를 참여자로 보여주고, 모든 플레이어의 me는 false다")
+    void getDetailInLeagueAfterListing() {
+        long host = member("방장");
+        long guest = member("손님");
+        CreatedLeague league = leagueCreationUseCase.create(host, "리그", "나스피", "소개");
+        JoinedLeague joined = leagueService.join(guest, league.inviteCode());
+        stockListingService.list(league.leagueId(), guest, "손님전자", "손님 소개");
+
+        LeagueDetail detail = detailUseCase.getDetailInLeague(league.leagueId());
+
+        assertThat(detail.players()).extracting(DetailPlayer::me).containsOnly(false);
+        DetailPlayer guestPlayer = detail.players().get(1);
+        assertThat(guestPlayer.playerId()).isEqualTo(joined.playerId());
+        assertThat(guestPlayer.listed()).isTrue();
+        assertThat(guestPlayer.listedAt()).isNotNull();
+        assertThat(guestPlayer.stock())
+                .extracting(PlayerStock::name, PlayerStock::description)
+                .containsExactly("손님전자", "손님 소개");
+    }
+
+    @Test
+    @DisplayName("조회자 없는 리그 상세에서 시작된 리그의 탈퇴한 참여자(회원 ID 없음)도 me가 false다")
+    void getDetailInLeagueWithWithdrawnPlayer() {
+        long host = member("방장");
+        CreatedLeague league = leagueCreationUseCase.create(host, "리그", "나스피", "소개");
+        long guest = 0;
+        for (int i = 0; i < 2; i++) {
+            guest = member("손님");
+            leagueService.join(guest, league.inviteCode());
+            stockListingService.list(league.leagueId(), guest, "종목" + i, "소개");
+        }
+        leagueStartUseCase.start(host, league.leagueId());
+        leagueService.recordWithdrawal(guest);
+        entityManager.remove(entityManager.find(Member.class, guest));
+        entityManager.flush();
+
+        LeagueDetail detail = detailUseCase.getDetailInLeague(league.leagueId());
+
+        assertThat(detail.players()).extracting(DetailPlayer::me).containsOnly(false);
+        assertThat(detail.players()).extracting(DetailPlayer::name).contains("탈퇴한 사용자");
+    }
+
+    @Test
+    @DisplayName("조회자 없는 리그 상세도 없는 리그는 조회할 수 없다")
+    void getDetailInLeagueNotFound() {
+        assertThatThrownBy(() -> detailUseCase.getDetailInLeague(Long.MAX_VALUE))
+                .isInstanceOf(NaspiBizException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.LEAGUE_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("리그에 입장하지 않은 회원은 리그 상세를 조회할 수 없다")
     void getDetailByOutsider() {
         CreatedLeague league = leagueCreationUseCase.create(member("방장"), "리그",
