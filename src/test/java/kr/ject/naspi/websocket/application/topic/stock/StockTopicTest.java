@@ -180,16 +180,17 @@ class StockTopicTest {
     @Test
     @DisplayName("리그에 입장한 회원(상장 전 대기자 포함)은 종목 정보를 구독할 수 있다")
     void participantCanSubscribe() {
-        when(leagueQueryService.findPlayerId(7L, 1L)).thenReturn(Optional.of(30L));
+        when(leagueQueryService.findAccessiblePlayerId(7L, 1L)).thenReturn(Optional.of(30L));
 
         assertThat(authorizer.canSubscribe(new LoginMember(7L), "/topic/leagues/1/stocks"))
                 .isTrue();
     }
 
     @Test
-    @DisplayName("리그에 입장하지 않은 회원은 종목 정보를 구독할 수 없다")
-    void outsiderCannotSubscribe() {
-        when(leagueQueryService.findPlayerId(eq(7L), eq(2L))).thenReturn(Optional.empty());
+    @DisplayName("리그에 입장하지 않았거나, 리그가 없거나, 종료 시각이 지난 리그면 종목 정보를 구독할 수 없다")
+    void inaccessibleCannotSubscribe() {
+        when(leagueQueryService.findAccessiblePlayerId(eq(7L), eq(2L)))
+                .thenReturn(Optional.empty());
 
         assertThat(authorizer.canSubscribe(new LoginMember(7L), "/topic/leagues/2/stocks"))
                 .isFalse();
